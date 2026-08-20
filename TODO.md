@@ -21,6 +21,7 @@
 
 ## Release validation
 
+- [ ] Audit every panel state for centered button text/icons, vertically centered row controls, bounded text, consistent spacing, and no overlap across themes.
 - [ ] Live-test notification ingestion, DND-ended generation, and scheduled generation.
 - [ ] Live-test Google Calendar setup and synchronization.
 - [ ] Live-test Voxtype dictation and its microphone placement/state changes.
