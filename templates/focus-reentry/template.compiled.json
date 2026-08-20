@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "focus-reentry",
+  "name": "Focus Re-entry",
+  "description": "A calm catch-up briefing after a focus session.",
+  "priority": 80,
+  "match": {
+    "triggers": ["dnd-ended"],
+    "minimumItems": 3,
+    "minimumFocusMinutes": 30
+  },
+  "context": {
+    "connectors": ["notifications"],
+    "maximumItems": 50,
+    "maximumBytes": 60000
+  },
+  "output": {
+    "sections": ["Needs you", "Changed while away", "No action"],
+    "maximumEntries": 12
+  }
+}

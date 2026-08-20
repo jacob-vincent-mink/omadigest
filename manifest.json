@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jacob-vincent-mink.omadigest",
+  "name": "OmaDigest",
+  "version": "0.1.0",
+  "author": "Jacob Vincent-Mink",
+  "license": "MIT",
+  "description": "Turn interruptions into cited, skill-shaped briefings with selectively enriched context.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaDigest",
+    "description": "AI attention briefings selected from user-defined digest skills.",
+    "category": "AI",
+    "aliases": ["ai", "digest", "notifications", "briefing", "focus", "skills"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "minimumItems": 3,
+      "scheduleTime": ""
+    },
+    "schema": [
+      {
+        "key": "minimumItems",
+        "type": "integer",
+        "label": "Minimum items",
+        "defaultValue": 3,
+        "description": "Minimum buffered items before suggesting a digest. Manual generation remains available."
+      },
+      {
+        "key": "scheduleTime",
+        "type": "string",
+        "label": "Daily digest time",
+        "defaultValue": "",
+        "description": "Optional local time in 24-hour HH:MM format. Leave empty to disable scheduled generation."
+      }
+    ]
+  }
+}

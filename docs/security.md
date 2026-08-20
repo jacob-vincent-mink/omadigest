@@ -1,0 +1,47 @@
+# Security and privacy
+
+OmaDigest processes private notification, calendar, model, and speech data. Its controls reduce authority and accidental disclosure; they do not make unreviewed plugins or model output inherently trustworthy.
+
+## Trust boundaries
+
+- **Quickshell UI:** presentation and bounded snapshots from public Omarchy services. It does not perform network or filesystem work.
+- **Broker:** trusted local authority for persistence, credentials, model sessions, connector processes, and validation.
+- **Pi model provider:** receives only the selected skill and bounded attention evidence for one generation.
+- **Integration:** separately launched, source-specific code with user authority constrained by process options and protocol.
+- **TTS provider:** receives finalized read-mode text only.
+
+## Prompt injection
+
+Notification and connector strings are framed as untrusted evidence. They never become system instructions, cannot add tools, and cannot select a template. Digest sessions expose only `emit_digest`; drafting sessions expose one matching emitter and `out_of_scope`.
+
+Structured output does not prove that model classification is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, and unsupported actions cannot execute.
+
+## Credentials
+
+TTS keys and integration `secret` fields are stored through Secret Service (`secret-tool`). They are not written into `shell.json`, template files, generated packages, digest history, logs, or model prompts. A compromised process running as the same desktop user may still be able to request unlocked Secret Service items; that is outside OmaDigest's process boundary.
+
+## Generated integrations
+
+Generated source can be dangerous. OmaDigest therefore:
+
+- gives the authoring model no file/shell/network tools;
+- accepts only allowlisted relative files and bounded sizes;
+- validates the manifest and JavaScript syntax;
+- shows the proposal before acceptance;
+- installs atomically;
+- keeps it disabled until setup and an explicit enable action;
+- launches it outside Quickshell in Bubblewrap with a read-only system view, no home mount, a private temporary directory, minimal environment, timeout, output limit, and Node permission flags.
+
+Bubblewrap and Node permissions are defense in depth, and `--allow-net` is still not hostname-specific when an integration declares network access. Human review remains mandatory. A future broker proxy can enforce exact-host egress.
+
+## Persistence
+
+Attention events are bounded, mode `0600`, segmented daily, retained for seven files, and deduplicated in memory. Connector enrichment is persisted only when normalized into the attention store. Completed digest history is capped at the newest 30 records and supports individual deletion and clear-all through the broker protocol.
+
+## Read mode
+
+Read mode removes URLs, Markdown punctuation, and code blocks before synthesis. Audio is capped at 50 MiB, stored mode `0600` below the runtime directory, played through `mpv`, and deleted on exit. Remote speech is separately configured and is not implied by model-provider consent.
+
+## Reporting
+
+Do not include credentials, private notification bodies, secret calendar URLs, or raw model transcripts in issues. Include fixed error codes, versions, and redacted reproduction steps.

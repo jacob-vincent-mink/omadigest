@@ -1,0 +1,5 @@
+node_modules/
+.agent-runtime/
+coverage/
+*.log
+.DS_Store

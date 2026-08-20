@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "general",
+  "name": "General Digest",
+  "description": "A balanced briefing for any set of attention items.",
+  "priority": 10,
+  "match": {},
+  "context": {
+    "connectors": ["notifications"],
+    "maximumItems": 40,
+    "maximumBytes": 50000
+  },
+  "output": {
+    "sections": ["Act now", "Review soon", "No action"],
+    "maximumEntries": 12
+  }
+}

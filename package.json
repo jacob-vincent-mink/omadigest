@@ -1,0 +1,24 @@
+{
+  "name": "omadigest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node runtime/scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "typebox": "1.3.7",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.10",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
