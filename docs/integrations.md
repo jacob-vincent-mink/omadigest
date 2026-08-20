@@ -7,11 +7,12 @@ Notifications are routing signals, not complete context. Integrations resolve na
 A generated package moves through explicit states:
 
 ```text
-agent proposal → in-memory draft → schema validation → syntax check
-              → complete diff review → accepted directory → setup → enabled
+OmaDigest request → default agent + authoring skill → temporary package
+                  → schema/syntax/sandbox-test/probe validation
+                  → atomic disabled install → setup → enabled
 ```
 
-Drafting never writes to the live integration directory. Acceptance does not enable the integration. Setup does not enable it either.
+The default agent works outside the live integration directory. The standalone `omadigest-author` command rejects symlinks, unsafe paths, oversized or incomplete packages, invalid manifests, syntax failures, failing sandboxed tests, and invalid protocol output. Installation happens only after all gates pass. Installation does not enable the integration. Setup does not enable it either.
 
 User packages live at:
 
@@ -48,11 +49,17 @@ The runtime supplies:
 - 128 KiB output limit;
 - schema validation of returned context.
 
-Bubblewrap and Node's permission model are defense in depth, not a complete malicious-code proof. Network permission is currently process-wide once declared; the runtime independently reviews URLs and connector schemas but cannot enforce a hostname-only kernel policy. Generated code therefore still requires human review. External-CLI integrations and declared host-path mounts are intentionally unsupported in the current runtime.
+Bubblewrap and Node's permission model are defense in depth, not a complete malicious-code proof. Network permission is currently process-wide once declared; the runtime independently reviews URLs and connector schemas but cannot enforce a hostname-only kernel policy. Generated code therefore still requires human review. `gh` is the only supported external command and receives broker-controlled authentication; declared host-path mounts remain unsupported.
 
 ## Setup
 
-Settings renders fields from the manifest. A connector `probe` must return ready before the broker permits enablement. OAuth-capable integrations can later request broker-mediated browser/device-code interactions; connectors must never launch a browser themselves.
+Settings renders fields from the manifest. **Check status** runs the connector's non-mutating `probe` independently of enablement; the same probe must return ready before the broker permits enablement. OAuth-capable integrations can later request broker-mediated browser/device-code interactions; connectors must never launch a browser themselves.
+
+## GitHub
+
+The bundled GitHub connector uses the existing authenticated `gh` session. The broker retrieves the token only to inject it into the sandboxed process; it never persists or sends the token to a model. The connector imports at most 50 unread notification records within the requested time window and retains only repository name, subject, reason, type, update time, stable provenance, and a credential-free GitHub URL. Bodies, comments, diffs, repository files, and API URLs are excluded.
+
+Its status probe calls the authenticated user endpoint and reports the active login. It starts disabled, and templates can invoke it only when they explicitly list `io.github.jacob-vincent-mink.github` in their context policy.
 
 ## Google Calendar
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "OmaDigest Authoring"
+  short_description: "Build validated templates and integrations"
+  default_prompt: "Use $omadigest-authoring to build and validate an OmaDigest integration from my request."

@@ -22,6 +22,7 @@ Scope {
   property string status: "Starting OmaDigest…"
   property var templates: []
   property var integrations: []
+  property var integrationStatus: ({})
   property var privacy: ({ defaultMode: "count-only", rules: [] })
   property var integrationSetup: ({})
   property var selection: null
@@ -29,6 +30,16 @@ Scope {
   property string draftId: ""
   property string draftKind: "template"
   property string draftState: "idle"
+  property var draftProgress: []
+  property var draftPlan: []
+  property int draftPlanStep: 0
+  property string draftPlanStatus: "idle"
+  property string authoringState: "idle"
+  property string authoringMessage: ""
+  property string authoringSkillState: "idle"
+  property string authoringSkillMessage: ""
+  property string templateEditState: "idle"
+  property string templateEditMessage: ""
   property var digest: null
   property var digestHistory: []
   property string digestState: "idle"
@@ -43,6 +54,10 @@ Scope {
   property var tts: ({ configured: false, state: "idle", config: null })
   property string errorCode: ""
   property string errorMessage: ""
+  property string dataDeleteState: "idle"
+  property string dataDeleteTarget: ""
+  property string dataDeleteMessage: ""
+  property int dataDeleteRevision: 0
   property int nextId: 1
 
   function clearError() {
@@ -61,8 +76,43 @@ Scope {
     if (!text) return
     draftKind = kind === "integration" ? "integration" : "template"
     draftState = "working"
+    draftProgress = []
+    draftPlan = []
+    draftPlanStep = 0
+    draftPlanStatus = "working"
     draft = null
     send({ type: "draft_start", id: "draft-" + nextId++, kind: draftKind, request: text })
+  }
+
+  function startTemplateRevision(templateId, request) {
+    var text = String(request || "").trim()
+    var target = String(templateId || "").trim()
+    clearError()
+    if (!text || !target) return
+    draftKind = "template"
+    draftState = "working"
+    draftProgress = []
+    draftPlan = []
+    draftPlanStep = 0
+    draftPlanStatus = "working"
+    draft = null
+    send({ type: "template_revise", id: "draft-" + nextId++, templateId: target, request: text.slice(0, 5000) })
+  }
+
+  function startIntegrationAuthoring(request) {
+    var text = String(request || "").trim()
+    clearError()
+    if (!text || authoringState === "launching") return
+    authoringState = "launching"
+    authoringMessage = "Opening your default coding agent…"
+    send({ type: "authoring_handoff", id: "authoring-" + nextId++, kind: "integration", request: text })
+  }
+
+  function installAuthoringSkill() {
+    clearError()
+    authoringSkillState = "installing"
+    authoringSkillMessage = "Installing for supported default agents…"
+    send({ type: "authoring_skill_install", id: "authoring-skill-" + nextId++ })
   }
 
   function acceptDraft() {
@@ -76,6 +126,16 @@ Scope {
     draft = null
     draftId = ""
     draftState = "idle"
+  }
+
+  function updateTemplate(templateId, instructions, compiledJson) {
+    clearError()
+    templateEditState = "saving"
+    templateEditMessage = "Validating template…"
+    send({
+      type: "template_update", id: "template-edit-" + nextId++, templateId: String(templateId),
+      instructions: String(instructions || ""), compiledJson: String(compiledJson || "")
+    })
   }
 
   function handoffDefaultAgent(prompt) {
@@ -148,6 +208,13 @@ Scope {
   function markDigestRead(digestId) { send({ type: "digest_mark_read", id: "history-" + nextId++, digestId: String(digestId) }) }
   function deleteDigest(digestId) { send({ type: "digest_delete", id: "history-" + nextId++, digestId: String(digestId) }) }
   function clearDigests() { send({ type: "digest_clear", id: "history-" + nextId++ }) }
+  function deleteData(target) {
+    clearError()
+    dataDeleteState = "working"
+    dataDeleteTarget = String(target)
+    dataDeleteMessage = "Deleting OmaDigest data…"
+    send({ type: "data_delete", id: "data-delete-" + nextId++, target: dataDeleteTarget })
+  }
 
   function openDigestFromHistory(saved) {
     if (!saved) return
@@ -203,6 +270,15 @@ Scope {
     })
   }
 
+  function checkIntegrationStatus(integrationId) {
+    var target = String(integrationId || "")
+    if (!target) return
+    var next = Object.assign({}, integrationStatus)
+    next[target] = { checking: true, ready: false, message: "Checking…" }
+    integrationStatus = next
+    send({ type: "integration_status", id: "integration-status-" + nextId++, integrationId: target })
+  }
+
   function setIntegrationEnabled(integrationId, enabled) {
     var id = "integration-" + nextId++
     send({
@@ -255,6 +331,20 @@ Scope {
       status = "Drafting " + draftKind + "…"
       return
     }
+    if (event.type === "draft_progress") {
+      var nextProgress = draftProgress.slice(-3)
+      nextProgress.push({ phase: String(event.phase || "working"), message: String(event.message || "Drafting…").slice(0, 160) })
+      draftProgress = nextProgress
+      status = String(event.message || status)
+      return
+    }
+    if (event.type === "draft_plan") {
+      draftPlan = (event.steps || []).slice(0, 5).map(function(step) { return String(step || "").slice(0, 100) })
+      draftPlanStep = Math.max(0, Math.min(draftPlan.length - 1, Number(event.currentStep) || 0))
+      draftPlanStatus = String(event.status || "working") === "complete" ? "complete" : "working"
+      status = draftPlan.length > 0 ? draftPlan[draftPlanStep] : status
+      return
+    }
     if (event.type === "draft") {
       draft = event.draft || null
       draftId = String(event.id || "")
@@ -268,7 +358,16 @@ Scope {
       draft = null
       draftId = ""
       draftState = "saved"
+      draftProgress = []
+      draftPlan = []
+      draftPlanStatus = "idle"
       status = event.kind === "integration" ? "Integration installed disabled" : "Template saved"
+      return
+    }
+    if (event.type === "template_saved") {
+      templateEditState = "saved"
+      templateEditMessage = "Template saved"
+      status = "Template saved"
       return
     }
     if (event.type === "privacy") {
@@ -330,6 +429,28 @@ Scope {
       digestHistory = event.digests || []
       return
     }
+    if (event.type === "data_deleted") {
+      dataDeleteState = "complete"
+      dataDeleteTarget = String(event.target || "")
+      dataDeleteMessage = dataDeleteTarget === "digest-history" ? "Digest history deleted"
+        : dataDeleteTarget === "notification-history" ? "OmaDigest notification history deleted"
+        : dataDeleteTarget === "integrations" ? "Integration data deleted"
+        : dataDeleteTarget === "templates" ? "Custom templates deleted"
+        : "OmaDigest history, integrations, and templates deleted"
+      if (dataDeleteTarget === "digest-history" || dataDeleteTarget === "all") {
+        digest = null
+        digestState = "idle"
+        digestHistory = []
+      }
+      if (dataDeleteTarget === "notification-history" || dataDeleteTarget === "all") {
+        attentionCount = 0
+        acknowledgedAttention = ({})
+      }
+      if (dataDeleteTarget === "integrations" || dataDeleteTarget === "all") integrationSetup = ({})
+      dataDeleteRevision += 1
+      status = dataDeleteMessage
+      return
+    }
     if (event.type === "tts") {
       tts = { configured: event.configured === true, state: String(event.state || "idle"), config: event.config || null }
       if (tts.state === "playing") status = "Reading digest…"
@@ -337,7 +458,17 @@ Scope {
       return
     }
     if (event.type === "handoff") {
+      if (event.target === "authoring-agent") {
+        authoringState = "launched"
+        authoringMessage = "Authoring session opened. Return here after the agent installs the validated integration."
+      }
       status = event.target === "herdr" ? "Continued in Herdr" : "Opened in the default agent"
+      return
+    }
+    if (event.type === "authoring_skill") {
+      authoringSkillState = "installed"
+      authoringSkillMessage = "Authoring skill linked for the default agent"
+      status = "Authoring skill installed"
       return
     }
     if (event.type === "integration_setup") {
@@ -352,6 +483,15 @@ Scope {
       status = "Integration settings saved"
       return
     }
+    if (event.type === "integration_status") {
+      var statuses = Object.assign({}, integrationStatus)
+      statuses[String(event.integrationId)] = {
+        checking: false, ready: event.ready === true, message: String(event.message || "")
+      }
+      integrationStatus = statuses
+      status = event.ready === true ? "Integration ready" : "Integration needs attention"
+      return
+    }
     if (event.type === "template_selected") {
       selection = event.selection || null
       state = "ready"
@@ -361,9 +501,26 @@ Scope {
     if (event.type === "error") {
       state = String(event.code || "") === "protocol_mismatch" ? "error" : "ready"
       if (String(event.id || "").indexOf("draft-") === 0) draftState = "error"
+      if (String(event.id || "").indexOf("authoring-") === 0
+        && String(event.id || "").indexOf("authoring-skill-") !== 0) {
+        authoringState = "error"
+        authoringMessage = String(event.message || "The authoring session could not open.")
+      }
+      if (String(event.id || "").indexOf("authoring-skill-") === 0) {
+        authoringSkillState = "error"
+        authoringSkillMessage = String(event.message || "The authoring skill could not be installed.")
+      }
       if (String(event.id || "").indexOf("digest-") === 0) digestState = "error"
+      if (String(event.id || "").indexOf("data-delete-") === 0) {
+        dataDeleteState = "error"
+        dataDeleteMessage = String(event.message || "OmaDigest data could not be deleted.")
+      }
       errorCode = String(event.code || "unknown")
       errorMessage = String(event.message || "OmaDigest encountered an error.")
+      if (String(event.id || "").indexOf("template-edit-") === 0) {
+        templateEditState = "error"
+        templateEditMessage = errorMessage
+      }
       status = "Ready"
     }
   }

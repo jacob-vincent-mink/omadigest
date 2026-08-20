@@ -49,4 +49,24 @@ describe("AttentionStore", () => {
     expect(attention.byIds(["crash"])[0]?.body).toBe("nvim");
     expect(new AttentionStore(env).acknowledgedIds()).toEqual(["crash"]);
   });
+
+  it("deletes only retained notification evidence and blocks older re-imports", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-attention-clear-"));
+    roots.push(root);
+    const env = { XDG_STATE_HOME: root, HOME: root };
+    const attention = new AttentionStore(env);
+    attention.ingest([
+      { id: "notification:old", source: "notifications", app: "GitHub", title: "Old", body: "", urgency: "normal", occurredAt: "2026-08-20T10:00:00.000Z" },
+      { id: "connector:old", source: "calendar", app: "Calendar", title: "Event", body: "", urgency: "normal", occurredAt: "2026-08-20T10:00:00.000Z" }
+    ]);
+    attention.clearNotifications("2026-08-20T11:00:00.000Z");
+    expect(attention.recent(10).map((item) => item.id)).toEqual(["connector:old"]);
+
+    attention.ingest([
+      { id: "notification:replayed", source: "notifications", app: "GitHub", title: "Replayed", body: "", urgency: "normal", occurredAt: "2026-08-20T10:30:00.000Z" },
+      { id: "notification:new", source: "notifications", app: "GitHub", title: "New", body: "", urgency: "normal", occurredAt: "2026-08-20T11:30:00.000Z" }
+    ]);
+    expect(attention.recent(10).map((item) => item.id).sort()).toEqual(["connector:old", "notification:new"]);
+    expect(new AttentionStore(env).recent(10).map((item) => item.id).sort()).toEqual(["connector:old", "notification:new"]);
+  });
 });

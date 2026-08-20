@@ -9,7 +9,7 @@ runtime/src/                 TypeScript broker and policies
 runtime/test/                deterministic unit tests
 templates/                   bundled digest skills
 integrations/                bundled removable connectors
-skills/                      private drafting-agent instructions
+skills/                      scoped Pi instructions and default-agent authoring skill
 docs/                        usage, product, and security contracts
 assets/                      monochrome runtime and README marks
 .github/workflows/           repository CI

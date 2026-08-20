@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="${1:-9}"
 hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = \"$workspace\" })); return \"ok\"" >/dev/null
 sleep 1
@@ -10,7 +11,7 @@ if [[ "$windows" != "0" ]]; then
   exit 1
 fi
 
-export OMARCHY_SCREENRECORD_DIR="${OMARCHY_SCREENRECORD_DIR:-$PWD/demo/recordings}"
+export OMARCHY_SCREENRECORD_DIR="${OMARCHY_SCREENRECORD_DIR:-$repo_root/demo/recordings}"
 mkdir -p "$OMARCHY_SCREENRECORD_DIR"
 omarchy screenrecord --fullscreen
 printf 'Recording isolated workspace %s. Visible interaction may now be driven through OmaDigest IPC.\n' "$workspace"

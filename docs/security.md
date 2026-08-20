@@ -24,12 +24,13 @@ TTS keys and integration `secret` fields are stored through Secret Service (`sec
 
 Generated source can be dangerous. OmaDigest therefore:
 
-- gives the authoring model no file/shell/network tools;
+- gives inline template-authoring sessions no file/shell/network tools;
+- launches integration authoring only after **Build in default agent** is clicked, with a dedicated skill that requires temporary staging and the broker-owned validator/installer;
+- links that skill into supported agent directories only after **Install agent skill** is clicked and never overwrites a non-symlink skill owned by the user;
 - launches a digest action in the default Omarchy agent only after **Send to agent** is clicked, framing cited notification and connector fields as untrusted evidence rather than instructions;
-- starts broader template/integration follow-up in a dedicated Herdr workspace only after **Continue in Herdr** is clicked, passing the authoring request and a bounded draft snapshot while explicitly excluding credentials and unrelated files;
+- starts broader template follow-up in a dedicated Herdr workspace only after **Continue in Herdr** is clicked, passing the authoring request and a bounded draft snapshot while explicitly excluding credentials and unrelated files;
 - accepts only allowlisted relative files and bounded sizes;
-- validates the manifest and JavaScript syntax;
-- shows the proposal before acceptance;
+- validates the manifest and JavaScript syntax, runs package tests inside the connector sandbox, and performs a mocked default protocol probe where possible;
 - installs atomically;
 - keeps it disabled until setup and an explicit enable action;
 - launches it outside Quickshell in Bubblewrap with a read-only system view, no home mount, a private temporary directory, minimal environment, timeout, output limit, and Node permission flags.

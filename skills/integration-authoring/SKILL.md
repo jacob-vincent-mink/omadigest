@@ -11,7 +11,7 @@ Build one self-contained integration package that turns an external source into 
 
 - Produce exactly one directory named after the manifest ID.
 - Required files: `manifest.json`, `connector.mjs`, `README.md`, and `connector.test.mjs`.
-- Use Node.js standard-library APIs only. Do not depend on an external CLI in the current runtime; declared host-path mounts and CLI authentication profiles are not yet supported.
+- Use Node.js standard-library APIs only. An external command may be used only when the request requires it, the manifest declares it, and the broker allowlists it; currently `gh` is the sole supported command. The broker injects authenticated `gh` access at runtime. Tests must mock command execution and never depend on host authentication or network access.
 - Speak the versioned NDJSON connector protocol in [connector protocol](references/connector-protocol.md).
 - Keep all source-specific parsing inside this directory.
 - Store no credentials. Setup values arrive from the broker for one request; secrets belong to the broker's credential store.

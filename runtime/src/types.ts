@@ -121,14 +121,21 @@ export type PublicPrivacyPolicy = {
   rules: Array<{ app: string; mode: PrivacyMode; source: "protected-default" | "user" }>;
 };
 
+export type DataDeletionTarget = "digest-history" | "notification-history" | "integrations" | "templates" | "all";
+
 export type BrokerCommand =
   | { type: "initialize"; protocolVersion: number }
   | { type: "select_template"; id: string; context: GenerationContext }
   | { type: "integration_set_enabled"; id: string; integrationId: string; enabled: boolean }
   | { type: "integration_setup"; id: string; integrationId: string; values: Record<string, string | boolean> }
+  | { type: "integration_status"; id: string; integrationId: string }
   | { type: "draft_start"; id: string; kind: "template" | "integration"; request: string }
+  | { type: "template_revise"; id: string; templateId: string; request: string }
   | { type: "draft_accept"; id: string; draftId: string }
   | { type: "draft_reject"; id: string; draftId: string }
+  | { type: "template_update"; id: string; templateId: string; instructions: string; compiledJson: string }
+  | { type: "authoring_handoff"; id: string; kind: "integration"; request: string }
+  | { type: "authoring_skill_install"; id: string }
   | { type: "handoff_default_agent"; id: string; prompt: string }
   | { type: "handoff_herdr"; id: string; kind: "template" | "integration"; request: string; draftJson: string }
   | { type: "digest_handoff"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
@@ -156,6 +163,7 @@ export type BrokerCommand =
   | { type: "digest_mark_read"; id: string; digestId: string }
   | { type: "digest_delete"; id: string; digestId: string }
   | { type: "digest_clear"; id: string }
+  | { type: "data_delete"; id: string; target: DataDeletionTarget }
   | { type: "shutdown" };
 
 export type BrokerEvent =
@@ -164,10 +172,15 @@ export type BrokerEvent =
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }
   | { type: "integration_setup"; id: string; integrationId: string; ready: boolean; message: string }
+  | { type: "integration_status"; id: string; integrationId: string; ready: boolean; message: string }
   | { type: "draft_state"; id: string; state: "working" }
+  | { type: "draft_progress"; id: string; phase: string; message: string }
+  | { type: "draft_plan"; id: string; steps: string[]; currentStep: number; status: "working" | "complete" }
   | { type: "draft"; id: string; draft: unknown }
   | { type: "draft_saved"; id: string; draftId: string; kind: "template" | "integration" }
-  | { type: "handoff"; id: string; state: "launched"; target?: "default-agent" | "herdr" }
+  | { type: "template_saved"; id: string; templateId: string }
+  | { type: "handoff"; id: string; state: "launched"; target?: "default-agent" | "herdr" | "authoring-agent" }
+  | { type: "authoring_skill"; id: string; state: "installed"; locations: number }
   | { type: "agent_status"; id: string; connected: boolean; provider: string; model: string }
   | { type: "privacy"; id: string; policy: PublicPrivacyPolicy }
   | { type: "auth_methods"; id?: string; methods: AgentAuthMethod[] }
@@ -178,4 +191,5 @@ export type BrokerEvent =
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest"; id: string; digest: Digest }
   | { type: "digest_history"; id: string; digests: Digest[] }
+  | { type: "data_deleted"; id: string; target: DataDeletionTarget }
   | { type: "error"; id?: string; code: string; message: string };

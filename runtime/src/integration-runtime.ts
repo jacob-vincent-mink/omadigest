@@ -62,8 +62,10 @@ export class IntegrationRuntime {
     }
   }
 
-  async sync(integrations: DiscoveredIntegration[], since: string, until: string): Promise<AttentionItem[]> {
-    const results = await Promise.all(integrations.filter((item) => item.enabled && item.manifest.capabilities.includes("sync")).map(async (integration) => {
+  async sync(integrations: DiscoveredIntegration[], allowedConnectorIds: string[], since: string, until: string): Promise<AttentionItem[]> {
+    const allowed = new Set(allowedConnectorIds.slice(0, 16));
+    const results = await Promise.all(integrations.filter((item) =>
+      item.enabled && allowed.has(item.manifest.id) && item.manifest.capabilities.includes("sync")).map(async (integration) => {
       try {
         const config = await this.config(integration);
         const response = await callConnector(integration, {
@@ -99,6 +101,15 @@ export class IntegrationRuntime {
       if (secret !== undefined) publicValues[field.key] = secret;
     }
     return publicValues;
+  }
+
+  async clearSecrets(integrations: DiscoveredIntegration[]): Promise<void> {
+    for (const integration of integrations.slice(0, 128)) {
+      for (const field of integration.manifest.setup.fields.slice(0, 64)) {
+        if (field.type !== "secret") continue;
+        await clearIntegrationSecret(integration.manifest.id, field.key);
+      }
+    }
   }
 
   #publicConfigPath(id: string): string { return join(this.#configRoot, "integration-config", `${id}.json`); }
@@ -186,6 +197,9 @@ function storeIntegrationSecret(integrationId: string, key: string, secret: stri
 }
 function lookupIntegrationSecret(integrationId: string, key: string): Promise<string | undefined> {
   return secretTool(["lookup", "application", "omadigest", "integration", integrationId, "field", key]);
+}
+function clearIntegrationSecret(integrationId: string, key: string): Promise<string | undefined> {
+  return secretTool(["clear", "application", "omadigest", "integration", integrationId, "field", key]);
 }
 function secretTool(args: string[], input?: string): Promise<string | undefined> {
   return new Promise((resolveSecret, rejectSecret) => {

@@ -1,5 +1,6 @@
 node_modules/
 .agent-runtime/
 coverage/
+demo/recordings/
 *.log
 .DS_Store

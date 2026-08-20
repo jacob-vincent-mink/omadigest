@@ -6,7 +6,7 @@ The bar's quill opens a deliberately small digest list. The header actions are:
 
 - **+** — generate from currently available attention items;
 - **✓** — mark the current backlog seen without deleting policy-permitted retained evidence;
-- **Settings** — open integrations, templates, privacy, and connections.
+- **Settings** — open integrations, templates, privacy, connections, and retained data controls.
 
 Select a digest to open its focused reader. Each entry includes source citations and, where policy allows, **Send to agent**.
 
@@ -55,15 +55,19 @@ Open **Settings → Templates** to inspect installed skills or create one from a
 4. Review the readable instructions and compiled matching policy.
 5. Accept or discard the complete draft.
 
+Open any installed template to choose **Edit manually** or **Revise with agent**. Manual edits expose both readable instructions and the compiled routing JSON, then pass through broker validation and atomic installation. Agent revisions receive the current template inside the same tool-restricted session, must preserve its ID, show their plan, and return a complete proposal for review. Editing a bundled template creates a user overlay; **Settings → Data → Delete templates** removes overlays and restores packaged defaults.
+
 The scoped drafting session cannot edit files or browse the system. If the request is unrelated it can only propose an explicit default-agent handoff. If legitimate authoring needs broader follow-up, **Continue in Herdr** transfers the request and a bounded draft snapshot to a dedicated workspace after confirmation.
 
 ## Integrations
 
 Open **Settings → Integrations** to inspect, configure, enable, disable, or remove connector packages.
 
-A generated integration is reviewed as a complete package, including its manifest, connector, tests, documentation, requested hosts, commands, and filesystem paths. Acceptance installs it disabled. Configuration and enablement are separate user actions.
+Describe a new connector and press **Build in default agent**. OmaDigest opens the user's default coding agent with a dedicated integration-authoring skill and exact local validator commands. The agent builds in a temporary directory; the validator bounds the package, checks its manifest and syntax, runs its tests inside the connector sandbox, performs a mocked protocol probe where possible, and only then installs it atomically. A successful install remains disabled. Configuration and enablement are separate user actions back in OmaDigest.
 
-The bundled Google Calendar connector asks for a Secret iCal URL and stores it in Secret Service. Connector cards show readiness and actionable setup errors without exposing secrets.
+The bundled GitHub connector uses the active authenticated `gh` session and imports bounded unread-notification metadata. The bundled Google Calendar connector asks for a Secret iCal URL and stores it in Secret Service. **Check status** runs each connector's non-mutating live probe—GitHub reports the active CLI identity, while Calendar reports connected or actionable setup failure—without enabling it.
+
+**Install agent skill** links the packaged integration-authoring skill into Omarchy's shared and supported agent skill directories. This is an explicit user action rather than a plugin-install hook; handoffs retain an absolute-path fallback if the skill is not linked.
 
 ## Agent actions
 
@@ -71,10 +75,11 @@ The bundled Google Calendar connector asks for a Secret iCal URL and stores it i
 
 Crash entries ask the default agent to use the `diagnose-crash` workflow and correlate the application and timestamp with systemd-coredump.
 
-Authoring views expose two broader handoffs:
+Authoring views expose explicit broader handoffs:
 
 - **Open in default agent** for work the scoped session classified as unrelated;
-- **Continue in Herdr** for explicit extended template or integration work.
+- **Build in default agent** for a new integration package;
+- **Continue in Herdr** when inline template drafting fails or needs extended work.
 
 Neither starts automatically.
 
@@ -92,6 +97,12 @@ ${XDG_STATE_HOME:-~/.local/state}/omadigest/ attention segments and digest histo
 ```
 
 Provider authentication and secrets are intentionally not part of the editable configuration tree. See [configuration](configuration.md) for the complete file contract.
+
+## Delete retained data
+
+Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, custom templates, or all four categories. Every action requires confirmation.
+
+Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or privacy rules.
 
 ## Troubleshooting
 

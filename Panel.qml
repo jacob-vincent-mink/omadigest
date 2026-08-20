@@ -19,6 +19,8 @@ Panel {
   readonly property var hostShell: bar && bar.shell ? bar.shell : null
   readonly property var notificationService: hostShell && hostShell.firstPartyServiceFor
     ? hostShell.firstPartyServiceFor("omarchy.notifications") : null
+  readonly property var idleService: hostShell && hostShell.firstPartyServiceFor
+    ? hostShell.firstPartyServiceFor("omarchy.idle") : null
   readonly property int liveCount: notificationService && notificationService.popupModel
     ? notificationService.popupModel.count : 0
   readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
@@ -27,8 +29,10 @@ Panel {
 
   property string page: "list"
   property string digestTab: "unread"
+  property string preparedDraftKind: ""
   property string settingsPage: "integrations"
   property var selectedTemplate: null
+  property string templateEditMode: "view"
   property string authPromptValue: ""
   property string selectedAuthMethod: ""
   property string connectionView: "overview"
@@ -47,9 +51,25 @@ Panel {
   property double dndStartedAt: 0
   property string lastScheduledDay: ""
   property var pendingAutomaticGeneration: null
+  property string pendingDataDeletion: ""
+
+  onSelectedTemplateChanged: templateEditMode = "view"
 
   onLiveCountChanged: if (OmaDigest.OmaDigestStore.ready)
     Qt.callLater(function() { OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems()) })
+
+  Connections {
+    target: root.idleService
+    enabled: root.idleService !== null
+
+    function onIdledThisCycleChanged() {
+      if (root.idleService && root.idleService.idledThisCycle) root.close()
+    }
+
+    function onScreensaverWindowCountChanged() {
+      if (root.idleService && root.idleService.screensaverWindowCount > 0) root.close()
+    }
+  }
 
   function open() {
     refreshNotificationHistory()
@@ -57,9 +77,69 @@ Panel {
     root.controller.show()
     root.markCurrentDigestRead()
   }
-  function close() { root.controller.hide() }
+  function close() {
+    if (dataDeleteConfirm.opened) root.cancelDataDeletion()
+    root.controller.hide()
+  }
   function toggle() { root.opened ? close() : open() }
   function closeForPopoutSwitch() { root.controller.hide() }
+
+  function dataDeletionPrompt(target) {
+    if (target === "digest-history") return "Delete every digest saved by OmaDigest? This cannot be undone."
+    if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
+    if (target === "integrations") return "Delete custom integrations, integration setup, enablement, and known integration secrets? Bundled integrations will be reset, not removed."
+    if (target === "templates") return "Delete every custom template? Bundled templates will remain available."
+    return "Delete all OmaDigest digest and notification history, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and privacy rules will remain."
+  }
+
+  function requestDataDeletion(target) {
+    if (OmaDigest.OmaDigestStore.dataDeleteState === "working") return
+    root.pendingDataDeletion = String(target)
+    dataDeleteConfirm.message = root.dataDeletionPrompt(root.pendingDataDeletion)
+    dataDeleteConfirm.selectedIndex = 0
+    dataDeleteConfirm.opened = true
+  }
+
+  function cancelDataDeletion() {
+    dataDeleteConfirm.opened = false
+    root.pendingDataDeletion = ""
+  }
+
+  function compiledTemplateJson(template) {
+    if (!template) return ""
+    return JSON.stringify({
+      version: template.version,
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      priority: template.priority,
+      match: template.match || {},
+      context: template.context,
+      output: template.output
+    }, null, 2)
+  }
+
+  function beginManualTemplateEdit() {
+    if (!root.selectedTemplate) return
+    templateInstructionsEdit.text = String(root.selectedTemplate.instructions || "")
+    templatePolicyEdit.text = root.compiledTemplateJson(root.selectedTemplate)
+    OmaDigest.OmaDigestStore.templateEditState = "idle"
+    OmaDigest.OmaDigestStore.templateEditMessage = ""
+    root.templateEditMode = "manual"
+  }
+
+  function saveManualTemplateEdit() {
+    if (!root.selectedTemplate || OmaDigest.OmaDigestStore.templateEditState === "saving") return
+    OmaDigest.OmaDigestStore.updateTemplate(
+      String(root.selectedTemplate.id), templateInstructionsEdit.text, templatePolicyEdit.text)
+  }
+
+  function confirmDataDeletion() {
+    var target = root.pendingDataDeletion
+    dataDeleteConfirm.opened = false
+    root.pendingDataDeletion = ""
+    if (target) OmaDigest.OmaDigestStore.deleteData(target)
+  }
 
   function digestsForTab(tab) {
     var wantRead = String(tab) === "read"
@@ -104,7 +184,7 @@ Panel {
         var timestamp = Number(row.timestamp || Date.now())
         var app = String(row.app || row.appName || "unknown").slice(0, 120)
         var title = String(row.summary || "").slice(0, 2000)
-        var stable = String(row.id || row.originalId || (app + "-" + timestamp + "-" + title))
+        var stable = root.notificationStableId(row, timestamp, app, title)
         parsed.push({
           id: "notification:" + stable.slice(0, 180), source: "notifications", app: app,
           title: title, body: String(row.body || "").slice(0, 8000),
@@ -118,6 +198,14 @@ Panel {
     if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
   }
 
+  function notificationStableId(row, timestamp, app, title) {
+    var nativeId = String(row.originalId || row.id || "").slice(0, 40)
+    var occurred = Number(timestamp || 0)
+    if (isFinite(occurred) && occurred > 0)
+      return (String(Math.floor(occurred)) + ":" + nativeId).slice(0, 180)
+    return (nativeId || (String(app) + ":" + String(title))).slice(0, 180)
+  }
+
   function currentAttentionItems() {
     var result = root.historyItems.slice()
     var model = notificationService ? notificationService.popupModel : null
@@ -128,7 +216,7 @@ Panel {
         var rawUrgency = Number(row.urgency || 1)
         var app = String(row.app || row.appName || "unknown").slice(0, 120)
         var title = String(row.summary || "").slice(0, 2000)
-        var stable = String(row.id || row.originalId || (app + "-" + timestamp + "-" + title))
+        var stable = root.notificationStableId(row, timestamp, app, title)
         result.push({
           id: "notification:" + stable.slice(0, 180), source: "notifications", app: app,
           title: title, body: String(row.body || "").slice(0, 8000),
@@ -225,6 +313,27 @@ Panel {
       root.page = "detail"
       if (root.opened) root.markCurrentDigestRead()
     }
+
+    function onTemplatesChanged() {
+      if (!root.selectedTemplate) return
+      var wanted = String(root.selectedTemplate.id || "")
+      var available = OmaDigest.OmaDigestStore.templates || []
+      for (var index = 0; index < available.length; index++) {
+        if (String(available[index].id || "") !== wanted) continue
+        root.selectedTemplate = available[index]
+        return
+      }
+    }
+
+    function onTemplateEditStateChanged() {
+      if (OmaDigest.OmaDigestStore.templateEditState === "saved") root.templateEditMode = "view"
+    }
+
+    function onDataDeleteRevisionChanged() {
+      var target = OmaDigest.OmaDigestStore.dataDeleteTarget
+      if (target === "notification-history" || target === "all") root.historyItems = []
+      if (target === "digest-history" || target === "all") root.page = "settings"
+    }
   }
 
   Process {
@@ -278,14 +387,33 @@ Panel {
       return "ok"
     }
 
+    function openCurrent(): string {
+      if (!OmaDigest.OmaDigestStore.digest) return "empty"
+      root.page = "detail"
+      root.open()
+      root.scrollToTop()
+      return "ok"
+    }
+
     function showSettings(section: string): string {
       var requested = String(section)
-      root.settingsPage = ["integrations", "templates", "privacy", "connections"].indexOf(requested) >= 0
+      root.settingsPage = ["integrations", "templates", "privacy", "connections", "data"].indexOf(requested) >= 0
         ? requested : "integrations"
       root.selectedTemplate = null
       root.page = "settings"
       root.open()
       root.scrollToTop()
+      return "ok"
+    }
+
+    function previewDataDeletion(target: string): string {
+      var requested = String(target)
+      if (["digest-history", "notification-history", "integrations", "templates", "all"].indexOf(requested) < 0)
+        return "invalid"
+      root.settingsPage = "data"
+      root.page = "settings"
+      root.open()
+      root.requestDataDeletion(requested)
       return "ok"
     }
 
@@ -303,6 +431,7 @@ Panel {
 
     function prepareDraft(kind: string, request: string): string {
       var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      root.preparedDraftKind = requestedKind
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
       root.open()
@@ -315,6 +444,13 @@ Panel {
     function submitDraft(kind: string): string {
       if (String(kind) === "integration") integrationDraftEditor.submit()
       else templateDraftEditor.submit()
+      return "ok"
+    }
+
+    function submitPreparedDraft(): string {
+      if (root.preparedDraftKind === "integration") integrationDraftEditor.submit()
+      else if (root.preparedDraftKind === "template") templateDraftEditor.submit()
+      else return "empty"
       return "ok"
     }
 
@@ -338,6 +474,7 @@ Panel {
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id) !== wanted) continue
         root.selectedTemplate = available[index]
+        root.templateEditMode = "view"
         root.settingsPage = "templates"
         root.page = "settings"
         root.open()
@@ -345,6 +482,15 @@ Panel {
         return "ok"
       }
       return "missing"
+    }
+
+    function editTemplate(templateId: string, mode: string): string {
+      if (showTemplate(templateId) !== "ok") return "missing"
+      if (String(mode) === "manual") root.beginManualTemplateEdit()
+      else if (String(mode) === "agent") root.templateEditMode = "agent"
+      else return "invalid-mode"
+      root.scrollToTop()
+      return "ok"
     }
 
     function setupIntegration(integrationId: string, valuesJson: string): string {
@@ -378,24 +524,62 @@ Panel {
       return "ok"
     }
 
+    function checkIntegration(integrationId: string): string {
+      OmaDigest.OmaDigestStore.checkIntegrationStatus(String(integrationId))
+      return "ok"
+    }
+
+    function installAuthoringSkill(): string {
+      OmaDigest.OmaDigestStore.installAuthoringSkill()
+      return "ok"
+    }
+
     function generate(): string {
       if (root.attentionAvailableCount <= 0 || OmaDigest.OmaDigestStore.digestState === "working") return "unavailable"
       root.generateDigest("manual", 0)
       return "ok"
     }
 
+    function beginFocus(): string {
+      root.dndStartedAt = Date.now()
+      return "ok"
+    }
+
+    function triggerFocusReentry(focusMinutes: int): string {
+      if (OmaDigest.OmaDigestStore.digestState === "working") return "working"
+      root.requestAutomaticGeneration("dnd-ended", Math.max(0, Number(focusMinutes) || 0))
+      return "ok"
+    }
+
     function state(): string {
       return JSON.stringify({
         ready: OmaDigest.OmaDigestStore.ready,
+        opened: root.opened,
         page: root.page,
         digestTab: root.digestTab,
         digestState: OmaDigest.OmaDigestStore.digestState,
+        digestTitle: OmaDigest.OmaDigestStore.digest ? String(OmaDigest.OmaDigestStore.digest.title || "") : "",
+        digestTemplateId: OmaDigest.OmaDigestStore.digest ? String(OmaDigest.OmaDigestStore.digest.templateId || "") : "",
         draftState: OmaDigest.OmaDigestStore.draftState,
         draftKind: OmaDigest.OmaDigestStore.draftKind,
+        draftId: OmaDigest.OmaDigestStore.draftId,
+        draftProgress: OmaDigest.OmaDigestStore.draftProgress,
+        draftPlan: OmaDigest.OmaDigestStore.draftPlan,
+        draftPlanStep: OmaDigest.OmaDigestStore.draftPlanStep,
+        authoringState: OmaDigest.OmaDigestStore.authoringState,
+        authoringMessage: OmaDigest.OmaDigestStore.authoringMessage,
+        authoringSkillState: OmaDigest.OmaDigestStore.authoringSkillState,
+        authoringSkillMessage: OmaDigest.OmaDigestStore.authoringSkillMessage,
+        preparedDraftKind: root.preparedDraftKind,
+        selectedTemplateId: root.selectedTemplate ? String(root.selectedTemplate.id || "") : "",
+        templateEditMode: root.templateEditMode,
+        templateEditState: OmaDigest.OmaDigestStore.templateEditState,
+        dataDeleteState: OmaDigest.OmaDigestStore.dataDeleteState,
         errorCode: OmaDigest.OmaDigestStore.errorCode,
         errorMessage: OmaDigest.OmaDigestStore.errorMessage,
         integrations: OmaDigest.OmaDigestStore.integrations,
         integrationSetup: OmaDigest.OmaDigestStore.integrationSetup,
+        integrationStatus: OmaDigest.OmaDigestStore.integrationStatus,
         attentionCount: root.attentionAvailableCount,
         unreadCount: root.digestsForTab("unread").length,
         readCount: root.digestsForTab("read").length
@@ -433,8 +617,23 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
+      onCloseRequested: {
+        if (dataDeleteConfirm.opened) root.cancelDataDeletion()
+        else root.close()
+      }
+      onTabRequested: function(direction) {
+        if (dataDeleteConfirm.opened) dataDeleteConfirm.selectedIndex = dataDeleteConfirm.selectedIndex === 0 ? 1 : 0
+        else root.switchPanel(direction)
+      }
+      onMoveRequested: function(dx, dy) {
+        if (dataDeleteConfirm.opened && dx !== 0)
+          dataDeleteConfirm.selectedIndex = dataDeleteConfirm.selectedIndex === 0 ? 1 : 0
+      }
+      onActivateRequested: {
+        if (!dataDeleteConfirm.opened) return
+        if (dataDeleteConfirm.selectedIndex === 0) root.cancelDataDeletion()
+        else root.confirmDataDeletion()
+      }
 
       Flickable {
         id: panelScroll
@@ -481,7 +680,7 @@ Panel {
                 text: root.page === "list"
                   ? (OmaDigest.OmaDigestStore.digestState === "working"
                     ? "Generating a digest…" : root.attentionAvailableCount + " attention items")
-                  : root.page === "settings" ? "Templates, integrations, and connections" : ""
+                  : root.page === "settings" ? "Sources, privacy, connections, and retained data" : ""
                 visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
@@ -874,11 +1073,12 @@ Panel {
                   { id: "integrations", label: "Integrations" },
                   { id: "templates", label: "Templates" },
                   { id: "privacy", label: "Privacy" },
-                  { id: "connections", label: "Connections" }
+                  { id: "connections", label: "Connections" },
+                  { id: "data", label: "Data" }
                 ]
                 Rectangle {
                   required property var modelData
-                  width: (content.width - Style.space(18)) / 4
+                  width: (content.width - Style.space(24)) / 5
                   height: Style.space(34)
                   radius: Style.cornerRadius
                   color: root.settingsPage === modelData.id
@@ -911,6 +1111,70 @@ Panel {
               width: parent.width
               visible: root.settingsPage === "integrations"
               spacing: Style.space(12)
+
+              Text {
+                text: "BUILT INTO OMARCHY"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Rectangle {
+                width: parent.width
+                height: coreSources.implicitHeight + Style.space(20)
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground, Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: Style.normalBorderFor(root.foreground, Color.accent)
+
+                Column {
+                  id: coreSources
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(8)
+
+                  Repeater {
+                    model: [
+                      { name: "Notifications", detail: "Privacy-filtered evidence from Omarchy's notification service" },
+                      { name: "Focus / DND", detail: "Automatic re-entry timing and digest triggers" }
+                    ]
+                    Row {
+                      required property var modelData
+                      width: parent.width
+                      height: sourceText.implicitHeight
+                      spacing: Style.space(8)
+
+                      Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "●"
+                        color: Color.accent
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                      Text {
+                        id: sourceText
+                        width: parent.width - Style.space(22)
+                        text: String(modelData.name) + "\n" + String(modelData.detail)
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        wrapMode: Text.WordWrap
+                      }
+                    }
+                  }
+                }
+              }
+
+              Text {
+                text: "OPTIONAL CONTEXT"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
 
               Text {
                 visible: OmaDigest.OmaDigestStore.integrations.length === 0
@@ -1058,9 +1322,54 @@ Panel {
                 wrapMode: Text.WordWrap
               }
 
-              Rectangle {
+              Row {
+                visible: root.templateEditMode === "view"
                 width: parent.width
-                height: templateDetails.implicitHeight + Style.space(20)
+                height: visible ? Style.space(36) : 0
+                spacing: Style.space(8)
+
+                Repeater {
+                  model: [
+                    { label: "Edit manually", mode: "manual" },
+                    { label: "Revise with agent", mode: "agent" }
+                  ]
+                  Rectangle {
+                    required property var modelData
+                    width: (parent.width - parent.spacing) / 2
+                    height: parent.height
+                    radius: Style.cornerRadius
+                    color: templateEditMouse.containsMouse
+                      ? Style.hoverFillFor(root.foreground, Color.accent)
+                      : Style.normalFillFor(root.foreground, Color.accent)
+                    border.width: Style.spacing.hairline
+                    border.color: Style.normalBorderFor(root.foreground, Color.accent)
+
+                    Text {
+                      anchors.centerIn: parent
+                      text: String(modelData.label)
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                    }
+                    MouseArea {
+                      id: templateEditMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        if (String(modelData.mode) === "manual") root.beginManualTemplateEdit()
+                        else root.templateEditMode = "agent"
+                      }
+                    }
+                  }
+                }
+              }
+
+              Rectangle {
+                visible: root.templateEditMode === "view"
+                width: parent.width
+                height: visible ? templateDetails.implicitHeight + Style.space(20) : 0
                 radius: Style.cornerRadius
                 color: Style.normalFillFor(root.foreground, Color.accent)
 
@@ -1118,6 +1427,7 @@ Panel {
               }
 
               Text {
+                visible: root.templateEditMode === "view"
                 text: "INSTRUCTIONS"
                 color: Color.accent
                 font.family: root.fontFamily
@@ -1126,12 +1436,148 @@ Panel {
                 font.letterSpacing: 1
               }
               Text {
+                visible: root.templateEditMode === "view"
                 width: parent.width
                 text: root.selectedTemplate ? String(root.selectedTemplate.instructions) : ""
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 wrapMode: Text.WordWrap
+              }
+
+              Column {
+                visible: root.templateEditMode === "manual"
+                width: parent.width
+                spacing: Style.space(8)
+
+                Text {
+                  text: "INSTRUCTIONS"
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  font.letterSpacing: 1
+                }
+                QQC.TextArea {
+                  id: templateInstructionsEdit
+                  width: parent.width
+                  height: Style.space(180)
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: TextEdit.Wrap
+                  background: Rectangle {
+                    radius: Style.cornerRadius
+                    color: Style.normalFillFor(root.foreground, Color.accent)
+                    border.width: Style.spacing.hairline
+                    border.color: Style.normalBorderFor(root.foreground, Color.accent)
+                  }
+                }
+
+                Text {
+                  text: "ROUTING POLICY · JSON"
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  font.letterSpacing: 1
+                }
+                QQC.TextArea {
+                  id: templatePolicyEdit
+                  width: parent.width
+                  height: Style.space(250)
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: TextEdit.NoWrap
+                  background: Rectangle {
+                    radius: Style.cornerRadius
+                    color: Style.normalFillFor(root.foreground, Color.accent)
+                    border.width: Style.spacing.hairline
+                    border.color: Style.normalBorderFor(root.foreground, Color.accent)
+                  }
+                }
+
+                Row {
+                  width: parent.width
+                  height: Style.space(36)
+                  spacing: Style.space(8)
+
+                  Repeater {
+                    model: [{ label: "Save changes", save: true }, { label: "Cancel", save: false }]
+                    Rectangle {
+                      required property var modelData
+                      width: (parent.width - parent.spacing) / 2
+                      height: parent.height
+                      radius: Style.cornerRadius
+                      color: modelData.save ? Color.accent : Style.normalFillFor(root.foreground, Color.accent)
+                      opacity: modelData.save && OmaDigest.OmaDigestStore.templateEditState === "saving" ? 0.55 : 1
+                      Text {
+                        anchors.centerIn: parent
+                        text: modelData.save && OmaDigest.OmaDigestStore.templateEditState === "saving" ? "Validating…" : String(modelData.label)
+                        color: modelData.save ? Color.background : root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: modelData.save
+                      }
+                      MouseArea {
+                        anchors.fill: parent
+                        enabled: !modelData.save || OmaDigest.OmaDigestStore.templateEditState !== "saving"
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: modelData.save ? root.saveManualTemplateEdit() : root.templateEditMode = "view"
+                      }
+                    }
+                  }
+                }
+
+                Text {
+                  visible: OmaDigest.OmaDigestStore.templateEditMessage !== ""
+                  width: parent.width
+                  text: OmaDigest.OmaDigestStore.templateEditMessage
+                  color: OmaDigest.OmaDigestStore.templateEditState === "error" ? Color.error : Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+              }
+
+              Column {
+                visible: root.templateEditMode === "agent"
+                width: parent.width
+                spacing: Style.space(8)
+
+                Text {
+                  width: parent.width
+                  text: "Describe the change. The constrained template agent receives the current template, shows its plan here, and returns a complete validated revision for review."
+                  color: Qt.darker(root.foreground, 1.25)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.WordWrap
+                }
+                OmaDigest.DraftEditor {
+                  id: templateRevisionEditor
+                  kind: "template"
+                  revisionTemplateId: root.selectedTemplate ? String(root.selectedTemplate.id) : ""
+                  width: parent.width
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                }
+                Text {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  text: "Cancel revision"
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                  MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -Style.space(6)
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.templateEditMode = "view"
+                  }
+                }
               }
             }
 
@@ -1302,6 +1748,157 @@ Panel {
                 width: parent.width
                 text: "Ignore: no retention or count · Count only: content is erased · Digest: content may reach the connected AI · Digest + agent: cited content may also accompany an explicit Send to agent action."
                 color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "data"
+              spacing: Style.space(12)
+
+              Text {
+                width: parent.width
+                text: "DELETE OMADIGEST DATA"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Text {
+                width: parent.width
+                text: "These controls affect only data retained by OmaDigest. Omarchy's own notification history is never deleted."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Repeater {
+                model: [
+                  { id: "digest-history", title: "Delete digest history", description: "Remove all saved read and unread digests." },
+                  { id: "notification-history", title: "Delete notification history", description: "Remove notification evidence retained by OmaDigest and prevent older Omarchy notifications from being re-imported." },
+                  { id: "integrations", title: "Delete integrations", description: "Remove custom integrations and reset all integration setup, enablement, and known secrets." },
+                  { id: "templates", title: "Delete templates", description: "Remove custom templates. Bundled templates remain available." }
+                ]
+
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: Math.max(dataDeleteCopy.implicitHeight + Style.space(20), Style.space(60))
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+
+                  Row {
+                    anchors.fill: parent
+                    anchors.margins: Style.space(10)
+                    spacing: Style.space(10)
+
+                    Column {
+                      id: dataDeleteCopy
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: parent.width - dataDeleteButton.width - Style.space(10)
+                      spacing: Style.space(2)
+                      Text {
+                        width: parent.width
+                        text: String(modelData.title)
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                      }
+                      Text {
+                        width: parent.width
+                        text: String(modelData.description)
+                        color: Qt.darker(root.foreground, 1.4)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WordWrap
+                      }
+                    }
+
+                    Button {
+                      id: dataDeleteButton
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: Style.space(84)
+                      height: Style.space(40)
+                      text: "Delete"
+                      bordered: true
+                      focusable: true
+                      foreground: Color.urgent
+                      fontFamily: root.fontFamily
+                      fontSize: Style.font.caption
+                      enabled: OmaDigest.OmaDigestStore.dataDeleteState !== "working"
+                      onClicked: root.requestDataDeletion(String(modelData.id))
+                    }
+                  }
+                }
+              }
+
+              Rectangle {
+                width: parent.width
+                height: deleteAllRow.implicitHeight + Style.space(24)
+                radius: Style.cornerRadius
+                color: Util.alpha(Color.urgent, 0.09)
+                border.width: Style.spacing.hairline
+                border.color: Util.alpha(Color.urgent, 0.52)
+
+                Row {
+                  id: deleteAllRow
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.margins: Style.space(12)
+                  spacing: Style.space(10)
+
+                  Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - deleteAllButton.width - Style.space(10)
+                    spacing: Style.space(2)
+                    Text {
+                      width: parent.width
+                      text: "Delete all"
+                      color: Color.urgent
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                    }
+                    Text {
+                      width: parent.width
+                      text: "Delete every category above. Model connections and privacy rules remain."
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.WordWrap
+                    }
+                  }
+
+                  Button {
+                    id: deleteAllButton
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(96)
+                    height: Style.space(40)
+                    text: "Delete all"
+                    bordered: true
+                    focusable: true
+                    foreground: Color.urgent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    enabled: OmaDigest.OmaDigestStore.dataDeleteState !== "working"
+                    onClicked: root.requestDataDeletion("all")
+                  }
+                }
+              }
+
+              Text {
+                visible: OmaDigest.OmaDigestStore.dataDeleteMessage !== ""
+                width: parent.width
+                text: OmaDigest.OmaDigestStore.dataDeleteMessage
+                color: OmaDigest.OmaDigestStore.dataDeleteState === "error" ? Color.error : Color.accent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
@@ -1798,6 +2395,20 @@ Panel {
             }
           }
         }
+      }
+
+      ConfirmDialog {
+        id: dataDeleteConfirm
+        anchors.fill: parent
+        z: 100
+        opened: false
+        confirmText: "Delete"
+        cancelText: "Cancel"
+        background: Color.background
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onCanceled: root.cancelDataDeletion()
+        onConfirmed: root.confirmDataDeletion()
       }
     }
   }

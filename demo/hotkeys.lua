@@ -1,0 +1,27 @@
+local source = debug.getinfo(1, "S").source:gsub("^@", "")
+local demo_dir = source:match("^(.*)/[^/]+$")
+local action = o.shell_quote(demo_dir .. "/hotkey-action.sh")
+local hyper = "SUPER + CTRL + ALT + SHIFT + "
+
+local function demo_bind(key, description, name)
+  o.bind(hyper .. key, "OmaDigest demo: " .. description, action .. " " .. name)
+end
+
+demo_bind("P", "Prepare/reset", "prepare")
+demo_bind("S", "Start screen recording", "record-start")
+demo_bind("Q", "Stop screen recording", "record-stop")
+demo_bind("O", "Toggle panel", "panel")
+demo_bind("N", "Visible notification storm", "storm")
+demo_bind("F", "Enter DND focus", "focus-start")
+demo_bind("H", "Emit hidden focus events", "focus-events")
+demo_bind("R", "Exit DND / re-entry", "reentry")
+demo_bind("J", "Emit fresh PR #482 update", "pr-update")
+demo_bind("V", "Open newest unread digest", "open-newest")
+demo_bind("U", "Show Unread", "unread")
+demo_bind("E", "Show Read", "read")
+demo_bind("T", "Load template prompt", "template-prompt")
+demo_bind("D", "Submit prepared draft", "submit-draft")
+demo_bind("A", "Accept completed draft", "accept-draft")
+demo_bind("G", "Generate digest", "generate")
+demo_bind("X", "Restore pre-demo state", "restore")
+demo_bind("K", "Show shortcut help", "help")

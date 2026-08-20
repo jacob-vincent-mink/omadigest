@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jacob-vincent-mink.github",
+  "name": "GitHub",
+  "version": "0.1.0",
+  "author": "Jacob Vincent-Mink",
+  "description": "Adds bounded unread GitHub notification context through your existing GitHub CLI session.",
+  "entryPoint": "connector.mjs",
+  "capabilities": ["sync", "open"],
+  "setup": {
+    "summary": "Uses the active gh login. OmaDigest never stores the GitHub token and only imports bounded notification metadata.",
+    "fields": [],
+    "actionLabel": "Check GitHub"
+  },
+  "permissions": {
+    "networkHosts": ["api.github.com", "github.com"],
+    "commands": ["gh"],
+    "readPaths": [],
+    "writePaths": []
+  }
+}

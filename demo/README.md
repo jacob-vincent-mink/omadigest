@@ -1,6 +1,6 @@
 # OmaDigest demo production
 
-The primary demo is scripted so visible transitions are fast, repeatable, and free of terminal windows. It still uses real Omarchy notifications, the real privacy policy, live scoped draft agents, the connector sandbox, deterministic template routing, and the configured digest model.
+The primary demo is scripted so visible transitions are fast, repeatable, and free of terminal windows. It uses real Omarchy notifications, a live authenticated GitHub CLI connector, the real privacy policy, the scoped template agent, deterministic template routing, and the configured digest model.
 
 ## Record the polished take
 
@@ -14,15 +14,46 @@ npm run check
 The runner:
 
 1. backs up and prepares isolated OmaDigest state;
-2. records real Omarchy notification popups;
-3. triggers a real focus-reentry digest while omitting the model wait from the final video;
-4. demonstrates opening a digest moving it from Unread to Read;
-5. authors, reviews, accepts, configures, and enables a live GitHub integration;
-6. authors, reviews, and accepts a deterministic GitHub Triage template;
-7. generates and opens a GitHub-enriched digest; and
-8. concatenates the clean scenes under `demo/recordings/` before restoring the original state.
+2. shows built-in Omarchy sources and the bundled connector's live `gh` identity;
+3. records real Omarchy notification popups;
+4. triggers a real focus-reentry digest while omitting the model wait from the final video;
+5. demonstrates opening a digest moving it from Unread to Read;
+6. opens both manual and constrained-agent editors for a packaged default template;
+7. authors, reviews, and accepts a deterministic GitHub Triage template with a visible model-authored plan;
+8. routes fresh PR notification and real connector evidence through that template and opens the specifically named report; and
+9. concatenates the clean scenes under `demo/recordings/` before restoring the original state.
 
-Model and connector operations are not mocked. Recording simply stops during long model waits, then resumes on the resulting UI state. The final path is printed on success.
+Model operations are not mocked. Recording simply stops during long model waits, then resumes on the resulting UI state. The final path is printed on success.
+
+## Record manually with demo hotkeys
+
+Install the reversible keymap once:
+
+```bash
+./demo/hotkeys.sh install
+```
+
+The bindings use the otherwise-unused `Hyper` chord: `Super + Ctrl + Alt + Shift`. Run `./demo/hotkeys.sh list` or press `Hyper+K` for the cheat sheet. `Hyper+S` starts a fullscreen recording on workspace 9 and `Hyper+Q` stops it; clips are written to `demo/recordings/`.
+
+A clean notification/re-entry take is:
+
+1. `Hyper+P` — back up and prepare isolated demo state.
+2. `Alt+Print` — start the normal Omarchy screen recorder.
+3. `Hyper+N` — emit the visible native notification storm.
+4. `Hyper+F` — enter DND/focus mode.
+5. `Hyper+H` — emit the protected Signal canary, crash, and additional focus events while DND is active.
+6. `Hyper+R` — leave DND and trigger automatic re-entry generation.
+7. `Hyper+V` — open the newest digest after it finishes; opening marks it read.
+
+For the authoring scenes, `Hyper+T` loads the template prompt into both the clipboard and OmaDigest editor. Use `Hyper+D` to submit it, `Hyper+A` to accept it, `Hyper+J` to emit the final PR #482 update, and `Hyper+G` to generate the routed digest. `Hyper+U` and `Hyper+E` switch between Unread and Read. A phone-friendly running order is in [`PHONE-CUE-SHEET.md`](PHONE-CUE-SHEET.md).
+
+Finish with `Hyper+X` to restore pre-demo state. Remove the bindings entirely with:
+
+```bash
+./demo/hotkeys.sh uninstall
+```
+
+Installation adds one marked `dofile(...)` block to `~/.config/hypr/bindings.lua`, creates a timestamped backup under `~/.local/state/omadigest-demo-hotkeys/backups/`, reloads Hyprland, and automatically rolls back if `hyprctl configerrors` reports a problem. It does not replace any existing binding.
 
 ## Privacy behavior in the take
 
@@ -39,7 +70,7 @@ omarchy-shell -q notifications setDnd off
 ./demo/restore.sh
 ```
 
-The helper never copies or changes model-provider authentication. It uses the already authenticated `gh` CLI and never displays or stores a GitHub token in connector configuration.
+The helper never copies or changes model-provider authentication or integration packages. It temporarily enables the bundled GitHub connector, backs up OmaDigest's enablement record, and restores that record byte-for-byte afterward.
 
 ## Manual scene capture
 

@@ -20,7 +20,7 @@ OmaDigest is a native Omarchy attention layer. It observes the existing notifica
 
 It does **not** replace the notification daemon or put a general-purpose agent inside the shell.
 
-> **Status:** Beta. Core notification intake, privacy enforcement, digest generation, template and integration authoring, explicit agent handoffs, DND re-entry, scheduling, Voxtype input, and provider-based read-aloud are implemented. See the remaining [release validation](TODO.md).
+> **Status:** Beta. Core notification intake, privacy enforcement, digest generation, inline template authoring, default-agent integration authoring, explicit agent handoffs, DND re-entry, scheduling, Voxtype input, and provider-based read-aloud are implemented. See the remaining [release validation](TODO.md).
 
 ## Highlights
 
@@ -28,7 +28,8 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Privacy before persistence** — protected apps such as Signal start at **Ignore**; unknown apps start at **Count only**, with content erased.
 - **Citations by construction** — every factual digest entry must cite a supplied notification or connector source ID.
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
-- **Describe, review, accept** — scoped agents draft readable templates and self-contained integrations for explicit review.
+- **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
+- **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
 - **Explicit action handoff** — send one cited digest item to the default Omarchy agent, or continue broader authoring work in Herdr.
 - **Focus re-entry** — automatically generate after DND ends, at an optional daily time, or manually from the panel.
@@ -50,7 +51,7 @@ Optional features:
 - `secret-tool` for integration and TTS secrets
 - `mpv` for read-aloud playback
 - `herdr` for explicit extended authoring handoff
-- `gh` only for a user-installed integration that declares and uses GitHub CLI access
+- `gh` for the bundled, read-only GitHub notification integration
 
 ### Add the plugin
 
@@ -118,11 +119,10 @@ OmaDigest gives each model session only the structured submission tool needed fo
 |---|---|
 | Digest generation | `emit_digest` |
 | Template drafting | `emit_template_draft`, `out_of_scope` |
-| Integration drafting | `emit_integration_draft`, `out_of_scope` |
 
-These sessions receive no Pi `bash`, `read`, `write`, `edit`, browser, web, or device tools. Broader work starts only after **Open in default agent**, **Send to agent**, or **Continue in Herdr** is clicked.
+These Pi sessions receive no `bash`, `read`, `write`, `edit`, browser, web, or device tools. Integration authoring is deliberately different: OmaDigest opens the default coding agent with its authoring skill, which builds in a temporary directory and must pass the standalone package validator before an atomic, disabled install. Broader work starts only after **Build in default agent**, **Open in default agent**, **Send to agent**, or **Continue in Herdr** is clicked.
 
-Generated integrations are schema-validated, syntax-checked, shown for review, installed only after acceptance, and remain disabled until separately configured and enabled. Connectors use Node's permission model, a minimal environment, bounded I/O, and timeouts. Omarchy plugins themselves share the user's long-running shell process and are not an OS security boundary; review plugin code before installing it.
+Generated integrations are schema-validated, syntax-checked, tested in the connector sandbox, probed with mocked inputs, installed atomically, and remain disabled until separately configured and enabled. Connectors use Node's permission model, a minimal environment, bounded I/O, and timeouts. Omarchy plugins themselves share the user's long-running shell process and are not an OS security boundary; review plugin code before installing it.
 
 See [Security policy](SECURITY.md) and the detailed [security model](docs/security.md).
 
@@ -146,7 +146,7 @@ integrations/<integration-id>/
 └── README.md
 ```
 
-The bundled Google Calendar integration uses a calendar's **Secret address in iCal format**, stored in Secret Service. It emits bounded event metadata—not the secret URL, descriptions, attendees, or attachments.
+The bundled GitHub integration uses the existing `gh` login and emits bounded unread-notification metadata—not issue bodies, comments, patches, repository contents, or tokens. The bundled Google Calendar integration uses a calendar's **Secret address in iCal format**, stored in Secret Service, and excludes the secret URL, descriptions, attendees, and attachments. Both expose a non-mutating live status check before enablement.
 
 ## Documentation
 

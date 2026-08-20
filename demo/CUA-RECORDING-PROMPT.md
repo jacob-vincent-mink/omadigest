@@ -6,9 +6,9 @@ Record a concise, production-quality OmaDigest demo from this repository. Prefer
 
 1. Read `AGENTS.md` and `demo/README.md`.
 2. Preserve any existing worktree changes and recordings.
-3. Run `npm run check`, `omarchy plugin validate "$PWD"`, and `qmllint -I components Panel.qml BarWidget.qml components/*.qml`.
+3. Run `npm run check`, `omarchy plugin validate "$PWD"`, and `qmllint -I /usr/share/omarchy/shell Panel.qml BarWidget.qml components/*.qml`.
 4. Confirm the installed plugin contains the current QML and broker bundle.
-5. Confirm workspace 9 is empty and Omarchy DND is off.
+5. Confirm workspace 9 is empty, Omarchy DND is off, and `gh auth status --hostname github.com` succeeds.
 
 ## Primary take
 
@@ -18,17 +18,20 @@ Run:
 ./demo/run-demo.sh 9
 ```
 
-Do not open a terminal on the recorded workspace. The runner invokes the real notification burst internally and drives OmaDigest through narrow semantic IPC methods. It cuts only model wait time; it does not substitute mock drafts, connectors, templates, digests, or notifications.
+Do not open a terminal on the recorded workspace. The runner invokes the real notification burst internally and drives OmaDigest through narrow semantic IPC methods. It cuts only model wait time; it does not substitute mock templates, digests, or notifications.
+
+For a human-paced take, install and use `demo/hotkeys.sh` as documented in `demo/README.md`. The hotkeys invoke the same semantic IPC and split notification/DND transitions into independently timed scenes.
 
 The finished video must visibly show:
 
+- built-in Omarchy sources plus the bundled GitHub connector's live authenticated status;
 - native Omarchy notification popups;
 - a specific, evidence-based automatic digest title;
 - no Signal canary and no contentless/count-only digest entry;
 - opening a digest automatically moving it from Unread to Read;
-- the GitHub integration request, live draft review, acceptance, setup, and enabled state;
-- the GitHub Triage template request, live draft review, acceptance, and readable details; and
-- a final GitHub-enriched digest with a specific subject-based title.
+- both manual and constrained-agent editing surfaces for a packaged default template;
+- the GitHub Triage template request, model-authored plan, live draft review, acceptance, and readable details; and
+- a final template-routed digest with a specific PR-based title, citations, and explicit agent action.
 
 ## Quality bar
 

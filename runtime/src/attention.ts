@@ -18,8 +18,10 @@ export const attentionItemSchema = z.object({
 export class AttentionStore {
   readonly #eventsDir: string;
   readonly #seenPath: string;
+  readonly #notificationClearPath: string;
   readonly #items = new Map<string, AttentionItem>();
   readonly #seen = new Set<string>();
+  #notificationClearedAt = "";
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
     const state = env.XDG_STATE_HOME?.startsWith("/")
@@ -27,12 +29,15 @@ export class AttentionStore {
       : env.HOME?.startsWith("/") ? join(env.HOME, ".local", "state") : "/tmp";
     this.#eventsDir = join(state, "omadigest", "events");
     this.#seenPath = join(state, "omadigest", "seen.json");
+    this.#notificationClearPath = join(state, "omadigest", "notification-clear.json");
+    this.#loadNotificationClear();
     this.#load();
     this.#loadSeen();
   }
 
   ingest(rawItems: AttentionItem[]): number {
-    const items = z.array(attentionItemSchema).max(200).parse(rawItems);
+    const items = z.array(attentionItemSchema).max(200).parse(rawItems).filter((item) =>
+      item.source !== "notifications" || this.#notificationClearedAt === "" || item.occurredAt > this.#notificationClearedAt);
     if (items.length === 0) return this.#items.size;
     mkdirSync(this.#eventsDir, { recursive: true, mode: 0o700 });
     const day = new Date().toISOString().slice(0, 10);
@@ -75,6 +80,42 @@ export class AttentionStore {
 
   acknowledgedIds(): string[] {
     return [...this.#items.keys()].filter((id) => this.#seen.has(id));
+  }
+
+  clearNotifications(clearedAt = new Date().toISOString()): void {
+    this.#notificationClearedAt = z.string().datetime().parse(clearedAt);
+    this.#saveNotificationClear();
+    if (existsSync(this.#eventsDir)) {
+      let names: string[] = [];
+      try { names = readdirSync(this.#eventsDir).filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/u.test(name)); }
+      catch { names = []; }
+      for (const name of names) {
+        const path = join(this.#eventsDir, name);
+        try {
+          if (statSync(path).size > 10 * 1024 * 1024) throw new Error("oversized attention segment");
+          const retained = readFileSync(path, "utf8").split("\n").flatMap((line) => {
+            if (line === "") return [];
+            const item = attentionItemSchema.parse(JSON.parse(line));
+            return item.source === "notifications" ? [] : [JSON.stringify(item)];
+          });
+          const temporary = `${path}.${randomUUID()}.tmp`;
+          writeFileSync(temporary, retained.length === 0 ? "" : `${retained.join("\n")}\n`, { mode: 0o600 });
+          renameSync(temporary, path);
+        } catch { rmSync(path, { force: true }); }
+      }
+    }
+    for (const [id, item] of this.#items) if (item.source === "notifications") this.#items.delete(id);
+    for (const id of this.#seen) if (!this.#items.has(id)) this.#seen.delete(id);
+    this.#saveSeen();
+  }
+
+  clear(): void {
+    this.#items.clear();
+    this.#seen.clear();
+    rmSync(this.#eventsDir, { recursive: true, force: true });
+    rmSync(this.#seenPath, { force: true });
+    this.#notificationClearedAt = new Date().toISOString();
+    this.#saveNotificationClear();
   }
 
   byIds(ids: string[]): AttentionItem[] {
@@ -125,6 +166,7 @@ export class AttentionStore {
         for (const line of readFileSync(path, "utf8").split("\n")) {
           if (line === "") continue;
           const item = attentionItemSchema.parse(JSON.parse(line));
+          if (item.source === "notifications" && this.#notificationClearedAt !== "" && item.occurredAt <= this.#notificationClearedAt) continue;
           this.#items.delete(item.id);
           this.#items.set(item.id, item);
         }
@@ -140,6 +182,22 @@ export class AttentionStore {
       if (!isObject(value) || value.version !== 1 || !Array.isArray(value.ids)) return;
       for (const id of value.ids.slice(-5_000)) if (typeof id === "string") this.#seen.add(id);
     } catch { /* Start with no acknowledgements. */ }
+  }
+
+  #loadNotificationClear(): void {
+    try {
+      if (statSync(this.#notificationClearPath).size > 64 * 1024) return;
+      const value: unknown = JSON.parse(readFileSync(this.#notificationClearPath, "utf8"));
+      if (isObject(value) && value.version === 1 && typeof value.clearedAt === "string")
+        this.#notificationClearedAt = z.string().datetime().parse(value.clearedAt);
+    } catch { /* No notification deletion watermark yet. */ }
+  }
+
+  #saveNotificationClear(): void {
+    mkdirSync(dirname(this.#notificationClearPath), { recursive: true, mode: 0o700 });
+    const temporary = `${this.#notificationClearPath}.${randomUUID()}.tmp`;
+    writeFileSync(temporary, `${JSON.stringify({ version: 1, clearedAt: this.#notificationClearedAt })}\n`, { mode: 0o600 });
+    renameSync(temporary, this.#notificationClearPath);
   }
 
   #saveSeen(): void {

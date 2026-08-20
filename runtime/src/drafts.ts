@@ -1,9 +1,10 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DraftResult, IntegrationDraft, TemplateDraft } from "./agent.js";
 import { integrationManifestSchema } from "./integration-schema.js";
+import { validateIntegrationPackageDirectory } from "./integration-package-validation.js";
+import { compiledTemplateSchema } from "./template-schema.js";
 
 export function installDraft(configRoot: string, draft: DraftResult): "template" | "integration" {
   if (draft.kind === "out-of-scope" || draft.kind === "clarification")
@@ -11,6 +12,19 @@ export function installDraft(configRoot: string, draft: DraftResult): "template"
   return draft.kind === "template"
     ? installTemplate(configRoot, draft)
     : installIntegration(configRoot, draft);
+}
+
+export function installTemplateEdit(configRoot: string, templateId: string, instructionsValue: string, compiledJson: string): "template" {
+  if (Buffer.byteLength(instructionsValue, "utf8") > 128 * 1024) throw new Error("Template instructions exceed the byte limit");
+  if (Buffer.byteLength(compiledJson, "utf8") > 64 * 1024) throw new Error("Template policy exceeds the byte limit");
+  const compiled = compiledTemplateSchema.parse(JSON.parse(compiledJson));
+  if (compiled.id !== templateId) throw new Error("The template ID cannot change during an edit");
+  const instructions = instructionsValue.trim();
+  if (instructions === "") throw new Error("Template instructions cannot be empty");
+  const skillMarkdown = [
+    "---", `name: ${compiled.id}`, `description: ${JSON.stringify(compiled.description)}`, "---", "", instructions
+  ].join("\n");
+  return installTemplate(configRoot, { kind: "template", skillMarkdown, compiled });
 }
 
 function installTemplate(configRoot: string, draft: TemplateDraft): "template" {
@@ -41,23 +55,7 @@ function installIntegration(configRoot: string, draft: IntegrationDraft): "integ
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
       writeFileSync(path, file.content, { mode: 0o600 });
     }
-    const restrictedEnvironment = { PATH: process.env.PATH || "/usr/bin", HOME: "/nonexistent", LANG: process.env.LANG || "C.UTF-8" };
-    execFileSync(process.execPath, ["--check", join(temporary, "connector.mjs")], {
-      timeout: 10_000, stdio: "ignore", env: restrictedEnvironment
-    });
-    execFileSync(process.execPath, ["--check", join(temporary, "connector.test.mjs")], {
-      timeout: 10_000, stdio: "ignore", env: restrictedEnvironment
-    });
-    execFileSync("bwrap", [
-      "--die-with-parent", "--unshare-all",
-      "--ro-bind", "/usr", "/usr",
-      "--ro-bind", "/lib", "/lib",
-      "--ro-bind", "/lib64", "/lib64",
-      "--ro-bind", temporary, "/integration",
-      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-      "--setenv", "HOME", "/nonexistent",
-      "/usr/bin/node", "--test", "/integration/connector.test.mjs"
-    ], { timeout: 20_000, stdio: "ignore", env: restrictedEnvironment });
+    validateIntegrationPackageDirectory(temporary);
     replaceDirectory(temporary, destination);
   } catch (error) {
     rmSync(temporary, { recursive: true, force: true });
