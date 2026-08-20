@@ -47,7 +47,8 @@ cat > "$privacy_tmp" <<'JSON'
     "signal": "ignore",
     "github": "digest-and-handoff",
     "calendar": "digest-and-handoff",
-    "omarchy": "digest-and-handoff"
+    "omarchy": "digest-and-handoff",
+    "omarchy-action": "ignore"
   }
 }
 JSON

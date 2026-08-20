@@ -93,7 +93,7 @@ Panel {
     }
     root.historyItems = parsed
     OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems())
-    if (root.pendingAutomaticGeneration) Qt.callLater(root.completeAutomaticGeneration)
+    if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
   }
 
   function currentAttentionItems() {
@@ -209,6 +209,20 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.parseNotificationHistory(text)
+    }
+  }
+
+  Timer {
+    id: automaticGenerationTimer
+    interval: 1000
+    repeat: false
+    onTriggered: root.completeAutomaticGeneration()
+  }
+
+  Connections {
+    target: OmaDigest.OmaDigestStore
+    function onAttentionCountChanged() {
+      if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
     }
   }
 
