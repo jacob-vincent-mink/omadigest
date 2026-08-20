@@ -27,6 +27,7 @@ Panel {
 
   property string page: "list"
   property string settingsPage: "integrations"
+  property var selectedTemplate: null
   property string ttsProvider: "openai-compatible"
   property var historyItems: []
   property double dndStartedAt: 0
@@ -532,7 +533,10 @@ Panel {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.settingsPage = String(modelData.id)
+                    onClicked: {
+                      root.settingsPage = String(modelData.id)
+                      if (root.settingsPage === "templates") root.selectedTemplate = null
+                    }
                   }
                 }
               }
@@ -583,7 +587,7 @@ Panel {
 
             Column {
               width: parent.width
-              visible: root.settingsPage === "templates"
+              visible: root.settingsPage === "templates" && root.selectedTemplate === null
               spacing: Style.space(10)
 
               Repeater {
@@ -591,18 +595,44 @@ Panel {
                 Rectangle {
                   required property var modelData
                   width: parent.width
-                  height: templateText.implicitHeight + Style.space(18)
+                  height: templateRow.implicitHeight + Style.space(18)
                   radius: Style.cornerRadius
-                  color: Style.normalFillFor(root.foreground, Color.accent)
-                  Text {
-                    id: templateText
-                    anchors.fill: parent
+                  color: templateMouse.containsMouse
+                    ? Style.hoverFillFor(root.foreground, Color.accent)
+                    : Style.normalFillFor(root.foreground, Color.accent)
+
+                  Row {
+                    id: templateRow
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                     anchors.margins: Style.space(9)
-                    text: String(modelData.name) + "\n" + String(modelData.description)
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.bodySmall
-                    wrapMode: Text.WordWrap
+                    spacing: Style.space(8)
+
+                    Text {
+                      width: parent.width - templateChevron.width - Style.space(10)
+                      text: String(modelData.name) + "\n" + String(modelData.description)
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      wrapMode: Text.WordWrap
+                    }
+                    Text {
+                      id: templateChevron
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "󰅂"
+                      color: Color.accent
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                    }
+                  }
+
+                  MouseArea {
+                    id: templateMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.selectedTemplate = modelData
                   }
                 }
               }
@@ -621,6 +651,120 @@ Panel {
                 foreground: root.foreground
                 accent: Color.accent
                 fontFamily: root.fontFamily
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "templates" && root.selectedTemplate !== null
+              spacing: Style.space(12)
+
+              Text {
+                text: "‹ All templates"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                MouseArea {
+                  anchors.fill: parent
+                  anchors.margins: -Style.space(6)
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.selectedTemplate = null
+                }
+              }
+
+              Text {
+                width: parent.width
+                text: root.selectedTemplate ? String(root.selectedTemplate.name) : ""
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.displaySmall
+                font.bold: true
+                wrapMode: Text.WordWrap
+              }
+              Text {
+                width: parent.width
+                text: root.selectedTemplate ? String(root.selectedTemplate.description) : ""
+                color: Qt.darker(root.foreground, 1.25)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                wrapMode: Text.WordWrap
+              }
+
+              Rectangle {
+                width: parent.width
+                height: templateDetails.implicitHeight + Style.space(20)
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground, Color.accent)
+
+                Column {
+                  id: templateDetails
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(8)
+
+                  Text {
+                    width: parent.width
+                    text: root.selectedTemplate
+                      ? "SECTIONS\n" + (root.selectedTemplate.output.sections || []).join("  ·  ") : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+                  Text {
+                    width: parent.width
+                    text: root.selectedTemplate
+                      ? "SOURCES\n" + (root.selectedTemplate.context.connectors || []).join("  ·  ") : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+                  Text {
+                    width: parent.width
+                    text: {
+                      if (!root.selectedTemplate) return ""
+                      var match = root.selectedTemplate.match || {}
+                      var pieces = []
+                      if ((match.triggers || []).length) pieces.push("triggers: " + match.triggers.join(", "))
+                      if (match.minimumItems !== undefined) pieces.push("at least " + match.minimumItems + " items")
+                      if (match.minimumFocusMinutes !== undefined) pieces.push("after " + match.minimumFocusMinutes + "+ focus minutes")
+                      return "MATCHING\n" + (pieces.length ? pieces.join("  ·  ") : "Manual or fallback")
+                    }
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+                  Text {
+                    width: parent.width
+                    text: root.selectedTemplate
+                      ? "LIMITS\n" + root.selectedTemplate.output.maximumEntries + " entries  ·  "
+                        + root.selectedTemplate.context.maximumItems + " context items" : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+                }
+              }
+
+              Text {
+                text: "INSTRUCTIONS"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+              Text {
+                width: parent.width
+                text: root.selectedTemplate ? String(root.selectedTemplate.instructions) : ""
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
               }
             }
 

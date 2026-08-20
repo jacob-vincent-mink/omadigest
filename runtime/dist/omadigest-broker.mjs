@@ -279450,7 +279450,7 @@ async function handle(raw) {
     emit({
       type: "ready",
       protocolVersion: PROTOCOL_VERSION,
-      templates: templates.map(({ manifest }) => ({ id: manifest.id, name: manifest.name, description: manifest.description })),
+      templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
       integrations: publicIntegrations()
     });
     return true;
@@ -279558,7 +279558,7 @@ async function handle(raw) {
       else emit({
         type: "ready",
         protocolVersion: PROTOCOL_VERSION,
-        templates: templates.map(({ manifest }) => ({ id: manifest.id, name: manifest.name, description: manifest.description })),
+        templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
         integrations: publicIntegrations()
       });
     } catch (error48) {

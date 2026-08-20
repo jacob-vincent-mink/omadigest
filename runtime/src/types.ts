@@ -70,6 +70,10 @@ export type DigestTemplate = {
   directory: string;
 };
 
+export type PublicTemplate = CompiledTemplate & {
+  instructions: string;
+};
+
 export type TemplateSelection = {
   templateId: string;
   name: string;
@@ -120,7 +124,7 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: Array<{ id: string; name: string; description: string }>; integrations: PublicIntegration[] }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }
   | { type: "integration_setup"; id: string; integrationId: string; ready: boolean; message: string }
