@@ -9,7 +9,7 @@ The compiled policy has:
 - optional `minimumItems` and `minimumFocusMinutes`.
 - optional `applications` plus `minimumApplicationShare` from `0..1`.
 - optional `requiresConnectors`; all must already be enabled and ready.
-- `context.connectors`, `maximumItems`, and `maximumBytes`.
+- `context.connectors`, optional `connectorCategories` (a connector-ID to category-ID list map), `maximumItems`, and `maximumBytes`. Requested categories are deterministically intersected with the user's enabled categories; templates cannot enable categories.
 - `output.sections` and `maximumEntries`.
 
 Every declared match condition must pass. Matching templates are ranked by priority, then number of explicit conditions, then stable ID. A user's generation-time override wins over routing.

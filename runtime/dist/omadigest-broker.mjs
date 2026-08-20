@@ -1927,13 +1927,13 @@ var init_json_parse = __esm({
 });
 
 // node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/utils/uuid.js
-function fillRandomBytes(bytes) {
+function fillRandomBytes(bytes2) {
   if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
+    globalThis.crypto.getRandomValues(bytes2);
     return;
   }
-  for (let i2 = 0; i2 < bytes.length; i2++) {
-    bytes[i2] = Math.floor(Math.random() * 256);
+  for (let i2 = 0; i2 < bytes2.length; i2++) {
+    bytes2[i2] = Math.floor(Math.random() * 256);
   }
 }
 function uuidv72() {
@@ -1948,24 +1948,24 @@ function uuidv72() {
     if (sequence === 0)
       lastTimestamp++;
   }
-  const bytes = new Uint8Array(16);
-  bytes[0] = lastTimestamp / 1099511627776 & 255;
-  bytes[1] = lastTimestamp / 4294967296 & 255;
-  bytes[2] = lastTimestamp / 16777216 & 255;
-  bytes[3] = lastTimestamp / 65536 & 255;
-  bytes[4] = lastTimestamp / 256 & 255;
-  bytes[5] = lastTimestamp & 255;
-  bytes[6] = 112 | sequence >>> 28 & 15;
-  bytes[7] = sequence >>> 20 & 255;
-  bytes[8] = 128 | sequence >>> 14 & 63;
-  bytes[9] = sequence >>> 6 & 255;
-  bytes[10] = (sequence & 63) << 2 | random[10] & 3;
-  bytes[11] = random[11];
-  bytes[12] = random[12];
-  bytes[13] = random[13];
-  bytes[14] = random[14];
-  bytes[15] = random[15];
-  const hex3 = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  const bytes2 = new Uint8Array(16);
+  bytes2[0] = lastTimestamp / 1099511627776 & 255;
+  bytes2[1] = lastTimestamp / 4294967296 & 255;
+  bytes2[2] = lastTimestamp / 16777216 & 255;
+  bytes2[3] = lastTimestamp / 65536 & 255;
+  bytes2[4] = lastTimestamp / 256 & 255;
+  bytes2[5] = lastTimestamp & 255;
+  bytes2[6] = 112 | sequence >>> 28 & 15;
+  bytes2[7] = sequence >>> 20 & 255;
+  bytes2[8] = 128 | sequence >>> 14 & 63;
+  bytes2[9] = sequence >>> 6 & 255;
+  bytes2[10] = (sequence & 63) << 2 | random[10] & 3;
+  bytes2[11] = random[11];
+  bytes2[12] = random[12];
+  bytes2[13] = random[13];
+  bytes2[14] = random[14];
+  bytes2[15] = random[15];
+  const hex3 = Array.from(bytes2, (byte) => byte.toString(16).padStart(2, "0"));
   return `${hex3.slice(0, 4).join("")}-${hex3.slice(4, 6).join("")}-${hex3.slice(6, 8).join("")}-${hex3.slice(8, 10).join("")}-${hex3.slice(10, 16).join("")}`;
 }
 var lastTimestamp, sequence;
@@ -2477,9 +2477,9 @@ function encodeUTF8(str3) {
   let encoder3;
   return (encodeUTF8_ ?? (encoder3 = new globalThis.TextEncoder(), encodeUTF8_ = encoder3.encode.bind(encoder3)))(str3);
 }
-function decodeUTF8(bytes) {
+function decodeUTF8(bytes2) {
   let decoder;
-  return (decodeUTF8_ ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_ = decoder.decode.bind(decoder)))(bytes);
+  return (decodeUTF8_ ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_ = decoder.decode.bind(decoder)))(bytes2);
 }
 var encodeUTF8_, decodeUTF8_;
 var init_bytes = __esm({
@@ -2859,8 +2859,8 @@ var init_streaming = __esm({
               const { value: value2, done } = await iter.next();
               if (done)
                 return ctrl.close();
-              const bytes = encodeUTF8(JSON.stringify(value2) + "\n");
-              ctrl.enqueue(bytes);
+              const bytes2 = encodeUTF8(JSON.stringify(value2) + "\n");
+              ctrl.enqueue(bytes2);
             } catch (err2) {
               ctrl.error(err2);
             }
@@ -11366,9 +11366,9 @@ function encodeUTF82(str3) {
   let encoder3;
   return (encodeUTF8_2 ?? (encoder3 = new globalThis.TextEncoder(), encodeUTF8_2 = encoder3.encode.bind(encoder3)))(str3);
 }
-function decodeUTF82(bytes) {
+function decodeUTF82(bytes2) {
   let decoder;
-  return (decodeUTF8_2 ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_2 = decoder.decode.bind(decoder)))(bytes);
+  return (decodeUTF8_2 ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_2 = decoder.decode.bind(decoder)))(bytes2);
 }
 var encodeUTF8_2, decodeUTF8_2;
 var init_bytes2 = __esm({
@@ -11754,8 +11754,8 @@ var init_streaming3 = __esm({
               const { value: value2, done } = await iter.next();
               if (done)
                 return ctrl.close();
-              const bytes = encodeUTF82(JSON.stringify(value2) + "\n");
-              ctrl.enqueue(bytes);
+              const bytes2 = encodeUTF82(JSON.stringify(value2) + "\n");
+              ctrl.enqueue(bytes2);
             } catch (err2) {
               ctrl.error(err2);
             }
@@ -17140,11 +17140,11 @@ var init_base64 = __esm({
       } else {
         const binaryStr = atob(base64Str);
         const len = binaryStr.length;
-        const bytes = new Uint8Array(len);
+        const bytes2 = new Uint8Array(len);
         for (let i2 = 0; i2 < len; i2++) {
-          bytes[i2] = binaryStr.charCodeAt(i2);
+          bytes2[i2] = binaryStr.charCodeAt(i2);
         }
-        return Array.from(new Float32Array(bytes.buffer));
+        return Array.from(new Float32Array(bytes2.buffer));
       }
     };
   }
@@ -54019,9 +54019,9 @@ function encodeUTF83(str3) {
   let encoder3;
   return (encodeUTF8_3 !== null && encodeUTF8_3 !== void 0 ? encodeUTF8_3 : (encoder3 = new globalThis.TextEncoder(), encodeUTF8_3 = encoder3.encode.bind(encoder3)))(str3);
 }
-function decodeUTF83(bytes) {
+function decodeUTF83(bytes2) {
   let decoder;
-  return (decodeUTF8_3 !== null && decodeUTF8_3 !== void 0 ? decodeUTF8_3 : (decoder = new globalThis.TextDecoder(), decodeUTF8_3 = decoder.decode.bind(decoder)))(bytes);
+  return (decodeUTF8_3 !== null && decodeUTF8_3 !== void 0 ? decodeUTF8_3 : (decoder = new globalThis.TextDecoder(), decodeUTF8_3 = decoder.decode.bind(decoder)))(bytes2);
 }
 function findNewlineIndex3(buffer, startIndex) {
   const newline = 10;
@@ -61175,8 +61175,8 @@ ${underline}`);
               const { value: value2, done } = await iter.next();
               if (done)
                 return ctrl.close();
-              const bytes = encodeUTF83(JSON.stringify(value2) + "\n");
-              ctrl.enqueue(bytes);
+              const bytes2 = encodeUTF83(JSON.stringify(value2) + "\n");
+              ctrl.enqueue(bytes2);
             } catch (err2) {
               ctrl.error(err2);
             }
@@ -111037,8 +111037,8 @@ ${val.stack}`;
       ;
     };
     var path16 = __require("path").join(__dirname, "photon_rs_bg.wasm");
-    var bytes = __require("fs").readFileSync(path16);
-    var wasmModule = new WebAssembly.Module(bytes);
+    var bytes2 = __require("fs").readFileSync(path16);
+    var wasmModule = new WebAssembly.Module(bytes2);
     var wasmInstance = new WebAssembly.Instance(wasmModule, imports);
     wasm = wasmInstance.exports;
     module.exports.__wasm = wasm;
@@ -152716,8 +152716,8 @@ var require_infra = __commonJS({
       assert2(!invalidIsomorphicEncodeValueRegex.test(input));
       return input;
     }
-    function parseJSONFromBytes(bytes) {
-      return JSON.parse(utf8DecodeBytes(bytes));
+    function parseJSONFromBytes(bytes2) {
+      return JSON.parse(utf8DecodeBytes(bytes2));
     }
     function removeASCIIWhitespace(str3, leading = true, trailing = true) {
       return removeChars(str3, leading, trailing, isASCIIWhitespace);
@@ -152816,8 +152816,8 @@ var require_data_url = __commonJS({
       return serialized;
     }
     function stringPercentDecode(input) {
-      const bytes = encoder3.encode(input);
-      return percentDecode(bytes);
+      const bytes2 = encoder3.encode(input);
+      return percentDecode(bytes2);
     }
     function isHexCharByte(byte) {
       return byte >= 48 && byte <= 57 || byte >= 65 && byte <= 70 || byte >= 97 && byte <= 102;
@@ -153400,10 +153400,10 @@ var require_webidl = __commonJS({
       if (jsArrayBuffer.detached) {
         return new Uint8Array(0);
       }
-      const bytes = new Uint8Array(length);
+      const bytes2 = new Uint8Array(length);
       const view = new Uint8Array(jsArrayBuffer, offset, length);
-      bytes.set(view);
-      return bytes;
+      bytes2.set(view);
+      return bytes2;
     };
     webidl.converters.DOMString = function(V3, prefix, argument, flags) {
       if (V3 === null && webidl.util.HasFlag(flags, webidl.attributes.LegacyNullToEmptyString)) {
@@ -154119,19 +154119,19 @@ var require_util4 = __commonJS({
     }
     async function readAllBytes(reader, successSteps, failureSteps) {
       try {
-        const bytes = [];
+        const bytes2 = [];
         let byteLength2 = 0;
         do {
           const { done, value: chunk } = await reader.read();
           if (done) {
-            successSteps(Buffer.concat(bytes, byteLength2));
+            successSteps(Buffer.concat(bytes2, byteLength2));
             return;
           }
           if (!isUint8Array(chunk)) {
             failureSteps(new TypeError("Received non-Uint8Array chunk"));
             return;
           }
-          bytes.push(chunk);
+          bytes2.push(chunk);
           byteLength2 += chunk.length;
         } while (true);
       } catch (e2) {
@@ -155123,10 +155123,10 @@ Content-Type: ${value2.type || "application/octet-stream"}\r
           const result = action();
           const iterator = result?.[Symbol.asyncIterator]?.();
           if (iterator) {
-            for await (const bytes of iterator) {
+            for await (const bytes2 of iterator) {
               if (isErrored(stream11)) break;
-              if (bytes.length) {
-                controller.enqueue(new Uint8Array(bytes));
+              if (bytes2.length) {
+                controller.enqueue(new Uint8Array(bytes2));
               }
             }
           } else if (result?.length && !isErrored(stream11)) {
@@ -155157,19 +155157,19 @@ Content-Type: ${value2.type || "application/octet-stream"}\r
     function bodyMixinMethods(instance, getInternalState) {
       const methods = {
         blob() {
-          return consumeBody2(this, (bytes) => {
+          return consumeBody2(this, (bytes2) => {
             let mimeType = bodyMimeType(getInternalState(this));
             if (mimeType === null) {
               mimeType = "";
             } else if (mimeType) {
               mimeType = serializeAMimeType(mimeType);
             }
-            return new Blob([bytes], { type: mimeType });
+            return new Blob([bytes2], { type: mimeType });
           }, instance, getInternalState);
         },
         arrayBuffer() {
-          return consumeBody2(this, (bytes) => {
-            return new Uint8Array(bytes).buffer;
+          return consumeBody2(this, (bytes2) => {
+            return new Uint8Array(bytes2).buffer;
           }, instance, getInternalState);
         },
         text() {
@@ -155205,8 +155205,8 @@ Content-Type: ${value2.type || "application/octet-stream"}\r
           }, instance, getInternalState);
         },
         bytes() {
-          return consumeBody2(this, (bytes) => {
-            return new Uint8Array(bytes);
+          return consumeBody2(this, (bytes2) => {
+            return new Uint8Array(bytes2);
           }, instance, getInternalState);
         },
         textStream() {
@@ -168764,10 +168764,10 @@ var require_response = __commonJS({
       static json(data, init = void 0) {
         webidl.argumentLengthCheck(arguments, 1, "Response.json");
         init = webidl.converters.ResponseInit(init);
-        const bytes = textEncoder.encode(
+        const bytes2 = textEncoder.encode(
           serializeJavascriptValueToJSONString(data)
         );
-        const body = extractBody2(bytes);
+        const body = extractBody2(bytes2);
         const responseObject = fromInnerResponse(makeResponse({}), "response");
         initializeResponse(responseObject, init, { body: body[0], type: "application/json" });
         return responseObject;
@@ -169955,7 +169955,7 @@ var require_subresource_integrity = __commonJS({
       /** @type {IsValidSRIHashAlgorithm} */
       Map.prototype.has.bind(validSRIHashAlgorithmTokenSet)
     );
-    var bytesMatch = runtimeFeatures.has("crypto") === false || validSRIHashAlgorithmTokenSet.size === 0 ? () => true : (bytes, metadataList) => {
+    var bytesMatch = runtimeFeatures.has("crypto") === false || validSRIHashAlgorithmTokenSet.size === 0 ? () => true : (bytes2, metadataList) => {
       const parsedMetadata = parseMetadata(metadataList);
       if (parsedMetadata.length === 0) {
         return true;
@@ -169964,7 +169964,7 @@ var require_subresource_integrity = __commonJS({
       for (const item of metadata) {
         const algorithm = item.alg;
         const expectedValue = item.val;
-        const actualValue = applyAlgorithmToBytes(algorithm, bytes);
+        const actualValue = applyAlgorithmToBytes(algorithm, bytes2);
         if (caseSensitiveMatch(actualValue, expectedValue)) {
           return true;
         }
@@ -170022,8 +170022,8 @@ var require_subresource_integrity = __commonJS({
       }
       return result;
     }
-    var applyAlgorithmToBytes = (algorithm, bytes) => {
-      return crypto4.hash(algorithm, bytes, "base64");
+    var applyAlgorithmToBytes = (algorithm, bytes2) => {
+      return crypto4.hash(algorithm, bytes2, "base64");
     };
     function caseSensitiveMatch(actualValue, expectedValue) {
       let actualValueLength = actualValue.length;
@@ -170465,12 +170465,12 @@ var require_fetch = __commonJS({
             processBodyError(response.error);
             return;
           }
-          const processBody = (bytes) => {
-            if (!bytesMatch(bytes, request.integrity)) {
+          const processBody = (bytes2) => {
+            if (!bytesMatch(bytes2, request.integrity)) {
               processBodyError("integrity mismatch");
               return;
             }
-            response.body = safelyExtractBody(bytes)[0];
+            response.body = safelyExtractBody(bytes2)[0];
             fetchFinale(fetchParams, response);
           };
           fullyReadBody(response.body, processBody, processBodyError);
@@ -170918,12 +170918,12 @@ var require_fetch = __commonJS({
       if (request.body == null && fetchParams.processRequestEndOfBody) {
         queueMicrotask(() => fetchParams.processRequestEndOfBody());
       } else if (request.body != null) {
-        const processBodyChunk = async function* (bytes) {
+        const processBodyChunk = async function* (bytes2) {
           if (isCancelled(fetchParams)) {
             return;
           }
-          yield bytes;
-          fetchParams.processRequestBodyChunkLength?.(bytes.byteLength);
+          yield bytes2;
+          fetchParams.processRequestBodyChunkLength?.(bytes2.byteLength);
         };
         const processEndOfBody = () => {
           if (isCancelled(fetchParams)) {
@@ -170945,8 +170945,8 @@ var require_fetch = __commonJS({
         };
         requestBody = (async function* () {
           try {
-            for await (const bytes of request.body.stream) {
-              yield* processBodyChunk(bytes);
+            for await (const bytes2 of request.body.stream) {
+              yield* processBodyChunk(bytes2);
             }
             processEndOfBody();
           } catch (err2) {
@@ -170994,33 +170994,33 @@ var require_fetch = __commonJS({
       }
       fetchParams.controller.resume = async () => {
         while (true) {
-          let bytes;
+          let bytes2;
           let isFailure;
           try {
             const { done, value: value2 } = await fetchParams.controller.next();
             if (isAborted(fetchParams)) {
               break;
             }
-            bytes = done ? void 0 : value2;
+            bytes2 = done ? void 0 : value2;
           } catch (err2) {
             if (fetchParams.controller.ended && !timingInfo.encodedBodySize) {
-              bytes = void 0;
+              bytes2 = void 0;
             } else {
-              bytes = err2;
+              bytes2 = err2;
               isFailure = true;
             }
           }
-          if (bytes === void 0) {
+          if (bytes2 === void 0) {
             readableStreamClose(fetchParams.controller.controller);
             finalizeResponse2(fetchParams, response);
             return;
           }
-          timingInfo.decodedBodySize += bytes?.byteLength ?? 0;
+          timingInfo.decodedBodySize += bytes2?.byteLength ?? 0;
           if (isFailure) {
-            fetchParams.controller.terminate(bytes);
+            fetchParams.controller.terminate(bytes2);
             return;
           }
-          const buffer = new Uint8Array(bytes);
+          const buffer = new Uint8Array(bytes2);
           if (buffer.byteLength) {
             fetchParams.controller.controller.enqueue(buffer);
           }
@@ -171156,9 +171156,9 @@ var require_fetch = __commonJS({
                 if (fetchParams.controller.dump) {
                   return;
                 }
-                const bytes = chunk;
-                timingInfo.encodedBodySize += bytes.byteLength;
-                if (this.body.push(bytes) === false) {
+                const bytes2 = chunk;
+                timingInfo.encodedBodySize += bytes2.byteLength;
+                if (this.body.push(bytes2) === false) {
                   controller.pause();
                 }
               },
@@ -171460,9 +171460,9 @@ var require_cache3 = __commonJS({
           // 16.
         };
         operations.push(operation);
-        const bytes = await bodyReadPromise.promise;
+        const bytes2 = await bodyReadPromise.promise;
         if (clonedResponse.body != null) {
-          clonedResponse.body.source = bytes;
+          clonedResponse.body.source = bytes2;
         }
         const cacheJobPromise = Promise.withResolvers();
         let errorData = null;
@@ -176684,16 +176684,16 @@ function cleanEnum(obj) {
 }
 function base64ToUint8Array(base643) {
   const binaryString = atob(base643);
-  const bytes = new Uint8Array(binaryString.length);
+  const bytes2 = new Uint8Array(binaryString.length);
   for (let i2 = 0; i2 < binaryString.length; i2++) {
-    bytes[i2] = binaryString.charCodeAt(i2);
+    bytes2[i2] = binaryString.charCodeAt(i2);
   }
-  return bytes;
+  return bytes2;
 }
-function uint8ArrayToBase64(bytes) {
+function uint8ArrayToBase64(bytes2) {
   let binaryString = "";
-  for (let i2 = 0; i2 < bytes.length; i2++) {
-    binaryString += String.fromCharCode(bytes[i2]);
+  for (let i2 = 0; i2 < bytes2.length; i2++) {
+    binaryString += String.fromCharCode(bytes2[i2]);
   }
   return btoa(binaryString);
 }
@@ -176702,22 +176702,22 @@ function base64urlToUint8Array(base64url3) {
   const padding = "=".repeat((4 - base643.length % 4) % 4);
   return base64ToUint8Array(base643 + padding);
 }
-function uint8ArrayToBase64url(bytes) {
-  return uint8ArrayToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+function uint8ArrayToBase64url(bytes2) {
+  return uint8ArrayToBase64(bytes2).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 function hexToUint8Array(hex3) {
   const cleanHex = hex3.replace(/^0x/, "");
   if (cleanHex.length % 2 !== 0) {
     throw new Error("Invalid hex string length");
   }
-  const bytes = new Uint8Array(cleanHex.length / 2);
+  const bytes2 = new Uint8Array(cleanHex.length / 2);
   for (let i2 = 0; i2 < cleanHex.length; i2 += 2) {
-    bytes[i2 / 2] = Number.parseInt(cleanHex.slice(i2, i2 + 2), 16);
+    bytes2[i2 / 2] = Number.parseInt(cleanHex.slice(i2, i2 + 2), 16);
   }
-  return bytes;
+  return bytes2;
 }
-function uint8ArrayToHex(bytes) {
-  return Array.from(bytes).map((b2) => b2.toString(16).padStart(2, "0")).join("");
+function uint8ArrayToHex(bytes2) {
+  return Array.from(bytes2).map((b2) => b2.toString(16).padStart(2, "0")).join("");
 }
 var Class = class {
   constructor(..._args) {
@@ -189225,6 +189225,13 @@ import { join } from "node:path";
 
 // runtime/src/template-schema.ts
 var trigger = external_exports.enum(["manual", "dnd-ended", "scheduled"]);
+var connectorId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/);
+var categoryId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/);
+var connectorCategories = external_exports.record(connectorId, external_exports.array(categoryId).max(32)).superRefine((value2, context) => {
+  if (Object.keys(value2).length > 16) context.addIssue({ code: "custom", message: "Too many connector category entries" });
+  if (Buffer.byteLength(JSON.stringify(value2), "utf8") > 16 * 1024)
+    context.addIssue({ code: "custom", message: "Connector categories are too large" });
+});
 var compiledTemplateSchema = external_exports.object({
   version: external_exports.literal(1),
   id: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/),
@@ -189241,9 +189248,19 @@ var compiledTemplateSchema = external_exports.object({
   }).strict(),
   context: external_exports.object({
     connectors: external_exports.array(external_exports.string().min(1).max(80)).max(16),
+    connectorCategories: connectorCategories.optional(),
     maximumItems: external_exports.number().int().min(1).max(200),
     maximumBytes: external_exports.number().int().min(1024).max(25e4)
-  }).strict(),
+  }).strict().superRefine((value2, context) => {
+    if (new Set(value2.connectors).size !== value2.connectors.length)
+      context.addIssue({ code: "custom", message: "Connector IDs must be unique" });
+    for (const [connector, categories] of Object.entries(value2.connectorCategories ?? {})) {
+      if (!value2.connectors.includes(connector))
+        context.addIssue({ code: "custom", message: `Category request references undeclared connector ${connector}` });
+      if (new Set(categories).size !== categories.length)
+        context.addIssue({ code: "custom", message: `Category IDs for ${connector} must be unique` });
+    }
+  }),
   output: external_exports.object({
     sections: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(12),
     maximumEntries: external_exports.number().int().min(1).max(50)
@@ -189341,7 +189358,9 @@ import { dirname, join as join2, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 
 // runtime/src/integration-schema.ts
+var bytes = (maximum) => (value2) => Buffer.byteLength(value2, "utf8") <= maximum;
 var integrationId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/);
+var integrationCategoryIdSchema = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/);
 var safeEntryPoint = external_exports.string().regex(/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[a-zA-Z0-9._/-]+\.mjs$/);
 var setupField = external_exports.object({
   key: external_exports.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
@@ -189351,6 +189370,12 @@ var setupField = external_exports.object({
   required: external_exports.boolean().default(true),
   placeholder: external_exports.string().max(200).optional()
 }).strict();
+var categorySchema = external_exports.object({
+  id: integrationCategoryIdSchema,
+  label: external_exports.string().min(1).max(80).refine(bytes(160), "Category label is too large"),
+  description: external_exports.string().min(1).max(500).refine(bytes(1e3), "Category description is too large"),
+  defaultEnabled: external_exports.boolean()
+}).strict();
 var integrationManifestSchema = external_exports.object({
   schemaVersion: external_exports.literal(1),
   id: integrationId,
@@ -189358,6 +189383,12 @@ var integrationManifestSchema = external_exports.object({
   version: external_exports.string().regex(/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/),
   author: external_exports.string().min(1).max(120),
   description: external_exports.string().min(1).max(500),
+  categories: external_exports.array(categorySchema).min(1).max(32).superRefine((categories, context) => {
+    if (new Set(categories.map((category) => category.id)).size !== categories.length)
+      context.addIssue({ code: "custom", message: "Category IDs must be unique" });
+    if (Buffer.byteLength(JSON.stringify(categories), "utf8") > 24 * 1024)
+      context.addIssue({ code: "custom", message: "Categories are too large" });
+  }).optional(),
   entryPoint: safeEntryPoint,
   capabilities: external_exports.array(external_exports.enum(["sync", "resolve", "open"])).min(1).max(3),
   setup: external_exports.object({
@@ -189375,7 +189406,10 @@ var integrationManifestSchema = external_exports.object({
 
 // runtime/src/integrations.ts
 var MAX_MANIFEST_BYTES2 = 64 * 1024;
-var MAX_STATE_BYTES = 1024 * 1024;
+var MAX_STATE_BYTES = 256 * 1024;
+var MAX_INTEGRATIONS = 256;
+var MAX_CATEGORY_OVERRIDES = 64;
+var DEFAULT_CATEGORY_ID = "default";
 function integrationConfigRoot(env2 = process.env) {
   const xdg = env2.XDG_CONFIG_HOME?.trim();
   if (xdg?.startsWith("/")) return join2(xdg, "omadigest");
@@ -189394,32 +189428,70 @@ function discoverIntegrations(bundledRoot, userRoot, statePath) {
     } catch {
       continue;
     }
-    for (const entry of entries) {
+    for (const entry of entries.slice(0, MAX_INTEGRATIONS)) {
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
       const loaded = loadIntegration(join2(root, entry.name), source);
       if (loaded === void 0 || byId.has(loaded.manifest.id)) continue;
       byId.set(loaded.manifest.id, loaded);
     }
   }
-  return [...byId.values()].map((integration) => ({ ...integration, enabled: state2.enabled.includes(integration.manifest.id) })).sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
+  return [...byId.values()].slice(0, MAX_INTEGRATIONS).map((integration) => {
+    const userState = state2.sources[integration.manifest.id];
+    return {
+      ...integration,
+      enabled: userState?.enabled ?? false,
+      categories: publicCategories(integration.manifest, userState?.categories)
+    };
+  }).sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
 }
 function setIntegrationEnabled(statePath, id, enabled) {
+  if (!validIntegrationId(id)) throw new Error("Invalid source ID");
   const current = readIntegrationState(statePath);
-  const ids = new Set(current.enabled);
-  if (enabled) ids.add(id);
-  else ids.delete(id);
-  writeIntegrationState(statePath, { version: 1, enabled: [...ids].sort() });
+  const existing = current.sources[id] ?? { enabled: false, categories: {} };
+  current.sources[id] = { ...existing, enabled };
+  writeIntegrationState(statePath, current);
+}
+function setIntegrationCategoryEnabled(statePath, id, categoryId2, enabled) {
+  if (!validIntegrationId(id)) throw new Error("Invalid source ID");
+  const current = readIntegrationState(statePath);
+  const existing = current.sources[id] ?? { enabled: false, categories: {} };
+  const categories = { ...existing.categories, [integrationCategoryIdSchema.parse(categoryId2)]: enabled };
+  if (Object.keys(categories).length > MAX_CATEGORY_OVERRIDES) throw new Error("Too many category overrides for this source");
+  current.sources[id] = { enabled: existing.enabled, categories };
+  writeIntegrationState(statePath, current);
 }
 function readIntegrationState(path16) {
   try {
-    if (statSync2(path16).size > MAX_STATE_BYTES) return { version: 1, enabled: [] };
+    if (statSync2(path16).size > MAX_STATE_BYTES) return emptyState();
     const value2 = JSON.parse(readFileSync2(path16, "utf8"));
-    if (!isObject2(value2) || value2.version !== 1 || !Array.isArray(value2.enabled)) return { version: 1, enabled: [] };
-    const enabled = value2.enabled.filter((id) => typeof id === "string" && /^[a-z0-9][a-z0-9._-]{0,127}$/u.test(id));
-    return { version: 1, enabled: [...new Set(enabled)].slice(0, 1e3) };
+    if (!isObject2(value2)) return emptyState();
+    if (value2.version === 1 && Array.isArray(value2.enabled)) return migrateVersionOne(value2.enabled);
+    if (value2.version !== 2 || !isObject2(value2.sources)) return emptyState();
+    const sources = {};
+    for (const [id, raw] of Object.entries(value2.sources).slice(0, MAX_INTEGRATIONS)) {
+      if (!validIntegrationId(id) || !isObject2(raw) || typeof raw.enabled !== "boolean" || !isObject2(raw.categories)) continue;
+      const categories = {};
+      for (const [categoryId2, enabled] of Object.entries(raw.categories).slice(0, MAX_CATEGORY_OVERRIDES)) {
+        if (integrationCategoryIdSchema.safeParse(categoryId2).success && typeof enabled === "boolean") categories[categoryId2] = enabled;
+      }
+      sources[id] = { enabled: raw.enabled, categories };
+    }
+    return { version: 2, sources };
   } catch {
-    return { version: 1, enabled: [] };
+    return emptyState();
   }
+}
+function publicCategories(manifest, overrides = {}) {
+  const declared = manifest.categories ?? [{
+    id: DEFAULT_CATEGORY_ID,
+    label: "All items",
+    description: "All items provided by this source.",
+    defaultEnabled: true
+  }];
+  return declared.map((category) => ({
+    ...category,
+    enabled: overrides[category.id] ?? category.defaultEnabled
+  }));
 }
 function loadIntegration(directory, source) {
   const manifestPath = join2(directory, "manifest.json");
@@ -189436,11 +189508,27 @@ function loadIntegration(directory, source) {
   }
 }
 function writeIntegrationState(path16, state2) {
+  if (Object.keys(state2.sources).length > MAX_INTEGRATIONS) throw new Error("Too many source settings");
+  const serialized = `${JSON.stringify(state2, null, 2)}
+`;
+  if (Buffer.byteLength(serialized, "utf8") > MAX_STATE_BYTES) throw new Error("Source settings are too large");
   mkdirSync(dirname(path16), { recursive: true, mode: 448 });
   const temporary = `${path16}.${randomUUID()}.tmp`;
-  writeFileSync(temporary, `${JSON.stringify(state2, null, 2)}
-`, { mode: 384 });
+  writeFileSync(temporary, serialized, { mode: 384 });
   renameSync(temporary, path16);
+}
+function migrateVersionOne(enabled) {
+  const sources = {};
+  for (const id of enabled.slice(0, MAX_INTEGRATIONS)) {
+    if (typeof id === "string" && validIntegrationId(id)) sources[id] = { enabled: true, categories: {} };
+  }
+  return { version: 2, sources };
+}
+function emptyState() {
+  return { version: 2, sources: {} };
+}
+function validIntegrationId(id) {
+  return /^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(id);
 }
 function isObject2(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
@@ -189451,17 +189539,30 @@ import { execFile, spawn } from "node:child_process";
 import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { dirname as dirname2, join as join3 } from "node:path";
 import { randomUUID as randomUUID2 } from "node:crypto";
+var MAX_CONNECTOR_RESPONSE_BYTES = 64 * 1024;
+var boundedString = (maximumChars, maximumBytes) => external_exports.string().max(maximumChars).refine(
+  (value2) => Buffer.byteLength(value2, "utf8") <= maximumBytes,
+  "Connector string is too large"
+);
 var connectorItemSchema = external_exports.object({
-  id: external_exports.string().min(1).max(240),
-  connector: external_exports.string().min(1).max(128),
-  kind: external_exports.string().min(1).max(100),
+  id: boundedString(240, 480).pipe(external_exports.string().min(1)),
+  connector: boundedString(128, 256).pipe(external_exports.string().min(1)),
+  category: boundedString(64, 128).optional(),
+  kind: boundedString(100, 200).pipe(external_exports.string().min(1)),
   occurredAt: external_exports.string().datetime(),
-  title: external_exports.string().max(2e3),
-  body: external_exports.string().max(8e3).optional(),
-  url: external_exports.string().url().max(2048).optional(),
+  title: boundedString(2e3, 4e3),
+  body: boundedString(8e3, 12e3).optional(),
+  url: external_exports.string().url().max(2048).refine((value2) => Buffer.byteLength(value2, "utf8") <= 4096, "Connector URL is too large").optional(),
   sensitivity: external_exports.enum(["public", "personal", "work", "unknown"]),
-  derivedFrom: external_exports.array(external_exports.string().min(1).max(240)).min(1).max(20)
+  derivedFrom: external_exports.array(boundedString(240, 480).pipe(external_exports.string().min(1))).min(1).max(20)
 }).strict();
+var ConnectorCallError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+  }
+  code;
+};
 var IntegrationRuntime = class {
   #configRoot;
   constructor(configRoot2) {
@@ -189492,44 +189593,38 @@ var IntegrationRuntime = class {
     writeFileSync2(temporary, `${JSON.stringify({ version: 1, values: publicValues }, null, 2)}
 `, { mode: 384 });
     renameSync2(temporary, path16);
-    const config2 = await this.config(integration);
-    const response = await callConnector(integration, { version: 1, type: "probe", id: randomUUID2(), config: config2 });
-    if (response.type !== "status" || response.state !== "ready") throw new Error(response.message || "Integration setup did not become ready");
+    return this.status(integration);
   }
   async status(integration) {
     try {
       const config2 = await this.config(integration);
       const response = await callConnector(integration, { version: 1, type: "probe", id: randomUUID2(), config: config2 });
-      return { ready: response.type === "status" && response.state === "ready", message: String(response.message || "") };
+      return normalizeConnectorStatus(integration, response);
     } catch (error48) {
-      return { ready: false, message: error48 instanceof Error ? error48.message : "Setup required" };
+      return normalizeConnectorError(integration, error48);
     }
   }
-  async sync(integrations, allowedConnectorIds, since, until) {
+  async sync(integrations, allowedConnectorIds, requestedCategories, since, until) {
     const allowed = new Set(allowedConnectorIds.slice(0, 16));
     const results = await Promise.all(integrations.filter((item) => item.enabled && allowed.has(item.manifest.id) && item.manifest.capabilities.includes("sync")).map(async (integration) => {
       try {
+        const categories = enabledCategoriesForSync(integration, requestedCategories?.[integration.manifest.id]);
+        if (categories.length === 0) return [];
         const config2 = await this.config(integration);
         const response = await callConnector(integration, {
           version: 1,
           type: "sync",
           id: randomUUID2(),
           config: config2,
+          categories,
           since,
           until,
           limit: 50,
           cursor: null
         });
         if (response.type !== "items" || !Array.isArray(response.items)) return [];
-        return external_exports.array(connectorItemSchema).max(100).parse(response.items).map((item) => ({
-          id: item.id,
-          source: integration.manifest.id,
-          app: integration.manifest.name,
-          title: item.title,
-          body: item.body || "",
-          urgency: "normal",
-          occurredAt: item.occurredAt
-        }));
+        if (response.items.length > 100) return [];
+        return filterConnectorItems(integration, categories, response.items);
       } catch {
         return [];
       }
@@ -189564,6 +189659,79 @@ var IntegrationRuntime = class {
     return join3(this.#configRoot, "integration-config", `${id}.json`);
   }
 };
+function enabledCategoriesForSync(integration, requested) {
+  const enabled = integration.categories.filter((category) => category.enabled).map((category) => category.id);
+  if (requested === void 0) return enabled;
+  const requestedSet = new Set(requested.slice(0, 32));
+  return enabled.filter((id) => requestedSet.has(id));
+}
+function filterConnectorItems(integration, categories, rawItems) {
+  if (rawItems.length > 100) return [];
+  const allowedCategories = new Set(categories.slice(0, 32));
+  return rawItems.slice(0, 50).flatMap((raw) => {
+    const parsed = connectorItemSchema.safeParse(raw);
+    if (!parsed.success || parsed.data.connector !== integration.manifest.id) return [];
+    const category = parsed.data.category ?? (integration.manifest.categories === void 0 ? DEFAULT_CATEGORY_ID : void 0);
+    if (category === void 0 || !allowedCategories.has(category)) return [];
+    return [{
+      id: parsed.data.id,
+      source: integration.manifest.id,
+      app: integration.manifest.name,
+      category,
+      title: parsed.data.title,
+      body: parsed.data.body || "",
+      urgency: "normal",
+      occurredAt: parsed.data.occurredAt
+    }];
+  });
+}
+function normalizeConnectorStatus(integration, response, checkedAt = (/* @__PURE__ */ new Date()).toISOString()) {
+  if (response.type !== "status")
+    return statusWithAction(integration, { state: "error", code: "invalid_response", message: "The source returned an invalid status.", checkedAt });
+  const state2 = normalizeStatusState(response.state);
+  if (state2 === void 0)
+    return statusWithAction(integration, { state: "error", code: "invalid_status", message: "The source returned an invalid status.", checkedAt });
+  const message = boundEvidence(response.message, state2 === "ready" ? "Ready" : statusFallback(state2));
+  const code = validErrorCode(response.code) ? response.code : void 0;
+  return statusWithAction(integration, { state: state2, message, checkedAt, ...code === void 0 ? {} : { code } });
+}
+function normalizeConnectorError(integration, error48, checkedAt = (/* @__PURE__ */ new Date()).toISOString()) {
+  const candidateCode = error48 instanceof ConnectorCallError ? error48.code : "connector_failed";
+  const code = validErrorCode(candidateCode) ? candidateCode : "connector_failed";
+  const state2 = code === "authentication_required" || code === "authentication-required" ? "authentication-required" : code === "setup_required" || code === "setup-required" ? "setup-required" : "error";
+  const message = boundEvidence(error48 instanceof Error ? error48.message : void 0, statusFallback(state2));
+  return statusWithAction(integration, { state: state2, message, checkedAt, code });
+}
+function normalizeStatusState(value2) {
+  if (value2 === "ready" || value2 === "error") return value2;
+  if (value2 === "authentication-required" || value2 === "authentication_required") return "authentication-required";
+  if (value2 === "setup-required" || value2 === "setup_required") return "setup-required";
+  return void 0;
+}
+function statusWithAction(integration, status) {
+  if ((status.state === "authentication-required" || status.state === "setup-required") && integration.manifest.setup.fields.length > 0) {
+    return { ...status, action: { kind: "setup", label: integration.manifest.setup.actionLabel } };
+  }
+  return status;
+}
+function statusFallback(state2) {
+  if (state2 === "authentication-required") return "Authentication required";
+  if (state2 === "setup-required") return "Setup required";
+  if (state2 === "ready") return "Ready";
+  return "The source could not be checked.";
+}
+function validErrorCode(value2) {
+  return typeof value2 === "string" && /^[a-z][a-z0-9_-]{0,79}$/u.test(value2);
+}
+function boundEvidence(value2, fallback) {
+  const source = typeof value2 === "string" && value2.trim() !== "" ? value2.trim() : fallback;
+  let result = "";
+  for (const character of source) {
+    if (Buffer.byteLength(result + character, "utf8") > 1e3) break;
+    result += character;
+  }
+  return result;
+}
 async function callConnector(integration, request) {
   const commandEnvironment = await connectorCommandEnvironment(integration);
   return new Promise((resolveCall, rejectCall) => {
@@ -189650,9 +189818,15 @@ async function callConnector(integration, request) {
         return;
       }
       try {
+        if (Buffer.byteLength(line, "utf8") > MAX_CONNECTOR_RESPONSE_BYTES) {
+          rejectCall(new ConnectorCallError("response_too_large", "Integration response exceeded the byte limit"));
+          return;
+        }
         const response = JSON.parse(line);
-        if (response.type === "error") rejectCall(new Error(String(response.message || "Integration failed")));
-        else resolveCall(response);
+        if (response.type === "error") {
+          const code = validErrorCode(response.code) ? response.code : "connector_failed";
+          rejectCall(new ConnectorCallError(code, boundEvidence(response.message, "Integration failed")));
+        } else resolveCall(response);
       } catch {
         rejectCall(new Error("Integration returned an invalid response"));
       }
@@ -219469,29 +219643,29 @@ function sleep6(ms2, signal) {
 }
 
 // node_modules/@earendil-works/pi-coding-agent/dist/utils/exif-orientation.js
-function readOrientationFromTiff(bytes, tiffStart) {
-  if (tiffStart + 8 > bytes.length)
+function readOrientationFromTiff(bytes2, tiffStart) {
+  if (tiffStart + 8 > bytes2.length)
     return 1;
-  const byteOrder = bytes[tiffStart] << 8 | bytes[tiffStart + 1];
+  const byteOrder = bytes2[tiffStart] << 8 | bytes2[tiffStart + 1];
   const le3 = byteOrder === 18761;
   const read16 = (pos) => {
     if (le3)
-      return bytes[pos] | bytes[pos + 1] << 8;
-    return bytes[pos] << 8 | bytes[pos + 1];
+      return bytes2[pos] | bytes2[pos + 1] << 8;
+    return bytes2[pos] << 8 | bytes2[pos + 1];
   };
   const read32 = (pos) => {
     if (le3)
-      return bytes[pos] | bytes[pos + 1] << 8 | bytes[pos + 2] << 16 | bytes[pos + 3] << 24;
-    return (bytes[pos] << 24 | bytes[pos + 1] << 16 | bytes[pos + 2] << 8 | bytes[pos + 3]) >>> 0;
+      return bytes2[pos] | bytes2[pos + 1] << 8 | bytes2[pos + 2] << 16 | bytes2[pos + 3] << 24;
+    return (bytes2[pos] << 24 | bytes2[pos + 1] << 16 | bytes2[pos + 2] << 8 | bytes2[pos + 3]) >>> 0;
   };
   const ifdOffset = read32(tiffStart + 4);
   const ifdStart = tiffStart + ifdOffset;
-  if (ifdStart + 2 > bytes.length)
+  if (ifdStart + 2 > bytes2.length)
     return 1;
   const entryCount = read16(ifdStart);
   for (let i2 = 0; i2 < entryCount; i2++) {
     const entryPos = ifdStart + 2 + i2 * 12;
-    if (entryPos + 12 > bytes.length)
+    if (entryPos + 12 > bytes2.length)
       return 1;
     if (read16(entryPos) === 274) {
       const value2 = read16(entryPos + 8);
@@ -219500,62 +219674,62 @@ function readOrientationFromTiff(bytes, tiffStart) {
   }
   return 1;
 }
-function findJpegTiffOffset(bytes) {
+function findJpegTiffOffset(bytes2) {
   let offset = 2;
-  while (offset < bytes.length - 1) {
-    if (bytes[offset] !== 255)
+  while (offset < bytes2.length - 1) {
+    if (bytes2[offset] !== 255)
       return -1;
-    const marker = bytes[offset + 1];
+    const marker = bytes2[offset + 1];
     if (marker === 255) {
       offset++;
       continue;
     }
     if (marker === 225) {
-      if (offset + 4 >= bytes.length)
+      if (offset + 4 >= bytes2.length)
         return -1;
       const segmentStart = offset + 4;
-      if (segmentStart + 6 > bytes.length)
+      if (segmentStart + 6 > bytes2.length)
         return -1;
-      if (!hasExifHeader(bytes, segmentStart))
+      if (!hasExifHeader(bytes2, segmentStart))
         return -1;
       return segmentStart + 6;
     }
-    if (offset + 4 > bytes.length)
+    if (offset + 4 > bytes2.length)
       return -1;
-    const length = bytes[offset + 2] << 8 | bytes[offset + 3];
+    const length = bytes2[offset + 2] << 8 | bytes2[offset + 3];
     offset += 2 + length;
   }
   return -1;
 }
-function findWebpTiffOffset(bytes) {
+function findWebpTiffOffset(bytes2) {
   let offset = 12;
-  while (offset + 8 <= bytes.length) {
-    const chunkId = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
-    const chunkSize = bytes[offset + 4] | bytes[offset + 5] << 8 | bytes[offset + 6] << 16 | bytes[offset + 7] << 24;
+  while (offset + 8 <= bytes2.length) {
+    const chunkId = String.fromCharCode(bytes2[offset], bytes2[offset + 1], bytes2[offset + 2], bytes2[offset + 3]);
+    const chunkSize = bytes2[offset + 4] | bytes2[offset + 5] << 8 | bytes2[offset + 6] << 16 | bytes2[offset + 7] << 24;
     const dataStart = offset + 8;
     if (chunkId === "EXIF") {
-      if (dataStart + chunkSize > bytes.length)
+      if (dataStart + chunkSize > bytes2.length)
         return -1;
-      const tiffStart = chunkSize >= 6 && hasExifHeader(bytes, dataStart) ? dataStart + 6 : dataStart;
+      const tiffStart = chunkSize >= 6 && hasExifHeader(bytes2, dataStart) ? dataStart + 6 : dataStart;
       return tiffStart;
     }
     offset = dataStart + chunkSize + chunkSize % 2;
   }
   return -1;
 }
-function hasExifHeader(bytes, offset) {
-  return bytes[offset] === 69 && bytes[offset + 1] === 120 && bytes[offset + 2] === 105 && bytes[offset + 3] === 102 && bytes[offset + 4] === 0 && bytes[offset + 5] === 0;
+function hasExifHeader(bytes2, offset) {
+  return bytes2[offset] === 69 && bytes2[offset + 1] === 120 && bytes2[offset + 2] === 105 && bytes2[offset + 3] === 102 && bytes2[offset + 4] === 0 && bytes2[offset + 5] === 0;
 }
-function getExifOrientation(bytes) {
+function getExifOrientation(bytes2) {
   let tiffOffset = -1;
-  if (bytes.length >= 2 && bytes[0] === 255 && bytes[1] === 216) {
-    tiffOffset = findJpegTiffOffset(bytes);
-  } else if (bytes.length >= 12 && bytes[0] === 82 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 70 && bytes[8] === 87 && bytes[9] === 69 && bytes[10] === 66 && bytes[11] === 80) {
-    tiffOffset = findWebpTiffOffset(bytes);
+  if (bytes2.length >= 2 && bytes2[0] === 255 && bytes2[1] === 216) {
+    tiffOffset = findJpegTiffOffset(bytes2);
+  } else if (bytes2.length >= 12 && bytes2[0] === 82 && bytes2[1] === 73 && bytes2[2] === 70 && bytes2[3] === 70 && bytes2[8] === 87 && bytes2[9] === 69 && bytes2[10] === 66 && bytes2[11] === 80) {
+    tiffOffset = findWebpTiffOffset(bytes2);
   }
   if (tiffOffset === -1)
     return 1;
-  return readOrientationFromTiff(bytes, tiffOffset);
+  return readOrientationFromTiff(bytes2, tiffOffset);
 }
 function rotate90(photon, image, dstIndex) {
   const w2 = image.get_width();
@@ -219707,14 +219881,14 @@ async function loadPhoton() {
 }
 
 // node_modules/@earendil-works/pi-coding-agent/dist/utils/image-convert.js
-async function convertImageBytesToPng(bytes) {
+async function convertImageBytesToPng(bytes2) {
   const photon = await loadPhoton();
   if (!photon) {
     return null;
   }
   try {
-    const rawImage = photon.PhotonImage.new_from_byteslice(bytes);
-    const image = applyExifOrientation(photon, rawImage, bytes);
+    const rawImage = photon.PhotonImage.new_from_byteslice(bytes2);
+    const image = applyExifOrientation(photon, rawImage, bytes2);
     if (image !== rawImage)
       rawImage.free();
     try {
@@ -219730,8 +219904,8 @@ async function convertToPng(base64Data, mimeType) {
   if (mimeType === "image/png") {
     return { data: base64Data, mimeType };
   }
-  const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
-  const pngBytes = await convertImageBytesToPng(bytes);
+  const bytes2 = new Uint8Array(Buffer.from(base64Data, "base64"));
+  const pngBytes = await convertImageBytesToPng(bytes2);
   if (!pngBytes) {
     return null;
   }
@@ -219945,12 +220119,12 @@ function normalizeSupportedImageMimeType(mimeType) {
       return null;
   }
 }
-async function normalizeImage(bytes, mimeType) {
+async function normalizeImage(bytes2, mimeType) {
   const normalizedMimeType = normalizeSupportedImageMimeType(mimeType);
   if (normalizedMimeType) {
-    return { bytes, mimeType: normalizedMimeType };
+    return { bytes: bytes2, mimeType: normalizedMimeType };
   }
-  const pngBytes = await convertImageBytesToPng(bytes);
+  const pngBytes = await convertImageBytesToPng(bytes2);
   if (!pngBytes) {
     return null;
   }
@@ -219965,9 +220139,9 @@ function conversionHint(from, to) {
     return void 0;
   return `[Image converted from ${from} to ${to}.]`;
 }
-async function processImage(bytes, mimeType, options) {
+async function processImage(bytes2, mimeType, options) {
   const autoResizeImages = options?.autoResizeImages ?? true;
-  const normalized = await normalizeImage(bytes, mimeType);
+  const normalized = await normalizeImage(bytes2, mimeType);
   if (!normalized) {
     return {
       ok: false,
@@ -220250,13 +220424,13 @@ function splitLinesForCounting(content) {
   }
   return lines;
 }
-function formatSize(bytes) {
-  if (bytes < 1024) {
-    return `${bytes}B`;
-  } else if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)}KB`;
+function formatSize(bytes2) {
+  if (bytes2 < 1024) {
+    return `${bytes2}B`;
+  } else if (bytes2 < 1024 * 1024) {
+    return `${(bytes2 / 1024).toFixed(1)}KB`;
   } else {
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+    return `${(bytes2 / (1024 * 1024)).toFixed(1)}MB`;
   }
 }
 function truncateHead(content, options = {}) {
@@ -227972,26 +228146,26 @@ function utf8ByteLength(content) {
   const firstNonAscii = content.search(nonAsciiPattern);
   if (firstNonAscii === -1)
     return content.length;
-  let bytes = firstNonAscii;
+  let bytes2 = firstNonAscii;
   for (let i2 = firstNonAscii; i2 < content.length; i2++) {
     const code = content.charCodeAt(i2);
     if (code <= 127) {
-      bytes += 1;
+      bytes2 += 1;
     } else if (code <= 2047) {
-      bytes += 2;
+      bytes2 += 2;
     } else if (code >= 55296 && code <= 56319 && i2 + 1 < content.length) {
       const next = content.charCodeAt(i2 + 1);
       if (next >= 56320 && next <= 57343) {
-        bytes += 4;
+        bytes2 += 4;
         i2++;
       } else {
-        bytes += 3;
+        bytes2 += 3;
       }
     } else {
-      bytes += 3;
+      bytes2 += 3;
     }
   }
-  return bytes;
+  return bytes2;
 }
 function splitLinesForCounting2(content) {
   if (content.length === 0)
@@ -228023,13 +228197,13 @@ function replaceUnpairedSurrogates(content) {
   }
   return output;
 }
-function formatSize2(bytes) {
-  if (bytes < 1024) {
-    return `${bytes}B`;
-  } else if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)}KB`;
+function formatSize2(bytes2) {
+  if (bytes2 < 1024) {
+    return `${bytes2}B`;
+  } else if (bytes2 < 1024 * 1024) {
+    return `${(bytes2 / 1024).toFixed(1)}KB`;
   } else {
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+    return `${(bytes2 / (1024 * 1024)).toFixed(1)}MB`;
   }
 }
 function truncateHead2(content, options = {}) {
@@ -228226,13 +228400,13 @@ function sanitizeBinaryOutput2(str3) {
   }).join("");
 }
 function trimToLastUtf8Bytes(text, maxBytes, encoder3) {
-  const bytes = encoder3.encode(text);
-  if (bytes.byteLength <= maxBytes)
+  const bytes2 = encoder3.encode(text);
+  if (bytes2.byteLength <= maxBytes)
     return text;
-  let start = bytes.byteLength - maxBytes;
-  while (start < bytes.byteLength && ((bytes[start] ?? 0) & 192) === 128)
+  let start = bytes2.byteLength - maxBytes;
+  while (start < bytes2.byteLength && ((bytes2[start] ?? 0) & 192) === 128)
     start++;
-  return new TextDecoder().decode(bytes.subarray(start));
+  return new TextDecoder().decode(bytes2.subarray(start));
 }
 async function executeShellWithCapture(env2, command, options) {
   let tailOutput = "";
@@ -229704,13 +229878,13 @@ function detectSupportedImageMimeType(buffer) {
     return "image/bmp";
   return void 0;
 }
-function encodeBase64(bytes) {
+function encodeBase64(bytes2) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   let output = "";
-  for (let index3 = 0; index3 < bytes.length; index3 += 3) {
-    const first = bytes[index3] ?? 0;
-    const second = bytes[index3 + 1];
-    const third = bytes[index3 + 2];
+  for (let index3 = 0; index3 < bytes2.length; index3 += 3) {
+    const first = bytes2[index3] ?? 0;
+    const second = bytes2[index3 + 1];
+    const third = bytes2[index3 + 2];
     output += alphabet[first >> 2];
     output += alphabet[(first & 3) << 4 | (second ?? 0) >> 4];
     output += second === void 0 ? "=" : alphabet[(second & 15) << 2 | (third ?? 0) >> 6];
@@ -229773,10 +229947,10 @@ function readUint32BE(buffer, offset) {
 function readUint32LE(buffer, offset) {
   return (buffer[offset] ?? 0) + ((buffer[offset + 1] ?? 0) << 8) + ((buffer[offset + 2] ?? 0) << 16) + (buffer[offset + 3] ?? 0) * 16777216;
 }
-function startsWith(buffer, bytes) {
-  if (buffer.length < bytes.length)
+function startsWith(buffer, bytes2) {
+  if (buffer.length < bytes2.length)
     return false;
-  return bytes.every((byte, index3) => buffer[index3] === byte);
+  return bytes2.every((byte, index3) => buffer[index3] === byte);
 }
 function startsWithAscii(buffer, offset, text) {
   if (buffer.length < offset + text.length)
@@ -229802,11 +229976,11 @@ function createReadTool(options) {
     parameters: readSchema,
     async execute(_toolCallId, { path: path16, offset, limit: limit2 }, signal, _onUpdate, { env: env2 }) {
       const absolutePath = await resolveReadToolPath(env2, path16, signal);
-      const bytes = getOrThrow(await env2.readBinaryFile(absolutePath, signal));
-      const mimeType = detectSupportedImageMimeType(bytes);
+      const bytes2 = getOrThrow(await env2.readBinaryFile(absolutePath, signal));
+      const mimeType = detectSupportedImageMimeType(bytes2);
       if (mimeType) {
         if (options?.imageProcessor) {
-          const processed = await options.imageProcessor(bytes, mimeType, {
+          const processed = await options.imageProcessor(bytes2, mimeType, {
             autoResizeImages: options.autoResizeImages ?? true
           });
           if (!processed.ok) {
@@ -229840,12 +230014,12 @@ ${processed.hints.join("\n")}` : "";
         return {
           content: [
             { type: "text", text: `Read image file [${mimeType}]` },
-            { type: "image", data: encodeBase64(bytes), mimeType }
+            { type: "image", data: encodeBase64(bytes2), mimeType }
           ],
           details: void 0
         };
       }
-      const textContent = new TextDecoder().decode(bytes);
+      const textContent = new TextDecoder().decode(bytes2);
       const allLines = textContent.split("\n");
       const totalFileLines = allLines.length;
       const startLine = offset ? Math.max(0, offset - 1) : 0;
@@ -233426,10 +233600,10 @@ var OutputAccumulator = class {
     if (text.length === 0) {
       return;
     }
-    const bytes = byteLength(text);
-    this.totalDecodedBytes += bytes;
+    const bytes2 = byteLength(text);
+    this.totalDecodedBytes += bytes2;
     this.tailText += text;
-    this.tailBytes += bytes;
+    this.tailBytes += bytes2;
     if (this.tailBytes > this.maxRollingBytes * 2) {
       this.trimTail();
     }
@@ -233440,7 +233614,7 @@ var OutputAccumulator = class {
       lastNewline = i2;
     }
     if (newlines === 0) {
-      this.currentLineBytes += bytes;
+      this.currentLineBytes += bytes2;
       this.hasOpenLine = true;
     } else {
       this.completedLines += newlines;
@@ -235870,10 +236044,10 @@ function readUint32BE2(buffer, offset) {
 function readUint32LE2(buffer, offset) {
   return (buffer[offset] ?? 0) + ((buffer[offset + 1] ?? 0) << 8) + ((buffer[offset + 2] ?? 0) << 16) + (buffer[offset + 3] ?? 0) * 16777216;
 }
-function startsWith2(buffer, bytes) {
-  if (buffer.length < bytes.length)
+function startsWith2(buffer, bytes2) {
+  if (buffer.length < bytes2.length)
     return false;
-  return bytes.every((byte, index3) => buffer[index3] === byte);
+  return bytes2.every((byte, index3) => buffer[index3] === byte);
 }
 function startsWithAscii2(buffer, offset, text) {
   if (buffer.length < offset + text.length)
@@ -253057,11 +253231,11 @@ function parseDownloadProgress(data) {
     detail: `${formatBytes(done)} / ${formatBytes(total)}`
   };
 }
-function formatBytes(bytes) {
-  if (bytes < 1024)
-    return `${bytes} B`;
+function formatBytes(bytes2) {
+  if (bytes2 < 1024)
+    return `${bytes2} B`;
   const units = ["KiB", "MiB", "GiB", "TiB"];
-  let value2 = bytes / 1024;
+  let value2 = bytes2 / 1024;
   let unit = units[0];
   for (let index3 = 1; index3 < units.length && value2 >= 1024; index3++) {
     value2 /= 1024;
@@ -254657,13 +254831,13 @@ function isSupportedImageMimeType(mimeType) {
   const base = baseMimeType2(mimeType);
   return SUPPORTED_IMAGE_MIME_TYPES.some((t2) => t2 === base);
 }
-async function convertToPng2(bytes) {
+async function convertToPng2(bytes2) {
   const photon = await loadPhoton();
   if (!photon) {
     return null;
   }
   try {
-    const image = photon.PhotonImage.new_from_byteslice(bytes);
+    const image = photon.PhotonImage.new_from_byteslice(bytes2);
     try {
       return image.get_bytes();
     } finally {
@@ -254746,11 +254920,11 @@ function readClipboardImageViaPowerShell() {
     if (output !== "ok") {
       return null;
     }
-    const bytes = readFileSync20(tmpFile);
-    if (bytes.length === 0) {
+    const bytes2 = readFileSync20(tmpFile);
+    if (bytes2.length === 0) {
       return null;
     }
-    return { bytes: new Uint8Array(bytes), mimeType: "image/png" };
+    return { bytes: new Uint8Array(bytes2), mimeType: "image/png" };
   } catch {
     return null;
   } finally {
@@ -254786,8 +254960,8 @@ async function readClipboardImageViaNativeClipboard() {
   if (!imageData || imageData.length === 0) {
     return null;
   }
-  const bytes = imageData instanceof Uint8Array ? imageData : Uint8Array.from(imageData);
-  return { bytes, mimeType: "image/png" };
+  const bytes2 = imageData instanceof Uint8Array ? imageData : Uint8Array.from(imageData);
+  return { bytes: bytes2, mimeType: "image/png" };
 }
 async function readClipboardImage(options) {
   const env2 = options?.env ?? process.env;
@@ -276549,9 +276723,9 @@ function oauthErrorHtml(message, details) {
 }
 
 // node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/pkce.js
-function base64urlEncode(bytes) {
+function base64urlEncode(bytes2) {
   let binary = "";
-  for (const byte of bytes) {
+  for (const byte of bytes2) {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
@@ -278957,6 +279131,11 @@ var templatePolicy = typebox_exports2.Object({
   }),
   context: typebox_exports2.Object({
     connectors: typebox_exports2.Array(typebox_exports2.String({ minLength: 1, maxLength: 80 }), { maxItems: 16 }),
+    connectorCategories: typebox_exports2.Optional(typebox_exports2.Record(
+      typebox_exports2.String({ pattern: "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$" }),
+      typebox_exports2.Array(typebox_exports2.String({ pattern: "^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$" }), { maxItems: 32 }),
+      { maxProperties: 16 }
+    )),
     maximumItems: typebox_exports2.Number({ minimum: 1, maximum: 200 }),
     maximumBytes: typebox_exports2.Number({ minimum: 1024, maximum: 25e4 })
   }),
@@ -279302,6 +279481,7 @@ var attentionItemSchema = external_exports.object({
   app: external_exports.string().min(1).max(120),
   title: external_exports.string().max(2e3),
   body: external_exports.string().max(8e3),
+  category: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/).optional(),
   contentAvailable: external_exports.boolean().optional(),
   urgency: external_exports.enum(["low", "normal", "critical"]),
   occurredAt: external_exports.string().datetime()
@@ -279742,9 +279922,9 @@ var SpeechService = class {
     await mkdir2(this.#runtimeDir, { recursive: true, mode: 448 });
     const audioPath = join49(this.#runtimeDir, `speech-${randomUUID13()}.mp3`);
     const response = await synthesize(config2, apiKey, normalized);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > 50 * 1024 * 1024) throw new Error("The TTS provider returned invalid audio");
-    await writeFile2(audioPath, bytes, { mode: 384 });
+    const bytes2 = new Uint8Array(await response.arrayBuffer());
+    if (bytes2.byteLength === 0 || bytes2.byteLength > 50 * 1024 * 1024) throw new Error("The TTS provider returned invalid audio");
+    await writeFile2(audioPath, bytes2, { mode: 384 });
     this.#player = spawn13("mpv", ["--no-video", "--really-quiet", "--keep-open=no", audioPath], {
       stdio: "ignore",
       windowsHide: true
@@ -280020,6 +280200,13 @@ var commandSchema = external_exports.discriminatedUnion("type", [
     enabled: external_exports.boolean()
   }).strict(),
   external_exports.object({
+    type: external_exports.literal("integration_set_category_enabled"),
+    id: external_exports.string().min(1).max(100),
+    integrationId: external_exports.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+    categoryId: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/),
+    enabled: external_exports.boolean()
+  }).strict(),
+  external_exports.object({
     type: external_exports.literal("integration_setup"),
     id: external_exports.string().min(1).max(100),
     integrationId: external_exports.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
@@ -280127,6 +280314,7 @@ var privacy = new PrivacyPolicy(configRoot);
 attention.applyPolicy((item) => privacy.filter(item));
 var digestHistory = new DigestHistory();
 var integrationRuntime = new IntegrationRuntime(configRoot);
+var sourceStatuses = /* @__PURE__ */ new Map();
 var dictation = new DictationService();
 var speech = new SpeechService(configRoot);
 var integrationRoots = {
@@ -280139,13 +280327,15 @@ function publicTemplates() {
   return templates.map(({ manifest, instructions }) => ({ ...manifest, instructions }));
 }
 function publicIntegrations() {
-  return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).map(({ manifest, source, enabled }) => ({
+  return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).map(({ manifest, source, enabled, categories }) => ({
     id: manifest.id,
     name: manifest.name,
     version: manifest.version,
     description: manifest.description,
     source,
     enabled,
+    status: sourceStatuses.get(manifest.id) ?? { state: "unknown" },
+    categories,
     capabilities: manifest.capabilities,
     setup: manifest.setup,
     permissions: manifest.permissions
@@ -280173,6 +280363,7 @@ var configWatcher = setInterval(() => {
 configWatcher.unref();
 async function reloadFileBackedConfiguration() {
   templates = loadAllTemplates();
+  sourceStatuses.clear();
   privacy.reload();
   attention.applyPolicy((item) => privacy.filter(item));
   emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
@@ -280365,6 +280556,7 @@ async function handle(raw) {
       const connectorItems = await integrationRuntime.sync(
         discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state),
         template.manifest.context.connectors.filter((connector) => connector !== "notifications"),
+        template.manifest.context.connectorCategories,
         new Date(now.getTime() - 864e5).toISOString(),
         new Date(now.getTime() + 7 * 864e5).toISOString()
       );
@@ -280571,11 +280763,13 @@ async function handle(raw) {
       return true;
     }
     try {
-      await integrationRuntime.configure(integration, command.values);
-      const status = await integrationRuntime.status(integration);
-      emit({ type: "integration_setup", id: command.id, integrationId: command.integrationId, ready: status.ready, message: status.message });
+      const status = await integrationRuntime.configure(integration, command.values);
+      rememberSourceStatus(command.integrationId, status);
+      emitStatus("integration_setup", command.id, command.integrationId, status);
     } catch (error48) {
-      emit({ type: "integration_setup", id: command.id, integrationId: command.integrationId, ready: false, message: error48 instanceof Error ? error48.message : "Setup failed" });
+      const status = { state: "error", code: "setup_failed", message: boundedMessage(error48, "Setup failed"), checkedAt: (/* @__PURE__ */ new Date()).toISOString() };
+      rememberSourceStatus(command.integrationId, status);
+      emitStatus("integration_setup", command.id, command.integrationId, status);
     }
     return true;
   }
@@ -280586,14 +280780,26 @@ async function handle(raw) {
       emit({ type: "error", id: command.id, code: "integration_unavailable", message: "That integration is unavailable." });
       return true;
     }
+    const checking = { state: "checking", message: "Checking source status\u2026" };
+    rememberSourceStatus(command.integrationId, checking);
+    emitStatus("integration_status", command.id, command.integrationId, checking);
     const status = await integrationRuntime.status(integration);
-    emit({
-      type: "integration_status",
-      id: command.id,
-      integrationId: command.integrationId,
-      ready: status.ready,
-      message: status.message || (status.ready ? "Ready" : "Setup required")
-    });
+    rememberSourceStatus(command.integrationId, status);
+    emitStatus("integration_status", command.id, command.integrationId, status);
+    return true;
+  }
+  if (command.type === "integration_set_category_enabled") {
+    const integration = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).find((candidate) => candidate.manifest.id === command.integrationId);
+    if (integration === void 0 || !integration.categories.some((category) => category.id === command.categoryId)) {
+      emit({ type: "error", id: command.id, code: "integration_category_unavailable", message: "That source category is unavailable." });
+      return true;
+    }
+    try {
+      setIntegrationCategoryEnabled(integrationRoots.state, command.integrationId, command.categoryId, command.enabled);
+      emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
+    } catch (error48) {
+      emit({ type: "error", id: command.id, code: "integration_state_failed", message: boundedMessage(error48, "The category setting could not be saved.") });
+    }
     return true;
   }
   if (command.type === "integration_set_enabled") {
@@ -280608,7 +280814,8 @@ async function handle(raw) {
         const target = discovered.find((integration) => integration.manifest.id === command.integrationId);
         if (target === void 0) throw new Error("That integration is unavailable");
         const status = await integrationRuntime.status(target);
-        if (!status.ready) throw new Error(status.message || "Set up this integration before enabling it");
+        rememberSourceStatus(command.integrationId, status);
+        if (status.state !== "ready") throw new Error(status.message || "Set up this integration before enabling it");
       }
       setIntegrationEnabled(integrationRoots.state, command.integrationId, command.enabled);
       emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
@@ -280617,7 +280824,7 @@ async function handle(raw) {
         type: "error",
         id: command.id,
         code: "integration_state_failed",
-        message: error48 instanceof Error ? error48.message : "The integration setting could not be saved."
+        message: boundedMessage(error48, "The integration setting could not be saved.")
       });
     }
     return true;
@@ -280633,6 +280840,30 @@ async function handle(raw) {
     });
   }
   return true;
+}
+function rememberSourceStatus(id, status) {
+  sourceStatuses.delete(id);
+  sourceStatuses.set(id, status);
+  while (sourceStatuses.size > 256) sourceStatuses.delete(sourceStatuses.keys().next().value);
+}
+function emitStatus(type, id, integrationId2, status) {
+  emit({
+    type,
+    id,
+    integrationId: integrationId2,
+    status,
+    ready: status.state === "ready",
+    message: status.message ?? (status.state === "ready" ? "Ready" : "Setup required")
+  });
+}
+function boundedMessage(error48, fallback) {
+  const source = error48 instanceof Error && error48.message.trim() !== "" ? error48.message.trim() : fallback;
+  let result = "";
+  for (const character of source) {
+    if (Buffer.byteLength(result + character, "utf8") > 1e3) break;
+    result += character;
+  }
+  return result;
 }
 function beginAuth(methodId) {
   if (authFlow !== void 0) cancelAuth(authFlow);

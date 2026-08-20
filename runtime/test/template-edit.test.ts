@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { installTemplateEdit } from "../src/drafts.js";
 import { loadTemplates } from "../src/templates.js";
+import { compiledTemplateSchema } from "../src/template-schema.js";
 
 const roots: string[] = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true }); });
@@ -35,5 +36,19 @@ describe("manual template editing", () => {
       .toThrow(/ID cannot change/u);
     expect(() => installTemplateEdit(root, "edited-template", "Safe instructions", "{"))
       .toThrow();
+  });
+
+  it("accepts bounded connector categories and rejects nondeterministic references", () => {
+    const parsed = JSON.parse(policy()) as Record<string, any>;
+    parsed.context.connectors.push("local.source");
+    parsed.context.connectorCategories = { "local.source": ["mentions", "routine"] };
+    expect(compiledTemplateSchema.parse(parsed).context.connectorCategories).toEqual({
+      "local.source": ["mentions", "routine"]
+    });
+
+    parsed.context.connectorCategories = { "other.source": ["mentions"] };
+    expect(() => compiledTemplateSchema.parse(parsed)).toThrow(/undeclared connector/u);
+    parsed.context.connectorCategories = { "local.source": Array.from({ length: 33 }, (_, index) => `category-${index}`) };
+    expect(() => compiledTemplateSchema.parse(parsed)).toThrow();
   });
 });

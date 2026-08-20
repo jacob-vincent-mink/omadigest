@@ -1249,16 +1249,16 @@ function cleanEnum(obj) {
 }
 function base64ToUint8Array(base643) {
   const binaryString = atob(base643);
-  const bytes = new Uint8Array(binaryString.length);
+  const bytes2 = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+    bytes2[i] = binaryString.charCodeAt(i);
   }
-  return bytes;
+  return bytes2;
 }
-function uint8ArrayToBase64(bytes) {
+function uint8ArrayToBase64(bytes2) {
   let binaryString = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binaryString += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes2.length; i++) {
+    binaryString += String.fromCharCode(bytes2[i]);
   }
   return btoa(binaryString);
 }
@@ -1267,22 +1267,22 @@ function base64urlToUint8Array(base64url3) {
   const padding = "=".repeat((4 - base643.length % 4) % 4);
   return base64ToUint8Array(base643 + padding);
 }
-function uint8ArrayToBase64url(bytes) {
-  return uint8ArrayToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+function uint8ArrayToBase64url(bytes2) {
+  return uint8ArrayToBase64(bytes2).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 function hexToUint8Array(hex3) {
   const cleanHex = hex3.replace(/^0x/, "");
   if (cleanHex.length % 2 !== 0) {
     throw new Error("Invalid hex string length");
   }
-  const bytes = new Uint8Array(cleanHex.length / 2);
+  const bytes2 = new Uint8Array(cleanHex.length / 2);
   for (let i = 0; i < cleanHex.length; i += 2) {
-    bytes[i / 2] = Number.parseInt(cleanHex.slice(i, i + 2), 16);
+    bytes2[i / 2] = Number.parseInt(cleanHex.slice(i, i + 2), 16);
   }
-  return bytes;
+  return bytes2;
 }
-function uint8ArrayToHex(bytes) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+function uint8ArrayToHex(bytes2) {
+  return Array.from(bytes2).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var Class = class {
   constructor(..._args) {
@@ -13785,7 +13785,9 @@ function date4(params) {
 config(en_default());
 
 // runtime/src/integration-schema.ts
+var bytes = (maximum) => (value) => Buffer.byteLength(value, "utf8") <= maximum;
 var integrationId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/);
+var integrationCategoryIdSchema = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/);
 var safeEntryPoint = external_exports.string().regex(/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[a-zA-Z0-9._/-]+\.mjs$/);
 var setupField = external_exports.object({
   key: external_exports.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
@@ -13795,6 +13797,12 @@ var setupField = external_exports.object({
   required: external_exports.boolean().default(true),
   placeholder: external_exports.string().max(200).optional()
 }).strict();
+var categorySchema = external_exports.object({
+  id: integrationCategoryIdSchema,
+  label: external_exports.string().min(1).max(80).refine(bytes(160), "Category label is too large"),
+  description: external_exports.string().min(1).max(500).refine(bytes(1e3), "Category description is too large"),
+  defaultEnabled: external_exports.boolean()
+}).strict();
 var integrationManifestSchema = external_exports.object({
   schemaVersion: external_exports.literal(1),
   id: integrationId,
@@ -13802,6 +13810,12 @@ var integrationManifestSchema = external_exports.object({
   version: external_exports.string().regex(/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/),
   author: external_exports.string().min(1).max(120),
   description: external_exports.string().min(1).max(500),
+  categories: external_exports.array(categorySchema).min(1).max(32).superRefine((categories, context) => {
+    if (new Set(categories.map((category) => category.id)).size !== categories.length)
+      context.addIssue({ code: "custom", message: "Category IDs must be unique" });
+    if (Buffer.byteLength(JSON.stringify(categories), "utf8") > 24 * 1024)
+      context.addIssue({ code: "custom", message: "Categories are too large" });
+  }).optional(),
   entryPoint: safeEntryPoint,
   capabilities: external_exports.array(external_exports.enum(["sync", "resolve", "open"])).min(1).max(3),
   setup: external_exports.object({
@@ -13957,6 +13971,13 @@ function runChecked(label, executable, args, environment, timeout) {
 
 // runtime/src/template-schema.ts
 var trigger = external_exports.enum(["manual", "dnd-ended", "scheduled"]);
+var connectorId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/);
+var categoryId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/);
+var connectorCategories = external_exports.record(connectorId, external_exports.array(categoryId).max(32)).superRefine((value, context) => {
+  if (Object.keys(value).length > 16) context.addIssue({ code: "custom", message: "Too many connector category entries" });
+  if (Buffer.byteLength(JSON.stringify(value), "utf8") > 16 * 1024)
+    context.addIssue({ code: "custom", message: "Connector categories are too large" });
+});
 var compiledTemplateSchema = external_exports.object({
   version: external_exports.literal(1),
   id: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/),
@@ -13973,9 +13994,19 @@ var compiledTemplateSchema = external_exports.object({
   }).strict(),
   context: external_exports.object({
     connectors: external_exports.array(external_exports.string().min(1).max(80)).max(16),
+    connectorCategories: connectorCategories.optional(),
     maximumItems: external_exports.number().int().min(1).max(200),
     maximumBytes: external_exports.number().int().min(1024).max(25e4)
-  }).strict(),
+  }).strict().superRefine((value, context) => {
+    if (new Set(value.connectors).size !== value.connectors.length)
+      context.addIssue({ code: "custom", message: "Connector IDs must be unique" });
+    for (const [connector, categories] of Object.entries(value.connectorCategories ?? {})) {
+      if (!value.connectors.includes(connector))
+        context.addIssue({ code: "custom", message: `Category request references undeclared connector ${connector}` });
+      if (new Set(categories).size !== categories.length)
+        context.addIssue({ code: "custom", message: `Category IDs for ${connector} must be unique` });
+    }
+  }),
   output: external_exports.object({
     sections: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(12),
     maximumEntries: external_exports.number().int().min(1).max(50)
@@ -14053,7 +14084,9 @@ import { existsSync, lstatSync, mkdirSync as mkdirSync3, readdirSync, readFileSy
 import { dirname as dirname3, join as join3, resolve, sep } from "node:path";
 import { randomUUID as randomUUID2 } from "node:crypto";
 var MAX_MANIFEST_BYTES = 64 * 1024;
-var MAX_STATE_BYTES = 1024 * 1024;
+var MAX_STATE_BYTES = 256 * 1024;
+var MAX_INTEGRATIONS = 256;
+var MAX_CATEGORY_OVERRIDES = 64;
 function integrationConfigRoot(env = process.env) {
   const xdg = env.XDG_CONFIG_HOME?.trim();
   if (xdg?.startsWith("/")) return join3(xdg, "omadigest");
@@ -14062,29 +14095,55 @@ function integrationConfigRoot(env = process.env) {
   return join3(home, ".config", "omadigest");
 }
 function setIntegrationEnabled(statePath, id, enabled) {
+  if (!validIntegrationId(id)) throw new Error("Invalid source ID");
   const current = readIntegrationState(statePath);
-  const ids = new Set(current.enabled);
-  if (enabled) ids.add(id);
-  else ids.delete(id);
-  writeIntegrationState(statePath, { version: 1, enabled: [...ids].sort() });
+  const existing = current.sources[id] ?? { enabled: false, categories: {} };
+  current.sources[id] = { ...existing, enabled };
+  writeIntegrationState(statePath, current);
 }
 function readIntegrationState(path) {
   try {
-    if (statSync(path).size > MAX_STATE_BYTES) return { version: 1, enabled: [] };
+    if (statSync(path).size > MAX_STATE_BYTES) return emptyState();
     const value = JSON.parse(readFileSync2(path, "utf8"));
-    if (!isObject2(value) || value.version !== 1 || !Array.isArray(value.enabled)) return { version: 1, enabled: [] };
-    const enabled = value.enabled.filter((id) => typeof id === "string" && /^[a-z0-9][a-z0-9._-]{0,127}$/u.test(id));
-    return { version: 1, enabled: [...new Set(enabled)].slice(0, 1e3) };
+    if (!isObject2(value)) return emptyState();
+    if (value.version === 1 && Array.isArray(value.enabled)) return migrateVersionOne(value.enabled);
+    if (value.version !== 2 || !isObject2(value.sources)) return emptyState();
+    const sources = {};
+    for (const [id, raw] of Object.entries(value.sources).slice(0, MAX_INTEGRATIONS)) {
+      if (!validIntegrationId(id) || !isObject2(raw) || typeof raw.enabled !== "boolean" || !isObject2(raw.categories)) continue;
+      const categories = {};
+      for (const [categoryId2, enabled] of Object.entries(raw.categories).slice(0, MAX_CATEGORY_OVERRIDES)) {
+        if (integrationCategoryIdSchema.safeParse(categoryId2).success && typeof enabled === "boolean") categories[categoryId2] = enabled;
+      }
+      sources[id] = { enabled: raw.enabled, categories };
+    }
+    return { version: 2, sources };
   } catch {
-    return { version: 1, enabled: [] };
+    return emptyState();
   }
 }
 function writeIntegrationState(path, state) {
+  if (Object.keys(state.sources).length > MAX_INTEGRATIONS) throw new Error("Too many source settings");
+  const serialized = `${JSON.stringify(state, null, 2)}
+`;
+  if (Buffer.byteLength(serialized, "utf8") > MAX_STATE_BYTES) throw new Error("Source settings are too large");
   mkdirSync3(dirname3(path), { recursive: true, mode: 448 });
   const temporary = `${path}.${randomUUID2()}.tmp`;
-  writeFileSync3(temporary, `${JSON.stringify(state, null, 2)}
-`, { mode: 384 });
+  writeFileSync3(temporary, serialized, { mode: 384 });
   renameSync2(temporary, path);
+}
+function migrateVersionOne(enabled) {
+  const sources = {};
+  for (const id of enabled.slice(0, MAX_INTEGRATIONS)) {
+    if (typeof id === "string" && validIntegrationId(id)) sources[id] = { enabled: true, categories: {} };
+  }
+  return { version: 2, sources };
+}
+function emptyState() {
+  return { version: 2, sources: {} };
+}
+function validIntegrationId(id) {
+  return /^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(id);
 }
 function isObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);

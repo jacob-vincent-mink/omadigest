@@ -26,6 +26,7 @@ The Quickshell manual editor exposes `template.compiled.json` for deliberate edi
 - minimum item/focus thresholds;
 - source-application share;
 - required enabled connectors;
+- optional per-connector category requests, intersected with user-enabled categories outside the model;
 - context item/byte budgets;
 - exact output sections and entry limit.
 

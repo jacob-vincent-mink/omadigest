@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { loadTemplates } from "./templates.js";
 import { selectTemplate } from "./selector.js";
-import { discoverIntegrations, integrationConfigRoot, setIntegrationEnabled } from "./integrations.js";
+import { discoverIntegrations, integrationConfigRoot, setIntegrationCategoryEnabled, setIntegrationEnabled } from "./integrations.js";
 import { IntegrationRuntime } from "./integration-runtime.js";
 import { agentConnectionStatus, discoverAgentAuthMethods, loginAgentProvider, runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
 import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
@@ -20,7 +20,7 @@ import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
 import { launchHerdrHandoff } from "./herdr.js";
 import { clearUserIntegrations, clearUserTemplates } from "./data-management.js";
 import { installAuthoringSkillLinks } from "./skill-install.js";
-import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration } from "./types.js";
+import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration, type SourceStatus } from "./types.js";
 
 const contextSchema = z.object({
   trigger: z.enum(["manual", "dnd-ended", "scheduled"]),
@@ -38,6 +38,13 @@ const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("integration_set_enabled"),
     id: z.string().min(1).max(100),
     integrationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+    enabled: z.boolean()
+  }).strict(),
+  z.object({
+    type: z.literal("integration_set_category_enabled"),
+    id: z.string().min(1).max(100),
+    integrationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+    categoryId: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/),
     enabled: z.boolean()
   }).strict(),
   z.object({
@@ -138,6 +145,7 @@ const privacy = new PrivacyPolicy(configRoot);
 attention.applyPolicy((item) => privacy.filter(item));
 const digestHistory = new DigestHistory();
 const integrationRuntime = new IntegrationRuntime(configRoot);
+const sourceStatuses = new Map<string, SourceStatus>();
 const dictation = new DictationService();
 const speech = new SpeechService(configRoot);
 const integrationRoots = {
@@ -160,13 +168,15 @@ function publicTemplates() {
 
 function publicIntegrations(): PublicIntegration[] {
   return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
-    .map(({ manifest, source, enabled }) => ({
+    .map(({ manifest, source, enabled, categories }) => ({
       id: manifest.id,
       name: manifest.name,
       version: manifest.version,
       description: manifest.description,
       source,
       enabled,
+      status: sourceStatuses.get(manifest.id) ?? { state: "unknown" },
+      categories,
       capabilities: manifest.capabilities,
       setup: manifest.setup,
       permissions: manifest.permissions
@@ -195,6 +205,7 @@ configWatcher.unref();
 
 async function reloadFileBackedConfiguration(): Promise<void> {
   templates = loadAllTemplates();
+  sourceStatuses.clear();
   privacy.reload();
   attention.applyPolicy((item) => privacy.filter(item));
   emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
@@ -392,6 +403,7 @@ async function handle(raw: string): Promise<boolean> {
       const connectorItems = await integrationRuntime.sync(
         discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state),
         template.manifest.context.connectors.filter((connector) => connector !== "notifications"),
+        template.manifest.context.connectorCategories,
         new Date(now.getTime() - 86_400_000).toISOString(),
         new Date(now.getTime() + 7 * 86_400_000).toISOString()
       );
@@ -602,11 +614,13 @@ async function handle(raw: string): Promise<boolean> {
       return true;
     }
     try {
-      await integrationRuntime.configure(integration, command.values);
-      const status = await integrationRuntime.status(integration);
-      emit({ type: "integration_setup", id: command.id, integrationId: command.integrationId, ready: status.ready, message: status.message });
+      const status = await integrationRuntime.configure(integration, command.values);
+      rememberSourceStatus(command.integrationId, status);
+      emitStatus("integration_setup", command.id, command.integrationId, status);
     } catch (error) {
-      emit({ type: "integration_setup", id: command.id, integrationId: command.integrationId, ready: false, message: error instanceof Error ? error.message : "Setup failed" });
+      const status: SourceStatus = { state: "error", code: "setup_failed", message: boundedMessage(error, "Setup failed"), checkedAt: new Date().toISOString() };
+      rememberSourceStatus(command.integrationId, status);
+      emitStatus("integration_setup", command.id, command.integrationId, status);
     }
     return true;
   }
@@ -618,11 +632,28 @@ async function handle(raw: string): Promise<boolean> {
       emit({ type: "error", id: command.id, code: "integration_unavailable", message: "That integration is unavailable." });
       return true;
     }
+    const checking: SourceStatus = { state: "checking", message: "Checking source status…" };
+    rememberSourceStatus(command.integrationId, checking);
+    emitStatus("integration_status", command.id, command.integrationId, checking);
     const status = await integrationRuntime.status(integration);
-    emit({
-      type: "integration_status", id: command.id, integrationId: command.integrationId,
-      ready: status.ready, message: status.message || (status.ready ? "Ready" : "Setup required")
-    });
+    rememberSourceStatus(command.integrationId, status);
+    emitStatus("integration_status", command.id, command.integrationId, status);
+    return true;
+  }
+
+  if (command.type === "integration_set_category_enabled") {
+    const integration = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
+      .find((candidate) => candidate.manifest.id === command.integrationId);
+    if (integration === undefined || !integration.categories.some((category) => category.id === command.categoryId)) {
+      emit({ type: "error", id: command.id, code: "integration_category_unavailable", message: "That source category is unavailable." });
+      return true;
+    }
+    try {
+      setIntegrationCategoryEnabled(integrationRoots.state, command.integrationId, command.categoryId, command.enabled);
+      emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
+    } catch (error) {
+      emit({ type: "error", id: command.id, code: "integration_state_failed", message: boundedMessage(error, "The category setting could not be saved.") });
+    }
     return true;
   }
 
@@ -638,7 +669,8 @@ async function handle(raw: string): Promise<boolean> {
         const target = discovered.find((integration) => integration.manifest.id === command.integrationId);
         if (target === undefined) throw new Error("That integration is unavailable");
         const status = await integrationRuntime.status(target);
-        if (!status.ready) throw new Error(status.message || "Set up this integration before enabling it");
+        rememberSourceStatus(command.integrationId, status);
+        if (status.state !== "ready") throw new Error(status.message || "Set up this integration before enabling it");
       }
       setIntegrationEnabled(integrationRoots.state, command.integrationId, command.enabled);
       emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
@@ -647,7 +679,7 @@ async function handle(raw: string): Promise<boolean> {
         type: "error",
         id: command.id,
         code: "integration_state_failed",
-        message: error instanceof Error ? error.message : "The integration setting could not be saved."
+        message: boundedMessage(error, "The integration setting could not be saved.")
       });
     }
     return true;
@@ -664,6 +696,33 @@ async function handle(raw: string): Promise<boolean> {
     });
   }
   return true;
+}
+
+function rememberSourceStatus(id: string, status: SourceStatus): void {
+  sourceStatuses.delete(id);
+  sourceStatuses.set(id, status);
+  while (sourceStatuses.size > 256) sourceStatuses.delete(sourceStatuses.keys().next().value as string);
+}
+
+function emitStatus(type: "integration_setup" | "integration_status", id: string, integrationId: string, status: SourceStatus): void {
+  emit({
+    type,
+    id,
+    integrationId,
+    status,
+    ready: status.state === "ready",
+    message: status.message ?? (status.state === "ready" ? "Ready" : "Setup required")
+  });
+}
+
+function boundedMessage(error: unknown, fallback: string): string {
+  const source = error instanceof Error && error.message.trim() !== "" ? error.message.trim() : fallback;
+  let result = "";
+  for (const character of source) {
+    if (Buffer.byteLength(result + character, "utf8") > 1_000) break;
+    result += character;
+  }
+  return result;
 }
 
 function beginAuth(methodId: string): void {

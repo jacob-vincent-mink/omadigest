@@ -53,7 +53,7 @@ Bubblewrap and Node's permission model are defense in depth, not a complete mali
 
 ## Setup
 
-Settings renders fields from the manifest. **Check status** runs the connector's non-mutating `probe` independently of enablement; the same probe must return ready before the broker permits enablement. OAuth-capable integrations can later request broker-mediated browser/device-code interactions; connectors must never launch a browser themselves.
+Settings renders fields and source categories from the manifest. A category has stable `id`, `label`, `description`, and `defaultEnabled`; old manifests receive one implicit enabled `default` category. **Check status** runs the connector's non-mutating `probe` independently of enablement and publishes structured checking/final status; the same probe must return ready before the broker permits enablement. The existing `integration_status` and `integration_set_enabled` names remain for UI compatibility, with `integration_set_category_enabled` added for category overrides. OAuth-capable integrations can later request broker-mediated browser/device-code interactions; connectors must never launch a browser themselves.
 
 ## GitHub
 

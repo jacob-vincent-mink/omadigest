@@ -164,6 +164,11 @@ const templatePolicy = Type.Object({
   }),
   context: Type.Object({
     connectors: Type.Array(Type.String({ minLength: 1, maxLength: 80 }), { maxItems: 16 }),
+    connectorCategories: Type.Optional(Type.Record(
+      Type.String({ pattern: "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$" }),
+      Type.Array(Type.String({ pattern: "^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$" }), { maxItems: 32 }),
+      { maxProperties: 16 }
+    )),
     maximumItems: Type.Number({ minimum: 1, maximum: 200 }),
     maximumBytes: Type.Number({ minimum: 1024, maximum: 250_000 })
   }),

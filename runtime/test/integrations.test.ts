@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { discoverIntegrations, readIntegrationState, setIntegrationEnabled } from "../src/integrations.js";
+import { discoverIntegrations, readIntegrationState, setIntegrationCategoryEnabled, setIntegrationEnabled } from "../src/integrations.js";
 
 const temporaryRoots: string[] = [];
 afterEach(() => {
@@ -15,7 +15,7 @@ function temporaryRoot(): string {
   return root;
 }
 
-function createIntegration(root: string, id = "local.calendar"): void {
+function createIntegration(root: string, id = "local.calendar", categories?: unknown[]): void {
   const directory = join(root, id);
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, "connector.mjs"), "process.stdin.resume();\n");
@@ -26,6 +26,7 @@ function createIntegration(root: string, id = "local.calendar"): void {
     version: "0.1.0",
     author: "Test",
     description: "Reads upcoming calendar events.",
+    ...(categories === undefined ? {} : { categories }),
     entryPoint: "connector.mjs",
     capabilities: ["sync", "resolve"],
     setup: {
@@ -50,14 +51,69 @@ describe("integrations", () => {
     const integrations = discoverIntegrations(bundled, join(root, "user"), join(root, "state.json"));
     expect(integrations).toHaveLength(1);
     expect(integrations[0]).toMatchObject({ source: "bundled", enabled: false });
+    expect(integrations[0]?.categories).toEqual([{
+      id: "default", label: "All items", description: "All items provided by this source.",
+      enabled: true, defaultEnabled: true
+    }]);
   });
 
-  it("persists enablement separately from removable package code", () => {
+  it("migrates v1 enablement and preserves it when writing v2 state", () => {
     const root = temporaryRoot();
     const statePath = join(root, "config", "state.json");
+    mkdirSync(join(root, "config"), { recursive: true });
+    writeFileSync(statePath, JSON.stringify({ version: 1, enabled: ["local.calendar", "bad id", "local.calendar"] }));
+    expect(readIntegrationState(statePath)).toEqual({
+      version: 2,
+      sources: { "local.calendar": { enabled: true, categories: {} } }
+    });
+    setIntegrationCategoryEnabled(statePath, "local.calendar", "events", false);
     setIntegrationEnabled(statePath, "local.calendar", true);
-    expect(readIntegrationState(statePath).enabled).toEqual(["local.calendar"]);
-    expect(JSON.parse(readFileSync(statePath, "utf8"))).toEqual({ version: 1, enabled: ["local.calendar"] });
+    expect(JSON.parse(readFileSync(statePath, "utf8"))).toEqual({
+      version: 2,
+      sources: { "local.calendar": { enabled: true, categories: { events: false } } }
+    });
+  });
+
+  it("applies category defaults and bounded user overrides", () => {
+    const root = temporaryRoot();
+    const bundled = join(root, "bundled");
+    const statePath = join(root, "state.json");
+    createIntegration(bundled, "local.calendar", [
+      { id: "events", label: "Events", description: "Calendar events", defaultEnabled: true },
+      { id: "reminders", label: "Reminders", description: "Calendar reminders", defaultEnabled: false }
+    ]);
+    setIntegrationCategoryEnabled(statePath, "local.calendar", "events", false);
+    setIntegrationCategoryEnabled(statePath, "local.calendar", "reminders", true);
+    expect(discoverIntegrations(bundled, join(root, "user"), statePath)[0]?.categories).toEqual([
+      { id: "events", label: "Events", description: "Calendar events", defaultEnabled: true, enabled: false },
+      { id: "reminders", label: "Reminders", description: "Calendar reminders", defaultEnabled: false, enabled: true }
+    ]);
+  });
+
+  it("rejects duplicate, oversized, and excessive category declarations", () => {
+    const invalidCases = [
+      [
+        { id: "events", label: "Events", description: "One", defaultEnabled: true },
+        { id: "events", label: "Events again", description: "Two", defaultEnabled: true }
+      ],
+      [{ id: "events", label: "😀".repeat(50), description: "Too many bytes", defaultEnabled: true }],
+      Array.from({ length: 33 }, (_, index) => ({ id: `category-${index}`, label: "Category", description: "Description", defaultEnabled: true }))
+    ];
+    for (const [index, categories] of invalidCases.entries()) {
+      const root = temporaryRoot();
+      const bundled = join(root, "bundled");
+      createIntegration(bundled, `local.invalid-${index}`, categories);
+      expect(discoverIntegrations(bundled, join(root, "user"), join(root, "state.json"))).toEqual([]);
+    }
+  });
+
+  it("bounds persisted source and category identifiers", () => {
+    const root = temporaryRoot();
+    const statePath = join(root, "state.json");
+    expect(() => setIntegrationEnabled(statePath, "bad source", true)).toThrow(/source ID/u);
+    for (let index = 0; index < 64; index += 1)
+      setIntegrationCategoryEnabled(statePath, "local.calendar", `category-${index}`, true);
+    expect(() => setIntegrationCategoryEnabled(statePath, "local.calendar", "one-too-many", true)).toThrow(/Too many category overrides/u);
   });
 
   it("rejects an entry point symlink", () => {

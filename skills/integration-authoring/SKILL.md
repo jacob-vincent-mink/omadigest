@@ -16,6 +16,8 @@ Build one self-contained integration package that turns an external source into 
 - Keep all source-specific parsing inside this directory.
 - Store no credentials. Setup values arrive from the broker for one request; secrets belong to the broker's credential store.
 - Return bounded normalized items with stable IDs and provenance.
+- Declare stable bounded manifest categories when the source has independently useful streams. Emit a declared `category` on every item; legacy category-less packages use only the implicit `default` category.
+- Honor the broker-provided `sync.categories` list and never return unrequested categories.
 - Never open URLs, execute setup commands, or mutate external data directly. Request broker-mediated interactions.
 
 ## Permissions

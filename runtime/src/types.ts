@@ -8,6 +8,7 @@ export type AttentionItem = {
   app: string;
   title: string;
   body: string;
+  category?: string | undefined;
   contentAvailable?: boolean | undefined;
   urgency: "low" | "normal" | "critical";
   occurredAt: string;
@@ -57,6 +58,7 @@ export type CompiledTemplate = {
   match: TemplateMatch;
   context: {
     connectors: string[];
+    connectorCategories?: Record<string, string[]>;
     maximumItems: number;
     maximumBytes: number;
   };
@@ -90,6 +92,8 @@ export type PublicIntegration = {
   description: string;
   source: "bundled" | "user";
   enabled: boolean;
+  status: SourceStatus;
+  categories: PublicSourceCategory[];
   capabilities: string[];
   setup: {
     summary: string;
@@ -97,6 +101,22 @@ export type PublicIntegration = {
     actionLabel: string;
   };
   permissions: { networkHosts: string[]; commands: string[]; readPaths: string[]; writePaths: string[] };
+};
+
+export type SourceStatusState = "unknown" | "checking" | "ready" | "authentication-required" | "setup-required" | "error";
+export type SourceStatus = {
+  state: SourceStatusState;
+  message?: string;
+  checkedAt?: string;
+  code?: string;
+  action?: { kind: "setup"; label: string };
+};
+export type PublicSourceCategory = {
+  id: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  defaultEnabled: boolean;
 };
 
 export type AgentAuthMethod = {
@@ -127,6 +147,7 @@ export type BrokerCommand =
   | { type: "initialize"; protocolVersion: number }
   | { type: "select_template"; id: string; context: GenerationContext }
   | { type: "integration_set_enabled"; id: string; integrationId: string; enabled: boolean }
+  | { type: "integration_set_category_enabled"; id: string; integrationId: string; categoryId: string; enabled: boolean }
   | { type: "integration_setup"; id: string; integrationId: string; values: Record<string, string | boolean> }
   | { type: "integration_status"; id: string; integrationId: string }
   | { type: "draft_start"; id: string; kind: "template" | "integration"; request: string }
@@ -171,8 +192,8 @@ export type BrokerEvent =
   | { type: "templates"; id: string; templates: PublicTemplate[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }
-  | { type: "integration_setup"; id: string; integrationId: string; ready: boolean; message: string }
-  | { type: "integration_status"; id: string; integrationId: string; ready: boolean; message: string }
+  | { type: "integration_setup"; id: string; integrationId: string; ready: boolean; message: string; status: SourceStatus }
+  | { type: "integration_status"; id: string; integrationId: string; ready: boolean; message: string; status: SourceStatus }
   | { type: "draft_state"; id: string; state: "working" }
   | { type: "draft_progress"; id: string; phase: string; message: string }
   | { type: "draft_plan"; id: string; steps: string[]; currentStep: number; status: "working" | "complete" }

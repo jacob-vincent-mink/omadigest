@@ -40,7 +40,7 @@ No built-in coding tools are enabled. Time, prompt, file, item, and output bound
 
 ## File-backed control plane
 
-User policy, templates, integrations, declared permissions, enablement, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
+User policy, templates, integrations, declared permissions, enablement, category overrides, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. Source enablement and category overrides use bounded version-2 state; version-1 integration enablement is migrated on read and rewritten on the next state change. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
 
 Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable.
 
@@ -52,7 +52,9 @@ Templates have readable `SKILL.md` instructions and a schema-validated compiled 
 
 An integration is discovered only when its directory, strict manifest, and regular `.mjs` entry point validate. Default-agent authoring occurs in a temporary staging directory; a standalone broker-owned command enforces file, byte, path, schema, syntax, sandbox-test, and protocol-probe gates before atomic installation. The packaged authoring skill can be explicitly linked into shared Codex, Claude, and Pi-compatible skill directories; plugin installation itself still runs no hook. Enablement is separate state from live probe status. Setup fields are manifest-driven; secrets go to Secret Service and ordinary values to private JSON.
 
-Connectors run as child processes with a minimal environment and versioned NDJSON request. Node permissions are derived from declared filesystem/network/command needs. Results are bounded and validated before becoming attention items. Generation runs only connector IDs explicitly named by the selected template. Connector failure is isolated and does not fail notification intake.
+Connectors run as child processes with a minimal environment and versioned NDJSON request. Node permissions are derived from declared filesystem/network/command needs. Results are bounded and validated before becoming attention items. Manifests may declare bounded source categories; legacy manifests receive an implicit enabled `default` category. Sync receives the deterministic intersection of template-requested and user-enabled categories, and undeclared or disabled results are discarded before persistence. Generation runs only connector IDs explicitly named by the selected template. Connector failure is isolated and does not fail notification intake.
+
+Public source status is a structured object with `unknown`, `checking`, `ready`, `authentication-required`, `setup-required`, or `error` state, plus bounded message, completion timestamp, and stable connector error code when available. Authentication/setup actions are derived only from concrete manifest setup fields, never connector-controlled strings or URLs.
 
 The model never receives connector credentials or raw connector protocol messages.
 
@@ -75,7 +77,7 @@ Protocol 1 currently includes:
 - attention ingestion and digest generation;
 - template drafting, acceptance, rejection, and handoff;
 - default-agent integration-authoring handoff;
-- integration setup and enablement;
+- integration setup, structured status refresh, source enablement, and category enablement;
 - deletion of OmaDigest digest history, retained notification evidence, custom integrations, and custom templates;
 - dictation status/start/stop/cancel;
 - TTS status/configure/speak/pause/stop.

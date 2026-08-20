@@ -42,7 +42,10 @@ describe("default-agent authoring packages", () => {
     const config = join(roots[0]!, "config");
     expect(validateAuthoringDirectory(staging).id).toBe("local.authoring-test");
     expect(installAuthoringDirectory(staging, config).id).toBe("local.authoring-test");
-    expect(JSON.parse(readFileSync(join(config, "integration-state.json"), "utf8")).enabled).toEqual([]);
+    expect(JSON.parse(readFileSync(join(config, "integration-state.json"), "utf8"))).toEqual({
+      version: 2,
+      sources: { "local.authoring-test": { enabled: false, categories: {} } }
+    });
     expect(readFileSync(join(config, "integrations", "local.authoring-test", "README.md"), "utf8")).toContain("Authoring test");
   });
 

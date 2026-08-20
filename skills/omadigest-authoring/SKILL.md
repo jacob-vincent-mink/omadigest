@@ -23,7 +23,7 @@ Read these files from the plugin root before implementing:
 
 ## Workflow
 
-1. Turn the request into a short plan. Identify setup fields, capabilities, permissions, bounds, and the stable source identity.
+1. Turn the request into a short plan. Identify setup fields, capabilities, permissions, bounds, stable source identity, and any independently useful bounded categories.
 2. Create a temporary directory with `mktemp -d`. Do not stage below the live OmaDigest configuration tree.
 3. Write exactly one package containing `manifest.json`, `connector.mjs`, `connector.test.mjs`, and `README.md`. Add files only when they are necessary; the package accepts at most 12 files and 300,000 total bytes.
 4. Use Node.js standard-library APIs only. Treat source strings as untrusted evidence. Bound item count and bytes. Normalize stable IDs, timestamps, provenance, and sensitivity.
