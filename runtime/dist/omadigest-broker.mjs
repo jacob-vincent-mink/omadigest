@@ -278558,6 +278558,15 @@ function modelRuntime() {
   runtimePromise ??= ModelRuntime.create({ allowModelNetwork: false });
   return runtimePromise;
 }
+async function agentConnectionStatus() {
+  try {
+    const models = await (await modelRuntime()).getAvailable();
+    const model = selectAgentModel(models);
+    return model === void 0 ? { connected: false, provider: "", model: "" } : { connected: true, provider: String(model.provider || ""), model: String(model.id) };
+  } catch {
+    return { connected: false, provider: "", model: "" };
+  }
+}
 var templatePolicy = typebox_exports2.Object({
   version: typebox_exports2.Literal(1),
   id: typebox_exports2.String({ minLength: 1, maxLength: 64 }),
@@ -279366,6 +279375,7 @@ var commandSchema = external_exports.discriminatedUnion("type", [
     id: external_exports.string().min(1).max(100),
     prompt: external_exports.string().min(1).max(1e4)
   }).strict(),
+  external_exports.object({ type: external_exports.literal("agent_status"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("dictation_status"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("dictation_start"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("dictation_stop"), id: external_exports.string().min(1).max(100) }).strict(),
@@ -279443,6 +279453,11 @@ async function handle(raw) {
       templates: templates.map(({ manifest }) => ({ id: manifest.id, name: manifest.name, description: manifest.description })),
       integrations: publicIntegrations()
     });
+    return true;
+  }
+  if (command.type === "agent_status") {
+    const status = await agentConnectionStatus();
+    emit({ type: "agent_status", id: command.id, ...status });
     return true;
   }
   if (command.type === "dictation_status" || command.type === "dictation_start" || command.type === "dictation_stop" || command.type === "dictation_cancel") {

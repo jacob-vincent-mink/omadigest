@@ -62,6 +62,18 @@ function modelRuntime(): Promise<ModelRuntime> {
   return runtimePromise;
 }
 
+export async function agentConnectionStatus(): Promise<{ connected: boolean; provider: string; model: string }> {
+  try {
+    const models = await (await modelRuntime()).getAvailable();
+    const model = selectAgentModel(models);
+    return model === undefined
+      ? { connected: false, provider: "", model: "" }
+      : { connected: true, provider: String((model as any).provider || ""), model: String(model.id) };
+  } catch {
+    return { connected: false, provider: "", model: "" };
+  }
+}
+
 const templatePolicy = Type.Object({
   version: Type.Literal(1),
   id: Type.String({ minLength: 1, maxLength: 64 }),

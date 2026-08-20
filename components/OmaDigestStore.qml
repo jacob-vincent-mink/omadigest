@@ -32,6 +32,7 @@ Scope {
   property var digestHistory: []
   property string digestState: "idle"
   property int attentionCount: 0
+  property var agentConnection: ({ connected: false, provider: "", model: "" })
   property bool dictationAvailable: false
   property string dictationState: "idle"
   property string transcript: ""
@@ -69,6 +70,8 @@ Scope {
   function handoffDefaultAgent(prompt) {
     send({ type: "handoff_default_agent", id: "handoff-" + nextId++, prompt: String(prompt || "") })
   }
+
+  function requestAgentStatus() { send({ type: "agent_status", id: "agent-" + nextId++ }) }
 
   function requestDictationStatus() {
     send({ type: "dictation_status", id: "dictation-" + nextId++ })
@@ -179,6 +182,7 @@ Scope {
       status = "Ready to build a briefing"
       templates = event.templates || []
       integrations = event.integrations || []
+      root.requestAgentStatus()
       root.requestDictationStatus()
       root.requestTtsStatus()
       root.requestDigestHistory()
@@ -203,6 +207,14 @@ Scope {
       draftId = ""
       draftState = "saved"
       status = event.kind === "integration" ? "Integration installed disabled" : "Template saved"
+      return
+    }
+    if (event.type === "agent_status") {
+      agentConnection = {
+        connected: event.connected === true,
+        provider: String(event.provider || ""),
+        model: String(event.model || "")
+      }
       return
     }
     if (event.type === "dictation") {

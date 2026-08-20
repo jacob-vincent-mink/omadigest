@@ -102,6 +102,7 @@ export type BrokerCommand =
   | { type: "draft_accept"; id: string; draftId: string }
   | { type: "draft_reject"; id: string; draftId: string }
   | { type: "handoff_default_agent"; id: string; prompt: string }
+  | { type: "agent_status"; id: string }
   | { type: "dictation_status"; id: string }
   | { type: "dictation_start"; id: string }
   | { type: "dictation_stop"; id: string }
@@ -127,6 +128,7 @@ export type BrokerEvent =
   | { type: "draft"; id: string; draft: unknown }
   | { type: "draft_saved"; id: string; draftId: string; kind: "template" | "integration" }
   | { type: "handoff"; id: string; state: "launched" }
+  | { type: "agent_status"; id: string; connected: boolean; provider: string; model: string }
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
   | { type: "attention"; id: string; count: number }

@@ -7,7 +7,7 @@ import { loadTemplates } from "./templates.js";
 import { selectTemplate } from "./selector.js";
 import { discoverIntegrations, integrationConfigRoot, setIntegrationEnabled } from "./integrations.js";
 import { IntegrationRuntime } from "./integration-runtime.js";
-import { runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
+import { agentConnectionStatus, runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
 import { AttentionStore, attentionItemSchema } from "./attention.js";
 import { installDraft } from "./drafts.js";
 import { DictationService } from "./dictation.js";
@@ -52,6 +52,7 @@ const commandSchema = z.discriminatedUnion("type", [
     id: z.string().min(1).max(100),
     prompt: z.string().min(1).max(10_000)
   }).strict(),
+  z.object({ type: z.literal("agent_status"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("dictation_status"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("dictation_start"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("dictation_stop"), id: z.string().min(1).max(100) }).strict(),
@@ -136,6 +137,12 @@ async function handle(raw: string): Promise<boolean> {
       templates: templates.map(({ manifest }) => ({ id: manifest.id, name: manifest.name, description: manifest.description })),
       integrations: publicIntegrations()
     });
+    return true;
+  }
+
+  if (command.type === "agent_status") {
+    const status = await agentConnectionStatus();
+    emit({ type: "agent_status", id: command.id, ...status });
     return true;
   }
 

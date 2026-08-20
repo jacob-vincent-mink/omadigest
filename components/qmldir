@@ -1,3 +1,4 @@
 singleton OmaDigestStore 1.0 OmaDigestStore.qml
 OmaDigestMark 1.0 OmaDigestMark.qml
 IntegrationCard 1.0 IntegrationCard.qml
+DraftEditor 1.0 DraftEditor.qml

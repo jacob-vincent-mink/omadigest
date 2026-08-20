@@ -24,14 +24,18 @@ Panel {
   readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
     ? String(notificationService.historyDir) : ""
   readonly property int attentionAvailableCount: root.currentAttentionItems().length
-  property var historyItems: []
+
+  property string page: "list"
+  property string settingsPage: "integrations"
   property string ttsProvider: "openai-compatible"
+  property var historyItems: []
   property double dndStartedAt: 0
   property string lastScheduledDay: ""
   property var pendingAutomaticGeneration: null
 
   function open() {
-    root.refreshNotificationHistory()
+    refreshNotificationHistory()
+    OmaDigest.OmaDigestStore.requestDigestHistory()
     root.controller.show()
   }
   function close() { root.controller.hide() }
@@ -42,16 +46,6 @@ Panel {
     if (root.bar && typeof root.bar.switchPanelFrom === "function")
       return root.bar.switchPanelFrom(root.barIdentity, direction)
     return false
-  }
-
-  function currentAppCounts() {
-    var result = {}
-    var items = root.currentAttentionItems()
-    for (var index = 0; index < items.length; index++) {
-      var app = String(items[index].app || "unknown")
-      result[app] = Number(result[app] || 0) + 1
-    }
-    return result
   }
 
   function refreshNotificationHistory() {
@@ -84,63 +78,53 @@ Panel {
     if (root.pendingAutomaticGeneration) Qt.callLater(root.completeAutomaticGeneration)
   }
 
-  function requestAutomaticGeneration(trigger, focusMinutes) {
-    root.pendingAutomaticGeneration = { trigger: trigger, focusMinutes: focusMinutes }
-    if (root.notificationHistoryDir) root.refreshNotificationHistory()
-    else root.completeAutomaticGeneration()
-  }
-
-  function completeAutomaticGeneration() {
-    var pending = root.pendingAutomaticGeneration
-    root.pendingAutomaticGeneration = null
-    if (!pending || root.attentionAvailableCount < Number(root.setting("minimumItems", 3))) return
-    OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems())
-    OmaDigest.OmaDigestStore.generateDigest(root.generationContext(pending.trigger, pending.focusMinutes), "")
-  }
-
   function currentAttentionItems() {
     var result = root.historyItems.slice()
     var model = notificationService ? notificationService.popupModel : null
-    if (!model) return root.deduplicateAttentionItems(result)
-    for (var index = 0; index < model.count && index < 200; index++) {
-      var row = model.get(index)
-      var timestamp = Number(row.timestamp || Date.now())
-      var rawUrgency = Number(row.urgency || 1)
-      var app = String(row.app || row.appName || "unknown").slice(0, 120)
-      var title = String(row.summary || "").slice(0, 2000)
-      var stable = String(row.id || row.originalId || (app + "-" + timestamp + "-" + title))
-      result.push({
-        id: "notification:" + stable.slice(0, 180),
-        source: "notifications",
-        app: app,
-        title: title,
-        body: String(row.body || "").slice(0, 8000),
-        urgency: rawUrgency >= 2 ? "critical" : (rawUrgency <= 0 ? "low" : "normal"),
-        occurredAt: new Date(timestamp).toISOString()
-      })
+    if (model) {
+      for (var index = 0; index < model.count && index < 200; index++) {
+        var row = model.get(index)
+        var timestamp = Number(row.timestamp || Date.now())
+        var rawUrgency = Number(row.urgency || 1)
+        var app = String(row.app || row.appName || "unknown").slice(0, 120)
+        var title = String(row.summary || "").slice(0, 2000)
+        var stable = String(row.id || row.originalId || (app + "-" + timestamp + "-" + title))
+        result.push({
+          id: "notification:" + stable.slice(0, 180), source: "notifications", app: app,
+          title: title, body: String(row.body || "").slice(0, 8000),
+          urgency: rawUrgency >= 2 ? "critical" : (rawUrgency <= 0 ? "low" : "normal"),
+          occurredAt: new Date(timestamp).toISOString()
+        })
+      }
     }
-    return root.deduplicateAttentionItems(result)
-  }
-
-  function deduplicateAttentionItems(items) {
     var byId = {}
     var order = []
-    for (var index = 0; index < items.length; index++) {
-      var id = String(items[index].id || "")
+    for (var position = 0; position < result.length; position++) {
+      var id = String(result[position].id || "")
       if (!id) continue
       if (byId[id] === undefined) order.push(id)
-      byId[id] = items[index]
+      byId[id] = result[position]
     }
-    var result = []
-    for (var position = 0; position < order.length; position++) result.push(byId[order[position]])
-    return result
+    var deduplicated = []
+    for (var item = 0; item < order.length; item++) deduplicated.push(byId[order[item]])
+    return deduplicated
+  }
+
+  function currentAppCounts() {
+    var counts = {}
+    var items = currentAttentionItems()
+    for (var index = 0; index < items.length; index++) {
+      var app = String(items[index].app || "unknown")
+      counts[app] = Number(counts[app] || 0) + 1
+    }
+    return counts
   }
 
   function availableConnectors() {
     var result = ["notifications"]
     var integrations = OmaDigest.OmaDigestStore.integrations || []
-    for (var i = 0; i < integrations.length; i++)
-      if (integrations[i].enabled === true) result.push(String(integrations[i].id))
+    for (var index = 0; index < integrations.length; index++)
+      if (integrations[index].enabled === true) result.push(String(integrations[index].id))
     return result
   }
 
@@ -155,16 +139,24 @@ Panel {
     }
   }
 
-  function routeCurrentInbox() {
-    OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems())
-    OmaDigest.OmaDigestStore.selectTemplate(
-      "manual", root.attentionAvailableCount, 0, root.currentAppCounts(), root.availableConnectors())
+  function generateDigest(trigger, focusMinutes) {
+    var items = root.currentAttentionItems()
+    if (items.length === 0 || OmaDigest.OmaDigestStore.digestState === "working") return
+    OmaDigest.OmaDigestStore.ingest(items)
+    OmaDigest.OmaDigestStore.generateDigest(root.generationContext(trigger || "manual", focusMinutes || 0), "")
   }
 
-  function generateCurrentDigest() {
-    OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems())
-    OmaDigest.OmaDigestStore.generateDigest(root.generationContext("manual", 0),
-      OmaDigest.OmaDigestStore.selection ? OmaDigest.OmaDigestStore.selection.templateId : "")
+  function requestAutomaticGeneration(trigger, focusMinutes) {
+    root.pendingAutomaticGeneration = { trigger: trigger, focusMinutes: focusMinutes }
+    if (root.notificationHistoryDir) root.refreshNotificationHistory()
+    else root.completeAutomaticGeneration()
+  }
+
+  function completeAutomaticGeneration() {
+    var pending = root.pendingAutomaticGeneration
+    root.pendingAutomaticGeneration = null
+    if (!pending || root.attentionAvailableCount < Number(root.setting("minimumItems", 3))) return
+    root.generateDigest(pending.trigger, pending.focusMinutes)
   }
 
   Connections {
@@ -179,6 +171,13 @@ Panel {
       var focusMinutes = Math.round((Date.now() - root.dndStartedAt) / 60000)
       root.dndStartedAt = 0
       root.requestAutomaticGeneration("dnd-ended", focusMinutes)
+    }
+  }
+
+  Connections {
+    target: OmaDigest.OmaDigestStore
+    function onDigestChanged() {
+      if (OmaDigest.OmaDigestStore.digest) root.page = "detail"
     }
   }
 
@@ -205,14 +204,6 @@ Panel {
       if (current !== configured || root.lastScheduledDay === day) return
       root.lastScheduledDay = day
       root.requestAutomaticGeneration("scheduled", 0)
-    }
-  }
-
-  Connections {
-    target: OmaDigest.OmaDigestStore
-    function onTranscriptChanged() {
-      var text = String(OmaDigest.OmaDigestStore.transcript || "").trim()
-      if (text) draftInput.text = draftInput.text.trim() ? draftInput.text.trim() + " " + text : text
     }
   }
 
@@ -257,11 +248,13 @@ Panel {
             }
 
             Column {
-              width: parent.width - Style.space(48)
-              spacing: Style.space(2)
+              width: parent.width - headerActions.width - Style.space(54)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(1)
 
               Text {
-                text: "OMADIGEST"
+                text: root.page === "settings" ? "OMADIGEST SETTINGS"
+                  : root.page === "detail" ? "DIGEST" : "OMADIGEST"
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.subtitle
@@ -271,162 +264,192 @@ Panel {
 
               Text {
                 width: parent.width
-                text: "Turn interruptions into a cited briefing shaped by your skills."
+                text: root.page === "list"
+                  ? root.attentionAvailableCount + " attention items · " + OmaDigest.OmaDigestStore.status
+                  : root.page === "settings" ? "Templates, integrations, and connections" : ""
+                visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                wrapMode: Text.WordWrap
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideRight
+              }
+            }
+
+            Row {
+              id: headerActions
+              spacing: Style.space(2)
+              anchors.verticalCenter: parent.verticalCenter
+
+              PanelActionButton {
+                visible: root.page === "detail" || root.page === "settings"
+                iconText: "󰅁"
+                tooltipText: "Back to digests"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.page = "list"
+              }
+
+              PanelActionButton {
+                visible: root.page === "list"
+                iconText: OmaDigest.OmaDigestStore.digestState === "working" ? "󰔟" : "󰑐"
+                tooltipText: root.attentionAvailableCount > 0 ? "Generate digest" : "No attention items"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
+                onClicked: root.generateDigest("manual", 0)
+              }
+
+              PanelActionButton {
+                visible: root.page === "list"
+                iconText: "󰒓"
+                tooltipText: "Settings"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.page = "settings"
               }
             }
           }
 
-          Rectangle {
-            width: parent.width
-            height: inboxColumn.implicitHeight + Style.space(24)
-            radius: Style.cornerRadius
-            color: Style.normalFillFor(root.foreground, Color.accent)
-            border.width: Style.spacing.hairline
-            border.color: Style.normalBorderFor(root.foreground, Color.accent)
-
-            Column {
-              id: inboxColumn
-              anchors.fill: parent
-              anchors.margins: Style.space(12)
-              spacing: Style.space(8)
-
-              Text {
-                text: root.attentionAvailableCount === 1 ? "1 attention item" : root.attentionAvailableCount + " attention items"
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-
-              Text {
-                width: parent.width
-                text: OmaDigest.OmaDigestStore.status
-                color: Qt.darker(root.foreground, 1.35)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                wrapMode: Text.WordWrap
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(38)
-                radius: Style.cornerRadius
-                color: routeMouse.containsMouse
-                  ? Style.hoverFillFor(root.foreground, Color.accent)
-                  : Color.accent
-                opacity: OmaDigest.OmaDigestStore.ready ? 1 : 0.5
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "Choose a template for this inbox"
-                  color: Color.background
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                }
-
-                MouseArea {
-                  id: routeMouse
-                  anchors.fill: parent
-                  enabled: OmaDigest.OmaDigestStore.ready
-                  hoverEnabled: true
-                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                  onClicked: root.routeCurrentInbox()
-                }
-              }
-            }
-          }
-
+          // Main screen: only the digest list.
           Column {
             width: parent.width
-            visible: OmaDigest.OmaDigestStore.selection !== null
-            spacing: Style.space(6)
+            visible: root.page === "list"
+            spacing: Style.space(8)
 
             Text {
-              text: OmaDigest.OmaDigestStore.selection
-                ? "SELECTED · " + String(OmaDigest.OmaDigestStore.selection.name).toUpperCase() : ""
-              color: Color.accent
+              visible: OmaDigest.OmaDigestStore.digestHistory.length === 0
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              text: OmaDigest.OmaDigestStore.digestState === "working"
+                ? "Building your first digest…"
+                : "No digests yet. Use the sparkle button when you're ready."
+              color: Qt.darker(root.foreground, 1.35)
               font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1
+              font.pixelSize: Style.font.body
+              wrapMode: Text.WordWrap
+              topPadding: Style.space(34)
+              bottomPadding: Style.space(34)
             }
 
             Repeater {
-              model: OmaDigest.OmaDigestStore.selection ? OmaDigest.OmaDigestStore.selection.reasons : []
+              model: OmaDigest.OmaDigestStore.digestHistory
 
-              Text {
+              Rectangle {
                 required property var modelData
                 width: parent.width
-                text: "• " + String(modelData)
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                wrapMode: Text.WordWrap
+                height: digestRow.implicitHeight + Style.space(22)
+                radius: Style.cornerRadius
+                color: digestMouse.containsMouse
+                  ? Style.hoverFillFor(root.foreground, Color.accent)
+                  : Style.normalFillFor(root.foreground, Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: Style.normalBorderFor(root.foreground, Color.accent)
+
+                Row {
+                  id: digestRow
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.margins: Style.space(11)
+                  spacing: Style.space(10)
+
+                  Column {
+                    width: parent.width - digestChevron.width - Style.space(12)
+                    spacing: Style.space(2)
+                    Text {
+                      width: parent.width
+                      text: String(modelData.title)
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      width: parent.width
+                      text: new Date(modelData.generatedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm")
+                        + " · " + String(modelData.templateId)
+                      color: Qt.darker(root.foreground, 1.4)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+
+                  Text {
+                    id: digestChevron
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "󰅂"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                  }
+                }
+
+                MouseArea {
+                  id: digestMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: OmaDigest.OmaDigestStore.openDigestFromHistory(modelData)
+                }
               }
             }
           }
 
-          Rectangle {
-            width: parent.width
-            height: Style.space(40)
-            radius: Style.cornerRadius
-            color: generateMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : Color.accent
-            opacity: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working" ? 1 : 0.5
-
-            Text {
-              anchors.centerIn: parent
-              text: OmaDigest.OmaDigestStore.digestState === "working" ? "Building digest…" : "Generate digest"
-              color: Color.background
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              font.bold: true
-            }
-
-            MouseArea {
-              id: generateMouse
-              anchors.fill: parent
-              enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
-              hoverEnabled: true
-              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: root.generateCurrentDigest()
-            }
-          }
-
+          // Clicking a list item opens this focused reader.
           Column {
             width: parent.width
-            visible: OmaDigest.OmaDigestStore.digest !== null
-            spacing: Style.space(8)
+            visible: root.page === "detail" && OmaDigest.OmaDigestStore.digest !== null
+            spacing: Style.space(12)
 
             Row {
               width: parent.width
               spacing: Style.space(8)
 
-              Text {
-                width: parent.width - readButton.width - Style.space(8)
-                text: OmaDigest.OmaDigestStore.digest ? String(OmaDigest.OmaDigestStore.digest.title) : ""
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.subtitle
-                font.bold: true
-                wrapMode: Text.WordWrap
+              Column {
+                width: parent.width - detailActions.width - Style.space(8)
+                spacing: Style.space(2)
+                Text {
+                  width: parent.width
+                  text: OmaDigest.OmaDigestStore.digest ? String(OmaDigest.OmaDigestStore.digest.title) : ""
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.displaySmall
+                  font.bold: true
+                  wrapMode: Text.WordWrap
+                }
+                Text {
+                  text: OmaDigest.OmaDigestStore.digest
+                    ? new Date(OmaDigest.OmaDigestStore.digest.generatedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm") : ""
+                  color: Qt.darker(root.foreground, 1.4)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
               }
 
-              PanelActionButton {
-                id: readButton
-                iconText: OmaDigest.OmaDigestStore.tts.state === "playing" ? "󰏤" : "󰋋"
-                tooltipText: OmaDigest.OmaDigestStore.tts.configured ? "Read digest" : "Configure read mode in settings"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                enabled: OmaDigest.OmaDigestStore.tts.configured
-                onClicked: {
-                  if (OmaDigest.OmaDigestStore.tts.state === "playing") OmaDigest.OmaDigestStore.pauseReadMode()
-                  else if (OmaDigest.OmaDigestStore.tts.state === "paused") OmaDigest.OmaDigestStore.pauseReadMode()
-                  else OmaDigest.OmaDigestStore.readDigest()
+              Row {
+                id: detailActions
+                spacing: Style.space(2)
+                PanelActionButton {
+                  iconText: OmaDigest.OmaDigestStore.tts.state === "playing" ? "󰏤" : "󰋋"
+                  tooltipText: OmaDigest.OmaDigestStore.tts.configured ? "Read digest" : "Configure read mode"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  enabled: OmaDigest.OmaDigestStore.tts.configured
+                  onClicked: {
+                    if (OmaDigest.OmaDigestStore.tts.state === "playing" || OmaDigest.OmaDigestStore.tts.state === "paused")
+                      OmaDigest.OmaDigestStore.pauseReadMode()
+                    else OmaDigest.OmaDigestStore.readDigest()
+                  }
+                }
+                PanelActionButton {
+                  visible: OmaDigest.OmaDigestStore.tts.state !== "idle"
+                  iconText: "󰓛"
+                  tooltipText: "Stop reading"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onClicked: OmaDigest.OmaDigestStore.stopReadMode()
                 }
               }
             }
@@ -437,7 +460,7 @@ Panel {
               Column {
                 required property var modelData
                 width: parent.width
-                spacing: Style.space(4)
+                spacing: Style.space(6)
 
                 Text {
                   text: String(modelData.title).toUpperCase()
@@ -450,10 +473,132 @@ Panel {
 
                 Repeater {
                   model: modelData.entries || []
-                  Text {
+                  Rectangle {
                     required property var modelData
                     width: parent.width
-                    text: "• " + String(modelData.headline) + " — " + String(modelData.explanation)
+                    height: entryText.implicitHeight + Style.space(18)
+                    radius: Style.cornerRadius
+                    color: Style.normalFillFor(root.foreground, Color.accent)
+                    Text {
+                      id: entryText
+                      anchors.fill: parent
+                      anchors.margins: Style.space(9)
+                      text: String(modelData.headline) + "\n" + String(modelData.explanation)
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      wrapMode: Text.WordWrap
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Management lives behind one corner icon.
+          Column {
+            width: parent.width
+            visible: root.page === "settings"
+            spacing: Style.space(12)
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: [
+                  { id: "integrations", label: "Integrations" },
+                  { id: "templates", label: "Templates" },
+                  { id: "connections", label: "Connections" }
+                ]
+                Rectangle {
+                  required property var modelData
+                  width: (content.width - Style.space(12)) / 3
+                  height: Style.space(34)
+                  radius: Style.cornerRadius
+                  color: root.settingsPage === modelData.id
+                    ? Style.selectedFillFor(root.foreground, Color.accent)
+                    : (settingsTabMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent")
+                  Text {
+                    anchors.centerIn: parent
+                    text: String(modelData.label)
+                    color: root.settingsPage === modelData.id ? Color.accent : root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: root.settingsPage === modelData.id
+                  }
+                  MouseArea {
+                    id: settingsTabMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.settingsPage = String(modelData.id)
+                  }
+                }
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "integrations"
+              spacing: Style.space(12)
+
+              Text {
+                visible: OmaDigest.OmaDigestStore.integrations.length === 0
+                width: parent.width
+                text: "No integrations installed."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.integrations
+                OmaDigest.IntegrationCard {
+                  required property var modelData
+                  integration: modelData
+                  width: parent.width
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                }
+              }
+
+              Text {
+                text: "CREATE AN INTEGRATION"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+              OmaDigest.DraftEditor {
+                kind: "integration"
+                width: parent.width
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "templates"
+              spacing: Style.space(10)
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.templates
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: templateText.implicitHeight + Style.space(18)
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  Text {
+                    id: templateText
+                    anchors.fill: parent
+                    anchors.margins: Style.space(9)
+                    text: String(modelData.name) + "\n" + String(modelData.description)
                     color: root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.bodySmall
@@ -461,425 +606,182 @@ Panel {
                   }
                 }
               }
-            }
-          }
 
-          Column {
-            width: parent.width
-            visible: OmaDigest.OmaDigestStore.digestHistory.length > 0
-            spacing: Style.space(6)
-
-            Text {
-              text: "RECENT DIGESTS"
-              color: Qt.darker(root.foreground, 1.35)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1
-            }
-
-            Repeater {
-              model: OmaDigest.OmaDigestStore.digestHistory.slice(0, 5)
-              Rectangle {
-                required property var modelData
-                width: parent.width
-                height: historyTitle.implicitHeight + Style.space(16)
-                radius: Style.cornerRadius
-                color: historyMouse.containsMouse
-                  ? Style.hoverFillFor(root.foreground, Color.accent)
-                  : Style.normalFillFor(root.foreground, Color.accent)
-
-                Text {
-                  id: historyTitle
-                  anchors.left: parent.left
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.margins: Style.space(8)
-                  text: String(modelData.title) + " · " + new Date(modelData.generatedAt).toLocaleString(Qt.locale(), "MMM d hh:mm")
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  elide: Text.ElideRight
-                }
-
-                MouseArea {
-                  id: historyMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: OmaDigest.OmaDigestStore.openDigestFromHistory(modelData)
-                }
-              }
-            }
-          }
-
-          Column {
-            width: parent.width
-            spacing: Style.space(6)
-
-            Text {
-              text: "AVAILABLE SKILLS"
-              color: Qt.darker(root.foreground, 1.35)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1
-            }
-
-            Repeater {
-              model: OmaDigest.OmaDigestStore.templates
-
-              Row {
-                required property var modelData
-                width: parent.width
-                spacing: Style.space(8)
-
-                Text {
-                  text: "›"
-                  color: Color.accent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                }
-
-                Text {
-                  width: parent.width - Style.space(24)
-                  text: String(modelData.name) + " — " + String(modelData.description)
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  wrapMode: Text.WordWrap
-                }
-              }
-            }
-          }
-
-          Column {
-            width: parent.width
-            spacing: Style.space(8)
-
-            Text {
-              text: "DRAFT WITH THE AGENT"
-              color: Qt.darker(root.foreground, 1.35)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1
-            }
-
-            Row {
-              spacing: Style.space(8)
-              Repeater {
-                model: ["template", "integration"]
-                Rectangle {
-                  required property string modelData
-                  width: Style.space(110)
-                  height: Style.space(32)
-                  radius: Style.cornerRadius
-                  color: OmaDigest.OmaDigestStore.draftKind === modelData
-                    ? Style.selectedFillFor(root.foreground, Color.accent)
-                    : Style.normalFillFor(root.foreground, Color.accent)
-                  Text {
-                    anchors.centerIn: parent
-                    text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.bodySmall
-                  }
-                  MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: OmaDigest.OmaDigestStore.draftKind = modelData
-                  }
-                }
-              }
-            }
-
-            QQC.TextArea {
-              id: draftInput
-              width: parent.width
-              height: Style.space(96)
-              color: root.foreground
-              placeholderText: OmaDigest.OmaDigestStore.draftKind === "template"
-                ? "Describe the briefing you want…"
-                : "Describe the source you want to connect…"
-              placeholderTextColor: Qt.darker(root.foreground, 1.6)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              wrapMode: TextEdit.Wrap
-              background: Rectangle {
-                radius: Style.cornerRadius
-                color: Style.normalFillFor(root.foreground, Color.accent)
-                border.width: Style.spacing.hairline
-                border.color: Style.normalBorderFor(root.foreground, Color.accent)
-              }
-            }
-
-            Row {
-              spacing: Style.space(8)
-
-              PanelActionButton {
-                iconText: OmaDigest.OmaDigestStore.dictationState === "recording" ? "󰍬" : "󰍭"
-                tooltipText: OmaDigest.OmaDigestStore.dictationAvailable ? "Dictate" : "Voxtype is unavailable"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                enabled: OmaDigest.OmaDigestStore.dictationAvailable
-                onClicked: OmaDigest.OmaDigestStore.toggleDictation()
-              }
-
-              Rectangle {
-                width: Style.space(170)
-                height: Style.space(36)
-                radius: Style.cornerRadius
-                color: draftMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : Color.accent
-                opacity: draftInput.text.trim() && OmaDigest.OmaDigestStore.draftState !== "working" ? 1 : 0.5
-                Text {
-                  anchors.centerIn: parent
-                  text: OmaDigest.OmaDigestStore.draftState === "working" ? "Drafting…" : "Draft " + OmaDigest.OmaDigestStore.draftKind
-                  color: Color.background
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: true
-                }
-                MouseArea {
-                  id: draftMouse
-                  anchors.fill: parent
-                  enabled: draftInput.text.trim() && OmaDigest.OmaDigestStore.draftState !== "working"
-                  hoverEnabled: true
-                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                  onClicked: OmaDigest.OmaDigestStore.startDraft(OmaDigest.OmaDigestStore.draftKind, draftInput.text)
-                }
-              }
-            }
-
-            Text {
-              visible: OmaDigest.OmaDigestStore.draft !== null
-              width: parent.width
-              text: {
-                var draft = OmaDigest.OmaDigestStore.draft
-                if (!draft) return ""
-                if (draft.kind === "out-of-scope") return String(draft.message)
-                if (draft.kind === "clarification") return String(draft.question)
-                if (draft.kind === "template") return "Template draft: " + String(draft.compiled.name)
-                return "Integration draft contains " + String((draft.files || []).length) + " reviewed files."
-              }
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
-
-            QQC.TextArea {
-              visible: OmaDigest.OmaDigestStore.draft !== null
-                && (OmaDigest.OmaDigestStore.draft.kind === "template" || OmaDigest.OmaDigestStore.draft.kind === "integration")
-              width: parent.width
-              height: visible ? Style.space(150) : 0
-              readOnly: true
-              text: visible ? JSON.stringify(OmaDigest.OmaDigestStore.draft, null, 2).slice(0, 12000) : ""
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: TextEdit.NoWrap
-              background: Rectangle {
-                radius: Style.cornerRadius
-                color: Style.normalFillFor(root.foreground, Color.accent)
-                border.width: Style.spacing.hairline
-                border.color: Style.normalBorderFor(root.foreground, Color.accent)
-              }
-            }
-
-            Row {
-              visible: OmaDigest.OmaDigestStore.draft !== null
-                && (OmaDigest.OmaDigestStore.draft.kind === "template" || OmaDigest.OmaDigestStore.draft.kind === "integration")
-              height: visible ? Style.space(36) : 0
-              spacing: Style.space(8)
-
-              Rectangle {
-                width: Style.space(120)
-                height: parent.height
-                radius: Style.cornerRadius
-                color: Color.accent
-                Text {
-                  anchors.centerIn: parent
-                  text: "Accept"
-                  color: Color.background
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: true
-                }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: OmaDigest.OmaDigestStore.acceptDraft() }
-              }
-
-              Rectangle {
-                width: Style.space(120)
-                height: parent.height
-                radius: Style.cornerRadius
-                color: Style.normalFillFor(root.foreground, Color.accent)
-                Text {
-                  anchors.centerIn: parent
-                  text: "Discard"
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                }
-                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: OmaDigest.OmaDigestStore.rejectDraft() }
-              }
-            }
-
-            Rectangle {
-              visible: OmaDigest.OmaDigestStore.draft && OmaDigest.OmaDigestStore.draft.kind === "out-of-scope"
-              width: parent.width
-              height: visible ? Style.space(36) : 0
-              radius: Style.cornerRadius
-              color: Style.normalFillFor(root.foreground, Color.accent)
               Text {
-                anchors.centerIn: parent
-                text: "Open in default agent"
-                color: root.foreground
+                text: "CREATE A TEMPLATE"
+                color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
               }
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: OmaDigest.OmaDigestStore.handoffDefaultAgent(OmaDigest.OmaDigestStore.draft.suggestedPrompt)
-              }
-            }
-          }
-
-          Column {
-            width: parent.width
-            spacing: Style.space(6)
-
-            Text {
-              text: "INTEGRATIONS"
-              color: Qt.darker(root.foreground, 1.35)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1
-            }
-
-            Text {
-              visible: OmaDigest.OmaDigestStore.integrations.length === 0
-              width: parent.width
-              text: "No integrations installed. Draft one above; generated packages remain disabled until reviewed and accepted."
-              color: Qt.darker(root.foreground, 1.35)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
-
-            Repeater {
-              model: OmaDigest.OmaDigestStore.integrations
-              OmaDigest.IntegrationCard {
-                required property var modelData
-                integration: modelData
+              OmaDigest.DraftEditor {
+                kind: "template"
                 width: parent.width
                 foreground: root.foreground
                 accent: Color.accent
                 fontFamily: root.fontFamily
               }
             }
-          }
 
-          Column {
-            width: parent.width
-            spacing: Style.space(8)
-
-            Text {
-              text: "READ MODE"
-              color: Qt.darker(root.foreground, 1.35)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1
-            }
-
-            Text {
+            Column {
               width: parent.width
-              text: OmaDigest.OmaDigestStore.tts.configured
-                ? "Configured for " + String(OmaDigest.OmaDigestStore.tts.config.provider)
-                : "Use an OpenAI-compatible speech endpoint or ElevenLabs. The API key is stored in Secret Service."
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
+              visible: root.settingsPage === "connections"
+              spacing: Style.space(10)
 
-            Row {
-              spacing: Style.space(8)
-              Repeater {
-                model: ["openai-compatible", "elevenlabs"]
-                Rectangle {
-                  required property string modelData
-                  width: Style.space(150)
-                  height: Style.space(30)
-                  radius: Style.cornerRadius
-                  color: root.ttsProvider === modelData
-                    ? Style.selectedFillFor(root.foreground, Color.accent)
-                    : Style.normalFillFor(root.foreground, Color.accent)
+              Rectangle {
+                width: parent.width
+                height: agentConnection.implicitHeight + Style.space(20)
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground, Color.accent)
+                Column {
+                  id: agentConnection
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(3)
                   Text {
-                    anchors.centerIn: parent
-                    text: modelData === "elevenlabs" ? "ElevenLabs" : "OpenAI-compatible"
-                    color: root.foreground
+                    text: "PI AGENT"
+                    color: Color.accent
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 1
                   }
-                  MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.ttsProvider = modelData }
+                  Text {
+                    width: parent.width
+                    text: OmaDigest.OmaDigestStore.agentConnection.connected
+                      ? OmaDigest.OmaDigestStore.agentConnection.provider + " · " + OmaDigest.OmaDigestStore.agentConnection.model
+                      : "Not connected. Authenticate a model with Pi."
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
                 }
               }
-            }
 
-            QQC.TextField {
-              id: ttsEndpoint
-              width: parent.width
-              placeholderText: root.ttsProvider === "elevenlabs" ? "https://api.elevenlabs.io" : "https://api.openai.com/v1"
-              color: root.foreground
-              font.family: root.fontFamily
-            }
-            QQC.TextField {
-              id: ttsModel
-              width: parent.width
-              placeholderText: root.ttsProvider === "elevenlabs" ? "eleven_multilingual_v2" : "gpt-4o-mini-tts"
-              color: root.foreground
-              font.family: root.fontFamily
-            }
-            QQC.TextField {
-              id: ttsVoice
-              width: parent.width
-              placeholderText: root.ttsProvider === "elevenlabs" ? "Voice ID" : "alloy"
-              color: root.foreground
-              font.family: root.fontFamily
-            }
-            QQC.TextField {
-              id: ttsApiKey
-              width: parent.width
-              placeholderText: "API key"
-              echoMode: TextInput.Password
-              color: root.foreground
-              font.family: root.fontFamily
-            }
+              Rectangle {
+                width: parent.width
+                height: voiceConnection.implicitHeight + Style.space(20)
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground, Color.accent)
+                Column {
+                  id: voiceConnection
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(3)
+                  Text {
+                    text: "VOICE INPUT"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 1
+                  }
+                  Text {
+                    text: OmaDigest.OmaDigestStore.dictationAvailable ? "Voxtype ready" : "Voxtype unavailable"
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+                }
+              }
 
-            Rectangle {
-              width: Style.space(150)
-              height: Style.space(36)
-              radius: Style.cornerRadius
-              color: Color.accent
               Text {
-                anchors.centerIn: parent
-                text: "Save read mode"
-                color: Color.background
+                text: "READ MODE"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+              Text {
+                width: parent.width
+                text: OmaDigest.OmaDigestStore.tts.configured
+                  ? "Configured for " + String(OmaDigest.OmaDigestStore.tts.config.provider)
+                  : "Configure an OpenAI-compatible speech endpoint or ElevenLabs. Keys are stored in Secret Service."
+                color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
-                font.bold: true
+                wrapMode: Text.WordWrap
               }
-              MouseArea {
-                anchors.fill: parent
-                enabled: ttsEndpoint.text.trim() && ttsModel.text.trim() && ttsVoice.text.trim() && ttsApiKey.text.trim()
-                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                onClicked: {
-                  OmaDigest.OmaDigestStore.configureTts(root.ttsProvider, ttsEndpoint.text, ttsModel.text, ttsVoice.text, 1, ttsApiKey.text)
-                  ttsApiKey.text = ""
+
+              Row {
+                spacing: Style.space(6)
+                Repeater {
+                  model: ["openai-compatible", "elevenlabs"]
+                  Rectangle {
+                    required property string modelData
+                    width: Style.space(150)
+                    height: Style.space(30)
+                    radius: Style.cornerRadius
+                    color: root.ttsProvider === modelData
+                      ? Style.selectedFillFor(root.foreground, Color.accent)
+                      : Style.normalFillFor(root.foreground, Color.accent)
+                    Text {
+                      anchors.centerIn: parent
+                      text: modelData === "elevenlabs" ? "ElevenLabs" : "OpenAI-compatible"
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                    }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.ttsProvider = modelData }
+                  }
+                }
+              }
+
+              QQC.TextField {
+                id: ttsEndpoint
+                width: parent.width
+                placeholderText: root.ttsProvider === "elevenlabs" ? "https://api.elevenlabs.io" : "https://api.openai.com/v1"
+                color: root.foreground
+                font.family: root.fontFamily
+              }
+              QQC.TextField {
+                id: ttsModel
+                width: parent.width
+                placeholderText: root.ttsProvider === "elevenlabs" ? "eleven_multilingual_v2" : "gpt-4o-mini-tts"
+                color: root.foreground
+                font.family: root.fontFamily
+              }
+              QQC.TextField {
+                id: ttsVoice
+                width: parent.width
+                placeholderText: root.ttsProvider === "elevenlabs" ? "Voice ID" : "alloy"
+                color: root.foreground
+                font.family: root.fontFamily
+              }
+              QQC.TextField {
+                id: ttsApiKey
+                width: parent.width
+                placeholderText: "API key"
+                echoMode: TextInput.Password
+                color: root.foreground
+                font.family: root.fontFamily
+              }
+
+              Rectangle {
+                width: Style.space(150)
+                height: Style.space(36)
+                radius: Style.cornerRadius
+                color: Color.accent
+                opacity: ttsEndpoint.text.trim() && ttsModel.text.trim() && ttsVoice.text.trim() && ttsApiKey.text.trim() ? 1 : 0.5
+                Text {
+                  anchors.centerIn: parent
+                  text: "Save read mode"
+                  color: Color.background
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+                MouseArea {
+                  anchors.fill: parent
+                  enabled: ttsEndpoint.text.trim() && ttsModel.text.trim() && ttsVoice.text.trim() && ttsApiKey.text.trim()
+                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onClicked: {
+                    OmaDigest.OmaDigestStore.configureTts(root.ttsProvider, ttsEndpoint.text, ttsModel.text, ttsVoice.text, 1, ttsApiKey.text)
+                    ttsApiKey.text = ""
+                  }
                 }
               }
             }
