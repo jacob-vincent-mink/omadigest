@@ -1,0 +1,53 @@
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { AttentionStore } from "../src/attention.js";
+import { PrivacyPolicy } from "../src/privacy.js";
+import type { AttentionItem } from "../src/types.js";
+
+const roots: string[] = [];
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+
+function fixture(app: string): AttentionItem {
+  return {
+    id: `notification:${app}`, source: "notifications", app,
+    title: "Private title", body: "Private body", urgency: "normal",
+    occurredAt: "2026-08-20T11:00:00.000Z"
+  };
+}
+
+describe("PrivacyPolicy", () => {
+  it("ignores protected apps and erases unknown notification content by default", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
+    roots.push(root);
+    const policy = new PrivacyPolicy(root);
+    expect(policy.filter(fixture("Signal"))).toBeUndefined();
+    expect(policy.filter(fixture("GitHub"))).toMatchObject({ app: "GitHub", title: "Notification content hidden by privacy policy", body: "" });
+  });
+
+  it("persists explicit digest and handoff permissions", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
+    roots.push(root);
+    const policy = new PrivacyPolicy(root);
+    policy.setRule("GitHub", "digest");
+    expect(policy.filter(fixture("GitHub"))?.body).toBe("Private body");
+    expect(policy.evidenceForHandoff([fixture("GitHub")])[0]?.body).toBe("");
+    policy.setRule("GitHub", "digest-and-handoff");
+    expect(new PrivacyPolicy(root).evidenceForHandoff([fixture("GitHub")])[0]?.body).toBe("Private body");
+  });
+
+  it("retroactively removes or sanitizes retained notification evidence", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-state-"));
+    roots.push(root);
+    const attention = new AttentionStore({ XDG_STATE_HOME: root, HOME: root });
+    attention.ingest([fixture("Signal"), fixture("GitHub")]);
+    const policy = new PrivacyPolicy(join(root, "config"));
+    attention.applyPolicy((item) => policy.filter(item));
+    expect(attention.byIds(["notification:Signal"])).toEqual([]);
+    expect(attention.byIds(["notification:GitHub"])[0]?.body).toBe("");
+    const eventsDir = join(root, "omadigest", "events");
+    const segment = readFileSync(join(eventsDir, readdirSync(eventsDir)[0]!), "utf8");
+    expect(segment).not.toContain("Private body");
+  });
+});

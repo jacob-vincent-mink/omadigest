@@ -116,6 +116,14 @@ See [Integrations](docs/integrations.md).
 
 See [Voice and read mode](docs/voice.md).
 
+## Inspectable configuration and privacy
+
+Templates, integrations, declared permissions, enablement, and notification privacy policy are file-backed under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. The broker detects valid external edits and refreshes the running UI, so the default Omarchy agent can safely operate on user-owned configuration without panel automation. Credentials remain in the typed connection flow or Secret Service.
+
+Unknown notification applications default to **Count only**. Signal and other protected private applications default to **Ignore**, before persistence or model submission. Users can explicitly choose **Ignore**, **Count only**, **Digest**, or **Digest + agent** per application in Settings.
+
+See [File-backed configuration](docs/configuration.md) and [Security](docs/security.md).
+
 ## Development
 
 ```bash

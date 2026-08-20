@@ -113,6 +113,12 @@ export type AgentAuthPrompt = {
   options?: Array<{ id: string; label: string; description?: string }>;
 };
 
+export type PrivacyMode = "ignore" | "count-only" | "digest" | "digest-and-handoff";
+export type PublicPrivacyPolicy = {
+  defaultMode: PrivacyMode;
+  rules: Array<{ app: string; mode: PrivacyMode; source: "protected-default" | "user" }>;
+};
+
 export type BrokerCommand =
   | { type: "initialize"; protocolVersion: number }
   | { type: "select_template"; id: string; context: GenerationContext }
@@ -124,6 +130,9 @@ export type BrokerCommand =
   | { type: "handoff_default_agent"; id: string; prompt: string }
   | { type: "digest_handoff"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
   | { type: "agent_status"; id: string }
+  | { type: "privacy_status"; id: string }
+  | { type: "privacy_set_default"; id: string; mode: PrivacyMode }
+  | { type: "privacy_set_rule"; id: string; app: string; mode: PrivacyMode }
   | { type: "auth_begin"; id: string; methodId: string }
   | { type: "auth_response"; id: string; flowId: string; promptId: string; value: string }
   | { type: "auth_cancel"; id: string; flowId: string }
@@ -146,7 +155,8 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[] }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy }
+  | { type: "templates"; id: string; templates: PublicTemplate[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }
   | { type: "integration_setup"; id: string; integrationId: string; ready: boolean; message: string }
@@ -155,6 +165,7 @@ export type BrokerEvent =
   | { type: "draft_saved"; id: string; draftId: string; kind: "template" | "integration" }
   | { type: "handoff"; id: string; state: "launched" }
   | { type: "agent_status"; id: string; connected: boolean; provider: string; model: string }
+  | { type: "privacy"; id: string; policy: PublicPrivacyPolicy }
   | { type: "auth_methods"; id?: string; methods: AgentAuthMethod[] }
   | { type: "auth"; id?: string; phase: "starting" | "browser" | "device_code" | "prompt" | "info" | "complete" | "cancelled" | "error"; flowId: string; methodId: string; message?: string; url?: string; verificationUri?: string; userCode?: string; prompt?: AgentAuthPrompt }
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }

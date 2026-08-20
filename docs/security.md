@@ -37,7 +37,9 @@ Bubblewrap and Node permissions are defense in depth, and `--allow-net` is still
 
 ## Persistence
 
-Attention events are bounded, mode `0600`, segmented daily, retained for seven files, and deduplicated in memory. Successful generation marks its input items seen, and the panel also provides an explicit mark-seen action. Seen state suppresses inbox counts but does not delete retained evidence, so an explicit default-agent handoff can still resolve citations for correlation. Connector enrichment is persisted only when normalized into the attention store. Completed digest history is capped at the newest 30 records and supports individual deletion and clear-all through the broker protocol.
+Notification privacy is deterministic and enforced before persistence. Protected private applications—including Signal—default to `ignore`; unknown applications default to `count-only`, which erases title and body before storage. Per-application policy can allow digest generation separately from full evidence in an explicit default-agent handoff. Tightening policy retroactively rewrites retained notification segments; relaxing it cannot recover erased content.
+
+Attention events that pass policy are bounded, mode `0600`, segmented daily, retained for seven files, and deduplicated in memory. Successful generation marks its input items seen, and the panel also provides an explicit mark-seen action. Seen state suppresses inbox counts but does not delete policy-permitted retained evidence, so an explicit default-agent handoff can still resolve citations for correlation. Connector enrichment is persisted only when normalized into the attention store. Completed digest history is capped at the newest 30 records and supports individual deletion and clear-all through the broker protocol.
 
 ## Read mode
 

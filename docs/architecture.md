@@ -39,6 +39,10 @@ Every agent operation uses an in-memory session and settings. The selected autho
 
 No built-in coding tools are enabled. Time, prompt, file, item, and output bounds are enforced outside the model.
 
+## File-backed control plane
+
+User policy, templates, integrations, declared permissions, enablement, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
+
 ## Templates
 
 Templates have readable `SKILL.md` instructions and a schema-validated compiled policy. TypeScript evaluates all triggers and displays reasons. Accepted user templates atomically overlay bundled IDs from the XDG configuration directory.

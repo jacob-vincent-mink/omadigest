@@ -8785,8 +8785,8 @@ function getBunSandboxEnvValue(name) {
   if (procEnvCache === null) {
     procEnvCache = /* @__PURE__ */ new Map();
     try {
-      const { readFileSync: readFileSync26 } = __require("node:fs");
-      const data = readFileSync26("/proc/self/environ", "utf-8");
+      const { readFileSync: readFileSync27 } = __require("node:fs");
+      const data = readFileSync27("/proc/self/environ", "utf-8");
       for (const entry of data.split("\0")) {
         const idx = entry.indexOf("=");
         if (idx > 0) {
@@ -30919,7 +30919,7 @@ var require_gaxios = __commonJS({
     var retry_js_1 = require_retry3();
     var stream_1 = __require("stream");
     var interceptor_js_1 = require_interceptor();
-    var randomUUID15 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
+    var randomUUID16 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
     var HTTP_STATUS_NO_CONTENT = 204;
     var Gaxios = class {
       agentCache = /* @__PURE__ */ new Map();
@@ -31192,7 +31192,7 @@ var require_gaxios = __commonJS({
          */
         ["Blob", "File", "FormData"].includes(opts.data?.constructor?.name || "");
         if (opts.multipart?.length) {
-          const boundary = await randomUUID15();
+          const boundary = await randomUUID16();
           preparedHeaders.set("content-type", `multipart/related; boundary=${boundary}`);
           opts.body = stream_1.Readable.from(this.getMultipartRequest(opts.multipart, boundary));
         } else if (shouldDirectlyPassData) {
@@ -67708,7 +67708,7 @@ var require_core = __commonJS({
       return match2 && match2.index === 0;
     }
     var BACKREF_RE = /\[(?:[^\\\]]|\\.)*\]|\(\??|\\([1-9][0-9]*)|\\./;
-    function join49(regexps, separator = "|") {
+    function join50(regexps, separator = "|") {
       let numCaptures = 0;
       return regexps.map((regex2) => {
         numCaptures += 1;
@@ -68012,7 +68012,7 @@ var require_core = __commonJS({
             this.exec = () => null;
           }
           const terminators = this.regexes.map((el) => el[1]);
-          this.matcherRe = langRe(join49(terminators), true);
+          this.matcherRe = langRe(join50(terminators), true);
           this.lastIndex = 0;
         }
         /** @param {string} s */
@@ -163316,7 +163316,7 @@ var require_snapshot_recorder = __commonJS({
   "node_modules/@earendil-works/pi-coding-agent/node_modules/undici/lib/mock/snapshot-recorder.js"(exports, module) {
     "use strict";
     var { writeFile: writeFile3, readFile: readFile7, mkdir: mkdir3 } = __require("node:fs/promises");
-    var { dirname: dirname32, resolve: resolve17 } = __require("node:path");
+    var { dirname: dirname33, resolve: resolve17 } = __require("node:path");
     var { setTimeout: setTimeout2, clearTimeout: clearTimeout2 } = __require("node:timers");
     var { InvalidArgumentError, UndiciError } = require_errors2();
     var { hashId, isUrlExcludedFactory, normalizeHeaders, createHeaderFilters } = require_snapshot_utils();
@@ -163562,7 +163562,7 @@ var require_snapshot_recorder = __commonJS({
           throw new InvalidArgumentError("Snapshot path is required");
         }
         const resolvedPath = resolve17(path16);
-        await mkdir3(dirname32(resolvedPath), { recursive: true });
+        await mkdir3(dirname33(resolvedPath), { recursive: true });
         const data = Array.from(this.#snapshots.entries()).map(([hash2, snapshot]) => ({
           hash: hash2,
           snapshot
@@ -175446,7 +175446,8 @@ ${captureLines}` : capture.stack;
 // runtime/src/broker.ts
 import { createInterface as createInterface5 } from "node:readline";
 import { execFile as execFile4 } from "node:child_process";
-import { randomUUID as randomUUID14 } from "node:crypto";
+import { existsSync as existsSync29, readdirSync as readdirSync14, statSync as statSync17 } from "node:fs";
+import { randomUUID as randomUUID15 } from "node:crypto";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 import { resolve as resolve16 } from "node:path";
 
@@ -278973,6 +278974,39 @@ var AttentionStore = class {
       return item === void 0 ? [] : [item];
     });
   }
+  applyPolicy(mapper) {
+    if (existsSync28(this.#eventsDir)) {
+      let names2 = [];
+      try {
+        names2 = readdirSync13(this.#eventsDir).filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/u.test(name));
+      } catch {
+        names2 = [];
+      }
+      for (const name of names2) {
+        const path16 = join44(this.#eventsDir, name);
+        try {
+          if (statSync14(path16).size > 10 * 1024 * 1024) continue;
+          const filtered = readFileSync24(path16, "utf8").split("\n").flatMap((line) => {
+            if (line === "") return [];
+            const item = attentionItemSchema.parse(JSON.parse(line));
+            const presented = mapper(item);
+            return presented === void 0 ? [] : [JSON.stringify(presented)];
+          });
+          const temporary = `${path16}.${randomUUID10()}.tmp`;
+          writeFileSync15(temporary, filtered.length === 0 ? "" : `${filtered.join("\n")}
+`, { mode: 384 });
+          renameSync6(temporary, path16);
+        } catch {
+        }
+      }
+    }
+    const current = [...this.#items.values()];
+    this.#items.clear();
+    for (const item of current) {
+      const presented = mapper(item);
+      if (presented !== void 0) this.#items.set(presented.id, presented);
+    }
+  }
   #load() {
     if (!existsSync28(this.#eventsDir)) return;
     let names2;
@@ -279441,6 +279475,108 @@ function isObject7(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 }
 
+// runtime/src/privacy.ts
+import { mkdirSync as mkdirSync19, readFileSync as readFileSync26, renameSync as renameSync9, statSync as statSync16, writeFileSync as writeFileSync18 } from "node:fs";
+import { randomUUID as randomUUID14 } from "node:crypto";
+import { dirname as dirname32, join as join49 } from "node:path";
+var privacyModeSchema = external_exports.enum(["ignore", "count-only", "digest", "digest-and-handoff"]);
+var fileSchema = external_exports.object({
+  version: external_exports.literal(1),
+  defaultMode: privacyModeSchema,
+  applications: external_exports.record(external_exports.string().min(1).max(120), privacyModeSchema)
+}).strict();
+var protectedDefaults = [
+  { app: "Signal", aliases: ["signal", "signal desktop", "signal-desktop", "org.signal.signal"] },
+  { app: "WhatsApp", aliases: ["whatsapp", "whatsapp desktop"] },
+  { app: "Telegram", aliases: ["telegram", "telegram desktop", "org.telegram.desktop"] },
+  { app: "1Password", aliases: ["1password", "1password for linux"] },
+  { app: "Bitwarden", aliases: ["bitwarden"] },
+  { app: "KeePassXC", aliases: ["keepassxc", "keepass"] },
+  { app: "Authy", aliases: ["authy"] }
+];
+var protectedAliases = new Map(protectedDefaults.flatMap((rule) => rule.aliases.map((alias) => [normalizeApplication(alias), rule.app])));
+var PrivacyPolicy = class {
+  #path;
+  #defaultMode = "count-only";
+  #applications = /* @__PURE__ */ new Map();
+  constructor(configRoot2) {
+    this.#path = join49(configRoot2, "privacy.json");
+    this.#load();
+  }
+  reload() {
+    this.#defaultMode = "count-only";
+    this.#applications.clear();
+    this.#load();
+  }
+  status() {
+    const rules = /* @__PURE__ */ new Map();
+    for (const rule of protectedDefaults) {
+      const key = normalizeApplication(rule.app);
+      rules.set(key, { app: rule.app, mode: this.#applications.get(key) ?? "ignore", source: this.#applications.has(key) ? "user" : "protected-default" });
+    }
+    for (const [app, mode] of this.#applications) {
+      if (!rules.has(app)) rules.set(app, { app, mode, source: "user" });
+    }
+    return { defaultMode: this.#defaultMode, rules: [...rules.values()].sort((left, right) => left.app.localeCompare(right.app)) };
+  }
+  setDefault(mode) {
+    this.#defaultMode = privacyModeSchema.parse(mode);
+    this.#save();
+  }
+  setRule(app, mode) {
+    const normalized = normalizeApplication(app);
+    if (normalized === "") throw new Error("Enter an application name.");
+    this.#applications.set(normalized, privacyModeSchema.parse(mode));
+    this.#save();
+  }
+  modeFor(app) {
+    const normalized = normalizeApplication(app);
+    const explicit = this.#applications.get(normalized);
+    if (explicit !== void 0) return explicit;
+    const protectedName = protectedAliases.get(normalized);
+    if (protectedName !== void 0) return this.#applications.get(normalizeApplication(protectedName)) ?? "ignore";
+    return this.#defaultMode;
+  }
+  filter(item) {
+    if (item.source !== "notifications") return item;
+    const mode = this.modeFor(item.app);
+    if (mode === "ignore") return void 0;
+    if (mode === "count-only") return hiddenItem(item);
+    return item;
+  }
+  evidenceForHandoff(items) {
+    return items.flatMap((item) => {
+      if (item.source !== "notifications") return [item];
+      const mode = this.modeFor(item.app);
+      if (mode === "ignore") return [];
+      return mode === "digest-and-handoff" ? [item] : [hiddenItem(item)];
+    });
+  }
+  #load() {
+    try {
+      if (statSync16(this.#path).size > 1024 * 1024) return;
+      const value2 = fileSchema.parse(JSON.parse(readFileSync26(this.#path, "utf8")));
+      this.#defaultMode = value2.defaultMode;
+      this.#applications = new Map(Object.entries(value2.applications).map(([app, mode]) => [normalizeApplication(app), mode]));
+    } catch {
+    }
+  }
+  #save() {
+    mkdirSync19(dirname32(this.#path), { recursive: true, mode: 448 });
+    const temporary = `${this.#path}.${randomUUID14()}.tmp`;
+    const value2 = { version: 1, defaultMode: this.#defaultMode, applications: Object.fromEntries(this.#applications) };
+    writeFileSync18(temporary, `${JSON.stringify(value2, null, 2)}
+`, { mode: 384 });
+    renameSync9(temporary, this.#path);
+  }
+};
+function normalizeApplication(value2) {
+  return value2.trim().toLowerCase().replaceAll(/\s+/gu, " ").slice(0, 120);
+}
+function hiddenItem(item) {
+  return { ...item, title: "Notification content hidden by privacy policy", body: "" };
+}
+
 // runtime/src/types.ts
 var PROTOCOL_VERSION = 1;
 
@@ -279489,6 +279625,9 @@ var commandSchema = external_exports.discriminatedUnion("type", [
     entryIndex: external_exports.number().int().min(0).max(200)
   }).strict(),
   external_exports.object({ type: external_exports.literal("agent_status"), id: external_exports.string().min(1).max(100) }).strict(),
+  external_exports.object({ type: external_exports.literal("privacy_status"), id: external_exports.string().min(1).max(100) }).strict(),
+  external_exports.object({ type: external_exports.literal("privacy_set_default"), id: external_exports.string().min(1).max(100), mode: privacyModeSchema }).strict(),
+  external_exports.object({ type: external_exports.literal("privacy_set_rule"), id: external_exports.string().min(1).max(100), app: external_exports.string().min(1).max(120), mode: privacyModeSchema }).strict(),
   external_exports.object({ type: external_exports.literal("auth_begin"), id: external_exports.string().min(1).max(100), methodId: external_exports.string().regex(/^[a-z0-9-]+::(?:oauth|api_key)$/) }).strict(),
   external_exports.object({ type: external_exports.literal("auth_response"), id: external_exports.string().min(1).max(100), flowId: external_exports.string().uuid(), promptId: external_exports.string().uuid(), value: external_exports.string().max(32768) }).strict(),
   external_exports.object({ type: external_exports.literal("auth_cancel"), id: external_exports.string().min(1).max(100), flowId: external_exports.string().uuid() }).strict(),
@@ -279525,6 +279664,8 @@ function loadAllTemplates() {
 var templates = loadAllTemplates();
 var pendingDrafts = /* @__PURE__ */ new Map();
 var attention = new AttentionStore();
+var privacy = new PrivacyPolicy(configRoot);
+attention.applyPolicy((item) => privacy.filter(item));
 var digestHistory = new DigestHistory();
 var integrationRuntime = new IntegrationRuntime(configRoot);
 var dictation = new DictationService();
@@ -279535,6 +279676,9 @@ var integrationRoots = {
   state: resolve16(configRoot, "integration-state.json")
 };
 var authFlow;
+function publicTemplates() {
+  return templates.map(({ manifest, instructions }) => ({ ...manifest, instructions }));
+}
 function publicIntegrations() {
   return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).map(({ manifest, source, enabled }) => ({
     id: manifest.id,
@@ -279555,6 +279699,51 @@ function emit(event) {
 function emitAttention(id) {
   emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
 }
+var configFingerprint = configurationFingerprint(configRoot);
+var configReloading = false;
+var configWatcher = setInterval(() => {
+  if (configReloading) return;
+  const next = configurationFingerprint(configRoot);
+  if (next === configFingerprint) return;
+  configFingerprint = next;
+  configReloading = true;
+  void reloadFileBackedConfiguration().finally(() => {
+    configReloading = false;
+  });
+}, 2e3);
+configWatcher.unref();
+async function reloadFileBackedConfiguration() {
+  templates = loadAllTemplates();
+  privacy.reload();
+  attention.applyPolicy((item) => privacy.filter(item));
+  emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
+  emit({ type: "integrations", id: "config-watch", integrations: publicIntegrations() });
+  emit({ type: "privacy", id: "config-watch", policy: privacy.status() });
+  emitAttention("config-watch");
+}
+function configurationFingerprint(root) {
+  const parts = [];
+  const visit = (path16, relative9, depth) => {
+    if (depth > 5 || parts.length > 2e3 || !existsSync29(path16)) return;
+    let stat5;
+    try {
+      stat5 = statSync17(path16);
+    } catch {
+      return;
+    }
+    parts.push(`${relative9}:${stat5.size}:${stat5.mtimeMs}`);
+    if (!stat5.isDirectory()) return;
+    let names2;
+    try {
+      names2 = readdirSync14(path16).sort();
+    } catch {
+      return;
+    }
+    for (const name of names2) visit(resolve16(path16, name), relative9 === "" ? name : `${relative9}/${name}`, depth + 1);
+  };
+  visit(root, "", 0);
+  return parts.join("|");
+}
 async function handle(raw) {
   let command;
   try {
@@ -279572,9 +279761,10 @@ async function handle(raw) {
     emit({
       type: "ready",
       protocolVersion: PROTOCOL_VERSION,
-      templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
+      templates: publicTemplates(),
       integrations: publicIntegrations(),
-      authMethods: await discoverAgentAuthMethods()
+      authMethods: await discoverAgentAuthMethods(),
+      privacy: privacy.status()
     });
     emitAttention("initialize");
     return true;
@@ -279582,6 +279772,22 @@ async function handle(raw) {
   if (command.type === "agent_status") {
     const status = await agentConnectionStatus();
     emit({ type: "agent_status", id: command.id, ...status });
+    return true;
+  }
+  if (command.type === "privacy_status") {
+    emit({ type: "privacy", id: command.id, policy: privacy.status() });
+    return true;
+  }
+  if (command.type === "privacy_set_default" || command.type === "privacy_set_rule") {
+    try {
+      if (command.type === "privacy_set_default") privacy.setDefault(command.mode);
+      else privacy.setRule(command.app, command.mode);
+      attention.applyPolicy((item) => privacy.filter(item));
+      emit({ type: "privacy", id: command.id, policy: privacy.status() });
+      emitAttention(command.id);
+    } catch (error48) {
+      emit({ type: "error", id: command.id, code: "privacy_invalid", message: error48 instanceof Error ? error48.message : "Privacy settings could not be saved." });
+    }
     return true;
   }
   if (command.type === "auth_begin") {
@@ -279628,7 +279834,10 @@ async function handle(raw) {
   }
   if (command.type === "attention_ingest") {
     try {
-      attention.ingest(command.items);
+      attention.ingest(command.items.flatMap((item) => {
+        const presented = privacy.filter(item);
+        return presented === void 0 ? [] : [presented];
+      }));
       emitAttention(command.id);
     } catch {
       emit({ type: "error", id: command.id, code: "attention_invalid", message: "Some attention items were invalid." });
@@ -279648,7 +279857,13 @@ async function handle(raw) {
   }
   if (command.type === "digest_generate") {
     try {
-      const selectedId = command.templateId || selectTemplate(templates, command.context).templateId;
+      const policyAllowed = attention.pending(200);
+      const appCounts = policyAllowed.reduce((counts, item) => {
+        counts[item.app] = (counts[item.app] ?? 0) + 1;
+        return counts;
+      }, {});
+      const safeContext = { ...command.context, itemCount: policyAllowed.length, appCounts };
+      const selectedId = command.templateId || selectTemplate(templates, safeContext).templateId;
       const template = templates.find((candidate) => candidate.manifest.id === selectedId);
       if (template === void 0) throw new Error("The selected digest template is unavailable");
       const now = new Date(command.context.now);
@@ -279715,9 +279930,10 @@ async function handle(raw) {
       else emit({
         type: "ready",
         protocolVersion: PROTOCOL_VERSION,
-        templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
+        templates: publicTemplates(),
         integrations: publicIntegrations(),
-        authMethods: await discoverAgentAuthMethods()
+        authMethods: await discoverAgentAuthMethods(),
+        privacy: privacy.status()
       });
     } catch (error48) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error48 instanceof Error ? error48.message : "The draft could not be installed." });
@@ -279765,7 +279981,7 @@ async function handle(raw) {
         section.title,
         entry.headline,
         entry.explanation,
-        attention.byIds(entry.sourceIds)
+        privacy.evidenceForHandoff(attention.byIds(entry.sourceIds))
       ));
       emit({ type: "handoff", id: command.id, state: "launched" });
     } catch {
@@ -279829,7 +280045,7 @@ async function handle(raw) {
 }
 function beginAuth(methodId) {
   if (authFlow !== void 0) cancelAuth(authFlow);
-  const flow = { id: randomUUID14(), methodId, controller: new AbortController() };
+  const flow = { id: randomUUID15(), methodId, controller: new AbortController() };
   authFlow = flow;
   emit({ type: "auth", phase: "starting", flowId: flow.id, methodId, message: "Starting secure sign-in\u2026" });
   void runAuth(flow);
@@ -279868,7 +280084,7 @@ function promptAuth(flow, prompt) {
     return Promise.reject(new Error("Authentication prompt was cancelled"));
   flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
   return new Promise((resolvePrompt, rejectPrompt) => {
-    const promptId = randomUUID14();
+    const promptId = randomUUID15();
     const signals = [flow.controller.signal, prompt.signal].filter((signal2) => signal2 !== void 0);
     const signal = signals.length === 1 ? signals[0] ?? flow.controller.signal : AbortSignal.any(signals);
     const onAbort = () => rejectPrompt(new Error("Authentication prompt was cancelled"));

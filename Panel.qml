@@ -23,7 +23,7 @@ Panel {
     ? notificationService.popupModel.count : 0
   readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
     ? String(notificationService.historyDir) : ""
-  readonly property int attentionAvailableCount: root.currentAttentionItems().length
+  readonly property int attentionAvailableCount: OmaDigest.OmaDigestStore.attentionCount
 
   property string page: "list"
   property string settingsPage: "integrations"
@@ -31,7 +31,14 @@ Panel {
   property string authPromptValue: ""
   property string selectedAuthMethod: ""
   property string connectionView: "overview"
+  property string privacyRuleMode: "digest"
   property string ttsProvider: "openai-compatible"
+  readonly property var privacyOptions: [
+    { value: "ignore", label: "Ignore" },
+    { value: "count-only", label: "Count only" },
+    { value: "digest", label: "Digest" },
+    { value: "digest-and-handoff", label: "Digest + agent" }
+  ]
   readonly property var authOptions: (OmaDigest.OmaDigestStore.authMethods || []).map(function(method) {
     return { value: String(method.id), label: String(method.label), description: String(method.description || "") }
   })
@@ -39,6 +46,9 @@ Panel {
   property double dndStartedAt: 0
   property string lastScheduledDay: ""
   property var pendingAutomaticGeneration: null
+
+  onLiveCountChanged: if (OmaDigest.OmaDigestStore.ready)
+    Qt.callLater(function() { OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems()) })
 
   function open() {
     refreshNotificationHistory()
@@ -82,6 +92,7 @@ Panel {
       } catch (error) { /* Skip malformed history rows. */ }
     }
     root.historyItems = parsed
+    OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems())
     if (root.pendingAutomaticGeneration) Qt.callLater(root.completeAutomaticGeneration)
   }
 
@@ -143,7 +154,8 @@ Panel {
       trigger: trigger || "manual",
       itemCount: root.attentionAvailableCount,
       focusMinutes: Math.max(0, Number(focusMinutes) || 0),
-      appCounts: root.currentAppCounts(),
+      // The broker derives application counts only after enforcing privacy policy.
+      appCounts: {},
       availableConnectors: root.availableConnectors(),
       now: new Date().toISOString()
     }
@@ -640,11 +652,12 @@ Panel {
                 model: [
                   { id: "integrations", label: "Integrations" },
                   { id: "templates", label: "Templates" },
+                  { id: "privacy", label: "Privacy" },
                   { id: "connections", label: "Connections" }
                 ]
                 Rectangle {
                   required property var modelData
-                  width: (content.width - Style.space(12)) / 3
+                  width: (content.width - Style.space(18)) / 4
                   height: Style.space(34)
                   radius: Style.cornerRadius
                   color: root.settingsPage === modelData.id
@@ -895,6 +908,179 @@ Panel {
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "privacy"
+              spacing: Style.space(12)
+
+              Text {
+                width: parent.width
+                text: "PRIVACY POLICY"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+              Text {
+                width: parent.width
+                text: "Policy is enforced before notification content is retained or sent to an AI. Protected applications start at Ignore; unknown applications start at Count only."
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Rectangle {
+                width: parent.width
+                height: defaultPrivacyContent.implicitHeight + Style.space(20)
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground, Color.accent)
+                Column {
+                  id: defaultPrivacyContent
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(7)
+                  Text {
+                    text: "UNKNOWN APPLICATIONS"
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                  }
+                  Dropdown {
+                    width: parent.width
+                    showLabel: false
+                    options: root.privacyOptions
+                    value: String(OmaDigest.OmaDigestStore.privacy.defaultMode || "count-only")
+                    foreground: root.foreground
+                    background: Color.background
+                    onChanged: function(value) { OmaDigest.OmaDigestStore.setPrivacyDefault(value) }
+                  }
+                }
+              }
+
+              Text {
+                text: "APPLICATION RULES"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.privacy.rules || []
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: privacyRuleRow.implicitHeight + Style.space(18)
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+
+                  Row {
+                    id: privacyRuleRow
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.margins: Style.space(9)
+                    spacing: Style.space(10)
+                    Column {
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: parent.width - privacyRulePicker.width - Style.space(10)
+                      Text {
+                        width: parent.width
+                        text: String(modelData.app)
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                        elide: Text.ElideRight
+                      }
+                      Text {
+                        width: parent.width
+                        text: modelData.source === "protected-default" ? "Protected default" : "User rule"
+                        color: Qt.darker(root.foreground, 1.45)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                    Dropdown {
+                      id: privacyRulePicker
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: Style.space(170)
+                      showLabel: false
+                      options: root.privacyOptions
+                      value: String(modelData.mode)
+                      foreground: root.foreground
+                      background: Color.background
+                      onChanged: function(value) { OmaDigest.OmaDigestStore.setPrivacyRule(modelData.app, value) }
+                    }
+                  }
+                }
+              }
+
+              Text {
+                text: "ADD OR OVERRIDE A RULE"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+              QQC.TextField {
+                id: privacyAppInput
+                width: parent.width
+                placeholderText: "Application name exactly as shown by notifications"
+                color: root.foreground
+                font.family: root.fontFamily
+              }
+              Dropdown {
+                id: newPrivacyMode
+                width: parent.width
+                showLabel: false
+                options: root.privacyOptions
+                value: root.privacyRuleMode
+                foreground: root.foreground
+                background: Color.background
+                onChanged: function(value) { root.privacyRuleMode = String(value) }
+              }
+              Rectangle {
+                x: Math.max(0, (parent.width - width) / 2)
+                width: Style.space(150)
+                height: Style.space(36)
+                radius: Style.cornerRadius
+                color: Color.accent
+                opacity: privacyAppInput.text.trim() ? 1 : 0.5
+                Text {
+                  anchors.centerIn: parent
+                  text: "Save rule"
+                  color: Color.background
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+                MouseArea {
+                  anchors.fill: parent
+                  enabled: privacyAppInput.text.trim() !== ""
+                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onClicked: {
+                    OmaDigest.OmaDigestStore.setPrivacyRule(privacyAppInput.text, newPrivacyMode.value)
+                    privacyAppInput.text = ""
+                  }
+                }
+              }
+
+              Text {
+                width: parent.width
+                text: "Ignore: no retention or count · Count only: content is erased · Digest: content may reach the connected AI · Digest + agent: cited content may also accompany an explicit Send to agent action."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
               }
             }

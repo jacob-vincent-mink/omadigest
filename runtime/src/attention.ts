@@ -83,6 +83,35 @@ export class AttentionStore {
     });
   }
 
+  applyPolicy(mapper: (item: AttentionItem) => AttentionItem | undefined): void {
+    if (existsSync(this.#eventsDir)) {
+      let names: string[] = [];
+      try { names = readdirSync(this.#eventsDir).filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/u.test(name)); }
+      catch { names = []; }
+      for (const name of names) {
+        const path = join(this.#eventsDir, name);
+        try {
+          if (statSync(path).size > 10 * 1024 * 1024) continue;
+          const filtered = readFileSync(path, "utf8").split("\n").flatMap((line) => {
+            if (line === "") return [];
+            const item = attentionItemSchema.parse(JSON.parse(line));
+            const presented = mapper(item);
+            return presented === undefined ? [] : [JSON.stringify(presented)];
+          });
+          const temporary = `${path}.${randomUUID()}.tmp`;
+          writeFileSync(temporary, filtered.length === 0 ? "" : `${filtered.join("\n")}\n`, { mode: 0o600 });
+          renameSync(temporary, path);
+        } catch { /* Leave an unreadable segment untouched rather than corrupting it. */ }
+      }
+    }
+    const current = [...this.#items.values()];
+    this.#items.clear();
+    for (const item of current) {
+      const presented = mapper(item);
+      if (presented !== undefined) this.#items.set(presented.id, presented);
+    }
+  }
+
   #load(): void {
     if (!existsSync(this.#eventsDir)) return;
     let names: string[];

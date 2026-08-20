@@ -15,9 +15,12 @@
 - [x] Add explicit per-entry handoff to the default Omarchy agent with retained cited evidence and crash-report correlation context.
 - [x] Hide read-aloud controls until TTS is configured.
 - [x] Mark successful digest inputs seen (with an explicit mark-seen action) without deleting retained correlation evidence.
+- [x] Add deterministic per-application notification privacy with protected Ignore defaults, Count only, Digest, and Digest + agent modes.
+- [x] Keep policy, templates, integrations, permissions, and enablement file-backed and hot-reload valid external agent edits.
 
 ## In progress
 
+- [ ] Build the scripted `crashing-sw` notification/coredump storyline and authenticated `gh` integration/template demo.
 - [ ] Live-test every settings and template-detail navigation path.
 - [ ] Complete a real OAuth sign-in and re-test digest/template/integration agents.
 - [ ] Evaluate provider-linked read mode: reuse a connected OpenAI API credential only with explicit opt-in when its API project has speech access. Do not assume Codex/ChatGPT or Grok/X subscriptions include TTS API access, and do not repurpose scoped OAuth tokens.

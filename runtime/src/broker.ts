@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { execFile } from "node:child_process";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -15,6 +16,7 @@ import { installDraft } from "./drafts.js";
 import { DictationService } from "./dictation.js";
 import { SpeechService, speechConfigSchema } from "./tts.js";
 import { DigestHistory } from "./digest-history.js";
+import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
 import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type PublicIntegration } from "./types.js";
 
 const contextSchema = z.object({
@@ -59,6 +61,9 @@ const commandSchema = z.discriminatedUnion("type", [
     sectionIndex: z.number().int().min(0).max(50), entryIndex: z.number().int().min(0).max(200)
   }).strict(),
   z.object({ type: z.literal("agent_status"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("privacy_status"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("privacy_set_default"), id: z.string().min(1).max(100), mode: privacyModeSchema }).strict(),
+  z.object({ type: z.literal("privacy_set_rule"), id: z.string().min(1).max(100), app: z.string().min(1).max(120), mode: privacyModeSchema }).strict(),
   z.object({ type: z.literal("auth_begin"), id: z.string().min(1).max(100), methodId: z.string().regex(/^[a-z0-9-]+::(?:oauth|api_key)$/) }).strict(),
   z.object({ type: z.literal("auth_response"), id: z.string().min(1).max(100), flowId: z.string().uuid(), promptId: z.string().uuid(), value: z.string().max(32_768) }).strict(),
   z.object({ type: z.literal("auth_cancel"), id: z.string().min(1).max(100), flowId: z.string().uuid() }).strict(),
@@ -98,6 +103,8 @@ function loadAllTemplates() {
 let templates = loadAllTemplates();
 const pendingDrafts = new Map<string, DraftResult>();
 const attention = new AttentionStore();
+const privacy = new PrivacyPolicy(configRoot);
+attention.applyPolicy((item) => privacy.filter(item));
 const digestHistory = new DigestHistory();
 const integrationRuntime = new IntegrationRuntime(configRoot);
 const dictation = new DictationService();
@@ -115,6 +122,10 @@ type AuthFlow = {
   prompt?: { id: string; resolve: (value: string) => void; reject: (error: Error) => void; cleanup: () => void };
 };
 let authFlow: AuthFlow | undefined;
+
+function publicTemplates() {
+  return templates.map(({ manifest, instructions }) => ({ ...manifest, instructions }));
+}
 
 function publicIntegrations(): PublicIntegration[] {
   return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
@@ -139,6 +150,44 @@ function emitAttention(id: string): void {
   emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
 }
 
+let configFingerprint = configurationFingerprint(configRoot);
+let configReloading = false;
+const configWatcher = setInterval(() => {
+  if (configReloading) return;
+  const next = configurationFingerprint(configRoot);
+  if (next === configFingerprint) return;
+  configFingerprint = next;
+  configReloading = true;
+  void reloadFileBackedConfiguration().finally(() => { configReloading = false; });
+}, 2_000);
+configWatcher.unref();
+
+async function reloadFileBackedConfiguration(): Promise<void> {
+  templates = loadAllTemplates();
+  privacy.reload();
+  attention.applyPolicy((item) => privacy.filter(item));
+  emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
+  emit({ type: "integrations", id: "config-watch", integrations: publicIntegrations() });
+  emit({ type: "privacy", id: "config-watch", policy: privacy.status() });
+  emitAttention("config-watch");
+}
+
+function configurationFingerprint(root: string): string {
+  const parts: string[] = [];
+  const visit = (path: string, relative: string, depth: number): void => {
+    if (depth > 5 || parts.length > 2_000 || !existsSync(path)) return;
+    let stat;
+    try { stat = statSync(path); } catch { return; }
+    parts.push(`${relative}:${stat.size}:${stat.mtimeMs}`);
+    if (!stat.isDirectory()) return;
+    let names: string[];
+    try { names = readdirSync(path).sort(); } catch { return; }
+    for (const name of names) visit(resolve(path, name), relative === "" ? name : `${relative}/${name}`, depth + 1);
+  };
+  visit(root, "", 0);
+  return parts.join("|");
+}
+
 async function handle(raw: string): Promise<boolean> {
   let command: z.infer<typeof commandSchema>;
   try {
@@ -157,9 +206,10 @@ async function handle(raw: string): Promise<boolean> {
     emit({
       type: "ready",
       protocolVersion: PROTOCOL_VERSION,
-      templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
+      templates: publicTemplates(),
       integrations: publicIntegrations(),
-      authMethods: await discoverAgentAuthMethods()
+      authMethods: await discoverAgentAuthMethods(),
+      privacy: privacy.status()
     });
     emitAttention("initialize");
     return true;
@@ -168,6 +218,23 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "agent_status") {
     const status = await agentConnectionStatus();
     emit({ type: "agent_status", id: command.id, ...status });
+    return true;
+  }
+
+  if (command.type === "privacy_status") {
+    emit({ type: "privacy", id: command.id, policy: privacy.status() });
+    return true;
+  }
+  if (command.type === "privacy_set_default" || command.type === "privacy_set_rule") {
+    try {
+      if (command.type === "privacy_set_default") privacy.setDefault(command.mode);
+      else privacy.setRule(command.app, command.mode);
+      attention.applyPolicy((item) => privacy.filter(item));
+      emit({ type: "privacy", id: command.id, policy: privacy.status() });
+      emitAttention(command.id);
+    } catch (error) {
+      emit({ type: "error", id: command.id, code: "privacy_invalid", message: error instanceof Error ? error.message : "Privacy settings could not be saved." });
+    }
     return true;
   }
 
@@ -218,7 +285,10 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_ingest") {
     try {
-      attention.ingest(command.items);
+      attention.ingest(command.items.flatMap((item) => {
+        const presented = privacy.filter(item);
+        return presented === undefined ? [] : [presented];
+      }));
       emitAttention(command.id);
     } catch {
       emit({ type: "error", id: command.id, code: "attention_invalid", message: "Some attention items were invalid." });
@@ -241,7 +311,13 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "digest_generate") {
     try {
-      const selectedId = command.templateId || selectTemplate(templates, command.context).templateId;
+      const policyAllowed = attention.pending(200);
+      const appCounts = policyAllowed.reduce<Record<string, number>>((counts, item) => {
+        counts[item.app] = (counts[item.app] ?? 0) + 1;
+        return counts;
+      }, {});
+      const safeContext = { ...command.context, itemCount: policyAllowed.length, appCounts };
+      const selectedId = command.templateId || selectTemplate(templates, safeContext).templateId;
       const template = templates.find((candidate) => candidate.manifest.id === selectedId);
       if (template === undefined) throw new Error("The selected digest template is unavailable");
       const now = new Date(command.context.now);
@@ -311,9 +387,10 @@ async function handle(raw: string): Promise<boolean> {
       else emit({
         type: "ready",
         protocolVersion: PROTOCOL_VERSION,
-        templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
+        templates: publicTemplates(),
         integrations: publicIntegrations(),
-        authMethods: await discoverAgentAuthMethods()
+        authMethods: await discoverAgentAuthMethods(),
+        privacy: privacy.status()
       });
     } catch (error) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error instanceof Error ? error.message : "The draft could not be installed." });
@@ -360,7 +437,7 @@ async function handle(raw: string): Promise<boolean> {
     }
     try {
       await launchDefaultAgent(formatDigestHandoff(digest.title, section.title, entry.headline,
-        entry.explanation, attention.byIds(entry.sourceIds)));
+        entry.explanation, privacy.evidenceForHandoff(attention.byIds(entry.sourceIds))));
       emit({ type: "handoff", id: command.id, state: "launched" });
     } catch {
       emit({ type: "error", id: command.id, code: "handoff_failed", message: "The default Omarchy agent could not be launched." });

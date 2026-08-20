@@ -22,6 +22,7 @@ Scope {
   property string status: "Starting OmaDigest…"
   property var templates: []
   property var integrations: []
+  property var privacy: ({ defaultMode: "count-only", rules: [] })
   property var integrationSetup: ({})
   property var selection: null
   property var draft: null
@@ -90,6 +91,12 @@ Scope {
   }
 
   function requestAgentStatus() { send({ type: "agent_status", id: "agent-" + nextId++ }) }
+  function setPrivacyDefault(mode) {
+    send({ type: "privacy_set_default", id: "privacy-" + nextId++, mode: String(mode) })
+  }
+  function setPrivacyRule(app, mode) {
+    send({ type: "privacy_set_rule", id: "privacy-" + nextId++, app: String(app || "").trim(), mode: String(mode) })
+  }
   function beginAuth(methodId) {
     clearError()
     send({ type: "auth_begin", id: "auth-" + nextId++, methodId: String(methodId) })
@@ -223,11 +230,16 @@ Scope {
       status = "Ready to build a briefing"
       templates = event.templates || []
       integrations = event.integrations || []
+      privacy = event.privacy || ({ defaultMode: "count-only", rules: [] })
       authMethods = event.authMethods || []
       root.requestAgentStatus()
       root.requestDictationStatus()
       root.requestTtsStatus()
       root.requestDigestHistory()
+      return
+    }
+    if (event.type === "templates") {
+      templates = event.templates || []
       return
     }
     if (event.type === "draft_state") {
@@ -249,6 +261,10 @@ Scope {
       draftId = ""
       draftState = "saved"
       status = event.kind === "integration" ? "Integration installed disabled" : "Template saved"
+      return
+    }
+    if (event.type === "privacy") {
+      privacy = event.policy || privacy
       return
     }
     if (event.type === "agent_status") {
