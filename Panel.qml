@@ -29,7 +29,12 @@ Panel {
   property string settingsPage: "integrations"
   property var selectedTemplate: null
   property string authPromptValue: ""
+  property string selectedAuthMethod: ""
+  property string connectionView: "overview"
   property string ttsProvider: "openai-compatible"
+  readonly property var authOptions: (OmaDigest.OmaDigestStore.authMethods || []).map(function(method) {
+    return { value: String(method.id), label: String(method.label), description: String(method.description || "") }
+  })
   property var historyItems: []
   property double dndStartedAt: 0
   property string lastScheduledDay: ""
@@ -613,6 +618,7 @@ Panel {
                     onClicked: {
                       root.settingsPage = String(modelData.id)
                       if (root.settingsPage === "templates") root.selectedTemplate = null
+                      if (root.settingsPage === "connections") root.connectionView = "overview"
                     }
                   }
                 }
@@ -851,106 +857,117 @@ Panel {
               spacing: Style.space(10)
 
               Rectangle {
+                visible: root.connectionView === "overview"
                 width: parent.width
-                height: agentConnection.implicitHeight + Style.space(20)
+                height: visible ? connectContent.implicitHeight + Style.space(24) : 0
                 radius: Style.cornerRadius
                 color: Style.normalFillFor(root.foreground, Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: OmaDigest.OmaDigestStore.agentConnection.connected
+                  ? Color.accent : Style.normalBorderFor(root.foreground, Color.accent)
+
                 Column {
-                  id: agentConnection
+                  id: connectContent
                   anchors.fill: parent
-                  anchors.margins: Style.space(10)
-                  spacing: Style.space(3)
-                  Text {
-                    text: "PI AGENT"
-                    color: Color.accent
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                    font.letterSpacing: 1
-                  }
-                  Text {
-                    width: parent.width
-                    text: OmaDigest.OmaDigestStore.agentConnection.connected
-                      ? OmaDigest.OmaDigestStore.agentConnection.provider + " · " + OmaDigest.OmaDigestStore.agentConnection.model
-                      : "Not connected. Authenticate a model with Pi."
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.bodySmall
-                    wrapMode: Text.WordWrap
-                  }
-                }
-              }
-
-              Text {
-                text: "SIGN IN"
-                color: Color.accent
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 1
-              }
-              Text {
-                width: parent.width
-                text: "Choose a provider. Browser-based sign-in opens automatically; API keys stay in OmaDigest's private configuration."
-                color: Qt.darker(root.foreground, 1.35)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                wrapMode: Text.WordWrap
-              }
-
-              Repeater {
-                model: OmaDigest.OmaDigestStore.authMethods
-                Rectangle {
-                  required property var modelData
-                  width: parent.width
-                  height: authMethodText.implicitHeight + Style.space(18)
-                  radius: Style.cornerRadius
-                  color: authMethodMouse.containsMouse
-                    ? Style.hoverFillFor(root.foreground, Color.accent)
-                    : Style.normalFillFor(root.foreground, Color.accent)
-                  opacity: ["starting", "browser", "device_code", "prompt", "info"].indexOf(OmaDigest.OmaDigestStore.auth.phase) >= 0 ? 0.5 : 1
+                  anchors.margins: Style.space(12)
+                  spacing: Style.space(9)
 
                   Row {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.margins: Style.space(9)
+                    width: parent.width
                     spacing: Style.space(8)
-                    Text {
-                      id: authMethodText
-                      width: parent.width - authMethodAction.width - Style.space(10)
-                      text: String(modelData.label) + "\n" + String(modelData.description)
-                      color: root.foreground
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.bodySmall
-                      wrapMode: Text.WordWrap
+                    Column {
+                      width: parent.width - connectionState.width - Style.space(10)
+                      spacing: Style.space(2)
+                      Text {
+                        text: "CONNECT OMADIGEST"
+                        color: Color.accent
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        font.letterSpacing: 1
+                      }
+                      Text {
+                        width: parent.width
+                        text: "Choose the account OmaDigest should use to build and draft briefings."
+                        color: Qt.darker(root.foreground, 1.35)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        wrapMode: Text.WordWrap
+                      }
                     }
                     Text {
-                      id: authMethodAction
-                      anchors.verticalCenter: parent.verticalCenter
-                      text: "Sign in"
-                      color: Color.accent
+                      id: connectionState
+                      text: OmaDigest.OmaDigestStore.agentConnection.connected ? "● Connected" : "Not connected"
+                      color: OmaDigest.OmaDigestStore.agentConnection.connected ? Color.accent : Qt.darker(root.foreground, 1.35)
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
-                      font.bold: true
                     }
                   }
-                  MouseArea {
-                    id: authMethodMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: ["starting", "browser", "device_code", "prompt", "info"].indexOf(OmaDigest.OmaDigestStore.auth.phase) < 0
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                    onClicked: {
-                      root.authPromptValue = ""
-                      OmaDigest.OmaDigestStore.beginAuth(modelData.id)
+
+                  Dropdown {
+                    id: authMethodPicker
+                    width: parent.width
+                    showLabel: false
+                    options: root.authOptions
+                    value: root.selectedAuthMethod || (options.length > 0 ? String(options[0].value) : "")
+                    enabled: options.length > 0 && ["starting", "browser", "device_code", "prompt", "info"].indexOf(OmaDigest.OmaDigestStore.auth.phase) < 0
+                    foreground: root.foreground
+                    background: Color.background
+                    onChanged: function(value) { root.selectedAuthMethod = String(value) }
+                  }
+
+                  Text {
+                    width: parent.width
+                    text: {
+                      var selected = root.authOptions.find(function(option) { return option.value === authMethodPicker.value })
+                      return selected ? String(selected.description || "") : "No supported providers are available."
                     }
+                    color: Qt.darker(root.foreground, 1.4)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.WordWrap
+                  }
+
+                  Rectangle {
+                    width: Style.space(150)
+                    height: Style.space(36)
+                    radius: Style.cornerRadius
+                    color: Color.accent
+                    opacity: authMethodPicker.value !== "" && authMethodPicker.enabled ? 1 : 0.5
+                    Text {
+                      anchors.centerIn: parent
+                      text: OmaDigest.OmaDigestStore.agentConnection.connected ? "Connect another" : "Connect"
+                      color: Color.background
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                    }
+                    MouseArea {
+                      anchors.fill: parent
+                      enabled: authMethodPicker.value !== "" && authMethodPicker.enabled
+                      cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                      onClicked: {
+                        root.authPromptValue = ""
+                        OmaDigest.OmaDigestStore.beginAuth(authMethodPicker.value)
+                      }
+                    }
+                  }
+
+                  Text {
+                    visible: OmaDigest.OmaDigestStore.agentConnection.connected
+                    width: parent.width
+                    text: visible ? OmaDigest.OmaDigestStore.agentConnection.provider + " · "
+                      + OmaDigest.OmaDigestStore.agentConnection.model : ""
+                    color: Qt.darker(root.foreground, 1.35)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
                   }
                 }
               }
 
               Rectangle {
-                visible: OmaDigest.OmaDigestStore.auth.phase !== "idle"
+                visible: root.connectionView === "overview" && OmaDigest.OmaDigestStore.auth.phase !== "idle"
                 width: parent.width
                 height: visible ? authFlowContent.implicitHeight + Style.space(20) : 0
                 radius: Style.cornerRadius
@@ -1105,77 +1122,151 @@ Panel {
               }
 
               Rectangle {
+                visible: root.connectionView === "overview"
                 width: parent.width
-                height: voiceConnection.implicitHeight + Style.space(20)
+                height: visible ? voiceConnection.implicitHeight + Style.space(24) : 0
                 radius: Style.cornerRadius
                 color: Style.normalFillFor(root.foreground, Color.accent)
+
                 Column {
                   id: voiceConnection
                   anchors.fill: parent
-                  anchors.margins: Style.space(10)
-                  spacing: Style.space(3)
+                  anchors.margins: Style.space(12)
+                  spacing: Style.space(10)
+
                   Text {
-                    text: "VOICE INPUT"
+                    text: "VOICE"
                     color: Color.accent
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
                     font.letterSpacing: 1
                   }
-                  Text {
-                    text: OmaDigest.OmaDigestStore.dictationAvailable ? "Voxtype ready" : "Voxtype unavailable"
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.bodySmall
+
+                  Row {
+                    width: parent.width
+                    spacing: Style.space(10)
+                    Column {
+                      width: parent.width - voiceInputPicker.width - Style.space(10)
+                      Text {
+                        text: "Voice input"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                      }
+                      Text {
+                        text: "Used by the centered microphone control while drafting."
+                        color: Qt.darker(root.foreground, 1.4)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                    Dropdown {
+                      id: voiceInputPicker
+                      width: Style.space(150)
+                      showLabel: false
+                      options: [{ value: "voxtype", label: OmaDigest.OmaDigestStore.dictationAvailable ? "Voxtype" : "Unavailable" }]
+                      value: "voxtype"
+                      enabled: false
+                      foreground: root.foreground
+                      background: Color.background
+                    }
+                  }
+
+                  Row {
+                    width: parent.width
+                    spacing: Style.space(8)
+                    Column {
+                      width: parent.width - readModePicker.width - configureReadMode.width - Style.space(18)
+                      Text {
+                        text: "Read aloud"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                      }
+                      Text {
+                        text: OmaDigest.OmaDigestStore.tts.configured ? "Ready" : "Not configured"
+                        color: Qt.darker(root.foreground, 1.4)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                    Dropdown {
+                      id: readModePicker
+                      width: Style.space(150)
+                      showLabel: false
+                      options: [
+                        { value: "openai-compatible", label: "OpenAI-compatible" },
+                        { value: "elevenlabs", label: "ElevenLabs" }
+                      ]
+                      value: root.ttsProvider
+                      foreground: root.foreground
+                      background: Color.background
+                      onChanged: function(value) { root.ttsProvider = String(value) }
+                    }
+                    Rectangle {
+                      id: configureReadMode
+                      width: Style.space(88)
+                      height: Style.space(34)
+                      radius: Style.cornerRadius
+                      color: Style.normalFillFor(root.foreground, Color.accent)
+                      Text {
+                        anchors.centerIn: parent
+                        text: "Configure"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                      MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.connectionView = "read-mode"
+                      }
+                    }
                   }
                 }
               }
 
               Text {
-                text: "READ MODE"
+                visible: root.connectionView === "read-mode"
+                text: "‹ Connections"
                 color: Color.accent
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                font.pixelSize: Style.font.bodySmall
                 font.bold: true
-                font.letterSpacing: 1
+                MouseArea {
+                  anchors.fill: parent
+                  anchors.margins: -Style.space(6)
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.connectionView = "overview"
+                }
               }
               Text {
+                visible: root.connectionView === "read-mode"
                 width: parent.width
-                text: OmaDigest.OmaDigestStore.tts.configured
-                  ? "Configured for " + String(OmaDigest.OmaDigestStore.tts.config.provider)
-                  : "Configure an OpenAI-compatible speech endpoint or ElevenLabs. Keys are stored in Secret Service."
+                text: "Configure read aloud"
                 color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.displaySmall
+                font.bold: true
+              }
+              Text {
+                visible: root.connectionView === "read-mode"
+                width: parent.width
+                text: root.ttsProvider === "elevenlabs"
+                  ? "Connect ElevenLabs for digest playback."
+                  : "Connect an endpoint that implements the OpenAI speech API."
+                color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 wrapMode: Text.WordWrap
               }
 
-              Row {
-                spacing: Style.space(6)
-                Repeater {
-                  model: ["openai-compatible", "elevenlabs"]
-                  Rectangle {
-                    required property string modelData
-                    width: Style.space(150)
-                    height: Style.space(30)
-                    radius: Style.cornerRadius
-                    color: root.ttsProvider === modelData
-                      ? Style.selectedFillFor(root.foreground, Color.accent)
-                      : Style.normalFillFor(root.foreground, Color.accent)
-                    Text {
-                      anchors.centerIn: parent
-                      text: modelData === "elevenlabs" ? "ElevenLabs" : "OpenAI-compatible"
-                      color: root.foreground
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.ttsProvider = modelData }
-                  }
-                }
-              }
-
               QQC.TextField {
                 id: ttsEndpoint
+                visible: root.connectionView === "read-mode"
                 width: parent.width
                 placeholderText: root.ttsProvider === "elevenlabs" ? "https://api.elevenlabs.io" : "https://api.openai.com/v1"
                 color: root.foreground
@@ -1183,6 +1274,7 @@ Panel {
               }
               QQC.TextField {
                 id: ttsModel
+                visible: root.connectionView === "read-mode"
                 width: parent.width
                 placeholderText: root.ttsProvider === "elevenlabs" ? "eleven_multilingual_v2" : "gpt-4o-mini-tts"
                 color: root.foreground
@@ -1190,6 +1282,7 @@ Panel {
               }
               QQC.TextField {
                 id: ttsVoice
+                visible: root.connectionView === "read-mode"
                 width: parent.width
                 placeholderText: root.ttsProvider === "elevenlabs" ? "Voice ID" : "alloy"
                 color: root.foreground
@@ -1197,6 +1290,7 @@ Panel {
               }
               QQC.TextField {
                 id: ttsApiKey
+                visible: root.connectionView === "read-mode"
                 width: parent.width
                 placeholderText: "API key"
                 echoMode: TextInput.Password
@@ -1205,8 +1299,9 @@ Panel {
               }
 
               Rectangle {
+                visible: root.connectionView === "read-mode"
                 width: Style.space(150)
-                height: Style.space(36)
+                height: visible ? Style.space(36) : 0
                 radius: Style.cornerRadius
                 color: Color.accent
                 opacity: ttsEndpoint.text.trim() && ttsModel.text.trim() && ttsVoice.text.trim() && ttsApiKey.text.trim() ? 1 : 0.5
