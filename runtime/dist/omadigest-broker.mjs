@@ -175446,7 +175446,7 @@ ${captureLines}` : capture.stack;
 // runtime/src/broker.ts
 import { createInterface as createInterface5 } from "node:readline";
 import { execFile as execFile4 } from "node:child_process";
-import { existsSync as existsSync29, readdirSync as readdirSync14, statSync as statSync17 } from "node:fs";
+import { existsSync as existsSync30, readdirSync as readdirSync14, statSync as statSync17 } from "node:fs";
 import { randomUUID as randomUUID15 } from "node:crypto";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 import { resolve as resolve16 } from "node:path";
@@ -279476,7 +279476,7 @@ function isObject7(value2) {
 }
 
 // runtime/src/privacy.ts
-import { mkdirSync as mkdirSync19, readFileSync as readFileSync26, renameSync as renameSync9, statSync as statSync16, writeFileSync as writeFileSync18 } from "node:fs";
+import { existsSync as existsSync29, mkdirSync as mkdirSync19, readFileSync as readFileSync26, renameSync as renameSync9, statSync as statSync16, writeFileSync as writeFileSync18 } from "node:fs";
 import { randomUUID as randomUUID14 } from "node:crypto";
 import { dirname as dirname32, join as join49 } from "node:path";
 var privacyModeSchema = external_exports.enum(["ignore", "count-only", "digest", "digest-and-handoff"]);
@@ -279502,6 +279502,7 @@ var PrivacyPolicy = class {
   constructor(configRoot2) {
     this.#path = join49(configRoot2, "privacy.json");
     this.#load();
+    if (!existsSync29(this.#path)) this.#save();
   }
   reload() {
     this.#defaultMode = "count-only";
@@ -279724,7 +279725,7 @@ async function reloadFileBackedConfiguration() {
 function configurationFingerprint(root) {
   const parts = [];
   const visit = (path16, relative9, depth) => {
-    if (depth > 5 || parts.length > 2e3 || !existsSync29(path16)) return;
+    if (depth > 5 || parts.length > 2e3 || !existsSync30(path16)) return;
     let stat5;
     try {
       stat5 = statSync17(path16);

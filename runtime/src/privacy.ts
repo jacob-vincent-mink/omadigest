@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { z } from "zod";
@@ -35,6 +35,7 @@ export class PrivacyPolicy {
   constructor(configRoot: string) {
     this.#path = join(configRoot, "privacy.json");
     this.#load();
+    if (!existsSync(this.#path)) this.#save();
   }
 
   reload(): void {
