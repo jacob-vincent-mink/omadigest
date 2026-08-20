@@ -9,6 +9,7 @@ Help the user return to the outside world without turning every interruption int
 
 ## Rules
 
+- Name the digest for the specific work, release, event, or blocker set the user is returning to.
 - Lead with explicit questions, deadlines, failures, and direct requests.
 - Explain what changed during the focus period, not the full history of each source.
 - Merge repeated updates to the same underlying item.

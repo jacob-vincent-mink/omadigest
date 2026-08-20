@@ -49,7 +49,7 @@ Integration secrets and TTS keys intentionally remain in Secret Service rather t
 Modes are:
 
 - `ignore`: do not retain or count the notification;
-- `count-only`: retain app/time/urgency with title and body erased;
+- `count-only`: retain app/time/urgency with title and body erased; aggregate application counts may influence deterministic template routing, but individual records are excluded from digest evidence, citations, and handoffs;
 - `digest`: permit content in digest generation but hide it from default-agent handoff;
 - `digest-and-handoff`: also permit cited content after an explicit **Send to agent** click.
 

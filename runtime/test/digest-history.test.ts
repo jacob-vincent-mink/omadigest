@@ -16,7 +16,7 @@ function fixture(id: string): Digest {
 }
 
 describe("DigestHistory", () => {
-  it("saves newest first and supports deletion", () => {
+  it("saves newest first and supports read state and deletion", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-history-"));
     roots.push(root);
     const history = new DigestHistory({ XDG_STATE_HOME: root, HOME: root });
@@ -26,6 +26,10 @@ describe("DigestHistory", () => {
       "00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001"
     ]);
     expect(history.get("00000000-0000-4000-8000-000000000002")?.title).toBe("Digest 00000000-0000-4000-8000-000000000002");
+    expect(history.list().every((item) => item.readAt === undefined)).toBe(true);
+    history.markRead("00000000-0000-4000-8000-000000000002", "2026-08-20T11:00:00.000Z");
+    expect(history.get("00000000-0000-4000-8000-000000000002")?.readAt).toBe("2026-08-20T11:00:00.000Z");
+    expect(history.get("00000000-0000-4000-8000-000000000001")?.readAt).toBeUndefined();
     history.delete("00000000-0000-4000-8000-000000000002");
     expect(history.list()).toHaveLength(1);
     history.clear();

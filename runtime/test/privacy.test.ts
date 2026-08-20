@@ -23,7 +23,10 @@ describe("PrivacyPolicy", () => {
     roots.push(root);
     const policy = new PrivacyPolicy(root);
     expect(policy.filter(fixture("Signal"))).toBeUndefined();
-    expect(policy.filter(fixture("GitHub"))).toMatchObject({ app: "GitHub", title: "Notification content hidden by privacy policy", body: "" });
+    const countOnly = policy.filter(fixture("GitHub"));
+    expect(countOnly).toMatchObject({ app: "GitHub", title: "", body: "", contentAvailable: false });
+    expect(countOnly?.occurredAt).toBe("2026-08-20T11:00:00.000Z");
+    expect(policy.evidenceForDigest([countOnly!])).toEqual([]);
   });
 
   it("persists explicit digest and handoff permissions", () => {
@@ -32,7 +35,8 @@ describe("PrivacyPolicy", () => {
     const policy = new PrivacyPolicy(root);
     policy.setRule("GitHub", "digest");
     expect(policy.filter(fixture("GitHub"))?.body).toBe("Private body");
-    expect(policy.evidenceForHandoff([fixture("GitHub")])[0]?.body).toBe("");
+    expect(policy.evidenceForDigest([fixture("GitHub")])).toHaveLength(1);
+    expect(policy.evidenceForHandoff([fixture("GitHub")])).toEqual([]);
     policy.setRule("GitHub", "digest-and-handoff");
     expect(new PrivacyPolicy(root).evidenceForHandoff([fixture("GitHub")])[0]?.body).toBe("Private body");
   });
@@ -45,7 +49,7 @@ describe("PrivacyPolicy", () => {
     const policy = new PrivacyPolicy(join(root, "config"));
     attention.applyPolicy((item) => policy.filter(item));
     expect(attention.byIds(["notification:Signal"])).toEqual([]);
-    expect(attention.byIds(["notification:GitHub"])[0]?.body).toBe("");
+    expect(attention.byIds(["notification:GitHub"])[0]).toMatchObject({ title: "", body: "", contentAvailable: false });
     const eventsDir = join(root, "omadigest", "events");
     const segment = readFileSync(join(eventsDir, readdirSync(eventsDir)[0]!), "utf8");
     expect(segment).not.toContain("Private body");

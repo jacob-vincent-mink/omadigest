@@ -17,6 +17,12 @@ Column {
   readonly property bool ownsDraft: OmaDigestStore.draftKind === root.kind
   readonly property var currentDraft: ownsDraft ? OmaDigestStore.draft : null
 
+  function setRequest(text) { request.text = String(text || "").slice(0, 20000) }
+  function submit() {
+    if (request.text.trim() && OmaDigestStore.draftState !== "working")
+      OmaDigestStore.startDraft(root.kind, request.text)
+  }
+
   Connections {
     target: OmaDigestStore
     function onTranscriptChanged() {
@@ -86,7 +92,7 @@ Column {
         enabled: request.text.trim() && OmaDigestStore.draftState !== "working"
         hoverEnabled: true
         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-        onClicked: OmaDigestStore.startDraft(root.kind, request.text)
+        onClicked: root.submit()
       }
     }
   }

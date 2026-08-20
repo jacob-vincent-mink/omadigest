@@ -8,6 +8,7 @@ export type AttentionItem = {
   app: string;
   title: string;
   body: string;
+  contentAvailable?: boolean | undefined;
   urgency: "low" | "normal" | "critical";
   occurredAt: string;
 };
@@ -25,6 +26,7 @@ export type Digest = {
   templateId: string;
   title: string;
   generatedAt: string;
+  readAt?: string;
   sections: Array<{ title: string; entries: DigestEntry[] }>;
 };
 
@@ -151,6 +153,7 @@ export type BrokerCommand =
   | { type: "attention_acknowledge"; id: string; itemIds: string[] }
   | { type: "digest_generate"; id: string; templateId?: string; context: GenerationContext }
   | { type: "digest_history"; id: string }
+  | { type: "digest_mark_read"; id: string; digestId: string }
   | { type: "digest_delete"; id: string; digestId: string }
   | { type: "digest_clear"; id: string }
   | { type: "shutdown" };

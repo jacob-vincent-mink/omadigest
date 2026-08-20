@@ -145,6 +145,7 @@ Scope {
   }
 
   function requestDigestHistory() { send({ type: "digest_history", id: "history-" + nextId++ }) }
+  function markDigestRead(digestId) { send({ type: "digest_mark_read", id: "history-" + nextId++, digestId: String(digestId) }) }
   function deleteDigest(digestId) { send({ type: "digest_delete", id: "history-" + nextId++, digestId: String(digestId) }) }
   function clearDigests() { send({ type: "digest_clear", id: "history-" + nextId++ }) }
 

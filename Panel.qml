@@ -26,6 +26,7 @@ Panel {
   readonly property int attentionAvailableCount: OmaDigest.OmaDigestStore.attentionCount
 
   property string page: "list"
+  property string digestTab: "unread"
   property string settingsPage: "integrations"
   property var selectedTemplate: null
   property string authPromptValue: ""
@@ -54,10 +55,31 @@ Panel {
     refreshNotificationHistory()
     OmaDigest.OmaDigestStore.requestDigestHistory()
     root.controller.show()
+    root.markCurrentDigestRead()
   }
   function close() { root.controller.hide() }
   function toggle() { root.opened ? close() : open() }
   function closeForPopoutSwitch() { root.controller.hide() }
+
+  function digestsForTab(tab) {
+    var wantRead = String(tab) === "read"
+    return (OmaDigest.OmaDigestStore.digestHistory || []).filter(function(digest) {
+      return (String(digest.readAt || "") !== "") === wantRead
+    })
+  }
+
+  function markCurrentDigestRead() {
+    if (root.page !== "detail") return
+    var current = OmaDigest.OmaDigestStore.digest
+    if (!current || String(current.readAt || "") !== "") return
+    OmaDigest.OmaDigestStore.markDigestRead(current.id)
+    OmaDigest.OmaDigestStore.digest = Object.assign({}, current, { readAt: new Date().toISOString() })
+  }
+
+  function scrollToTop() { Qt.callLater(function() { panelScroll.contentY = 0 }) }
+  function scrollToBottom() {
+    Qt.callLater(function() { panelScroll.contentY = Math.max(0, panelScroll.contentHeight - panelScroll.height) })
+  }
 
   function switchPanel(direction) {
     if (root.bar && typeof root.bar.switchPanelFrom === "function")
@@ -199,7 +221,9 @@ Panel {
   Connections {
     target: OmaDigest.OmaDigestStore
     function onDigestChanged() {
-      if (OmaDigest.OmaDigestStore.digest) root.page = "detail"
+      if (!OmaDigest.OmaDigestStore.digest) return
+      root.page = "detail"
+      if (root.opened) root.markCurrentDigestRead()
     }
   }
 
@@ -223,6 +247,159 @@ Panel {
     target: OmaDigest.OmaDigestStore
     function onAttentionCountChanged() {
       if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
+    }
+  }
+
+  // Narrow semantic controls make demos and integration tests deterministic
+  // without exposing arbitrary input, filesystem, or shell execution.
+  IpcHandler {
+    target: "omadigest"
+
+    function open(): string { root.open(); return "ok" }
+    function close(): string { root.close(); return "ok" }
+
+    function showDigests(tab: string): string {
+      root.digestTab = String(tab) === "read" ? "read" : "unread"
+      root.page = "list"
+      root.open()
+      root.scrollToTop()
+      return "ok"
+    }
+
+    function openNewest(tab: string): string {
+      var requested = String(tab) === "read" ? "read" : "unread"
+      var matches = root.digestsForTab(requested)
+      if (matches.length === 0) return "empty"
+      root.digestTab = requested
+      OmaDigest.OmaDigestStore.openDigestFromHistory(matches[0])
+      root.page = "detail"
+      root.open()
+      root.scrollToTop()
+      return "ok"
+    }
+
+    function showSettings(section: string): string {
+      var requested = String(section)
+      root.settingsPage = ["integrations", "templates", "privacy", "connections"].indexOf(requested) >= 0
+        ? requested : "integrations"
+      root.selectedTemplate = null
+      root.page = "settings"
+      root.open()
+      root.scrollToTop()
+      return "ok"
+    }
+
+    function startDraft(kind: string, request: string): string {
+      var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
+      root.page = "settings"
+      root.open()
+      if (requestedKind === "integration") integrationDraftEditor.setRequest(request)
+      else templateDraftEditor.setRequest(request)
+      root.scrollToBottom()
+      OmaDigest.OmaDigestStore.startDraft(requestedKind, request)
+      return "ok"
+    }
+
+    function prepareDraft(kind: string, request: string): string {
+      var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
+      root.page = "settings"
+      root.open()
+      if (requestedKind === "integration") integrationDraftEditor.setRequest(request)
+      else templateDraftEditor.setRequest(request)
+      root.scrollToBottom()
+      return "ok"
+    }
+
+    function submitDraft(kind: string): string {
+      if (String(kind) === "integration") integrationDraftEditor.submit()
+      else templateDraftEditor.submit()
+      return "ok"
+    }
+
+    function showDraft(kind: string): string {
+      root.settingsPage = String(kind) === "integration" ? "integrations" : "templates"
+      root.page = "settings"
+      root.open()
+      root.scrollToBottom()
+      return "ok"
+    }
+
+    function acceptDraft(): string {
+      if (!OmaDigest.OmaDigestStore.draftId) return "empty"
+      OmaDigest.OmaDigestStore.acceptDraft()
+      return "ok"
+    }
+
+    function showTemplate(templateId: string): string {
+      var wanted = String(templateId)
+      var available = OmaDigest.OmaDigestStore.templates || []
+      for (var index = 0; index < available.length; index++) {
+        if (String(available[index].id) !== wanted) continue
+        root.selectedTemplate = available[index]
+        root.settingsPage = "templates"
+        root.page = "settings"
+        root.open()
+        root.scrollToTop()
+        return "ok"
+      }
+      return "missing"
+    }
+
+    function setupIntegration(integrationId: string, valuesJson: string): string {
+      try {
+        OmaDigest.OmaDigestStore.setupIntegration(String(integrationId), JSON.parse(String(valuesJson || "{}")))
+        return "ok"
+      } catch (error) { return "invalid-json" }
+    }
+
+    function setupIntegrationDefaults(integrationId: string): string {
+      var wanted = String(integrationId)
+      var available = OmaDigest.OmaDigestStore.integrations || []
+      for (var index = 0; index < available.length; index++) {
+        if (String(available[index].id) !== wanted) continue
+        var values = {}
+        var fields = available[index].setup.fields || []
+        for (var fieldIndex = 0; fieldIndex < fields.length; fieldIndex++) {
+          var field = fields[fieldIndex]
+          if (String(field.type) === "boolean") values[String(field.key)] = true
+          else if (field.required === true) return "required-value"
+          else values[String(field.key)] = ""
+        }
+        OmaDigest.OmaDigestStore.setupIntegration(wanted, values)
+        return "ok"
+      }
+      return "missing"
+    }
+
+    function enableIntegration(integrationId: string): string {
+      OmaDigest.OmaDigestStore.setIntegrationEnabled(String(integrationId), true)
+      return "ok"
+    }
+
+    function generate(): string {
+      if (root.attentionAvailableCount <= 0 || OmaDigest.OmaDigestStore.digestState === "working") return "unavailable"
+      root.generateDigest("manual", 0)
+      return "ok"
+    }
+
+    function state(): string {
+      return JSON.stringify({
+        ready: OmaDigest.OmaDigestStore.ready,
+        page: root.page,
+        digestTab: root.digestTab,
+        digestState: OmaDigest.OmaDigestStore.digestState,
+        draftState: OmaDigest.OmaDigestStore.draftState,
+        draftKind: OmaDigest.OmaDigestStore.draftKind,
+        errorCode: OmaDigest.OmaDigestStore.errorCode,
+        errorMessage: OmaDigest.OmaDigestStore.errorMessage,
+        integrations: OmaDigest.OmaDigestStore.integrations,
+        integrationSetup: OmaDigest.OmaDigestStore.integrationSetup,
+        attentionCount: root.attentionAvailableCount,
+        unreadCount: root.digestsForTab("unread").length,
+        readCount: root.digestsForTab("read").length
+      })
     }
   }
 
@@ -260,6 +437,7 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
       Flickable {
+        id: panelScroll
         anchors.fill: parent
         contentWidth: width
         contentHeight: content.implicitHeight
@@ -431,19 +609,47 @@ Panel {
             }
           }
 
-          // Main screen: only the digest list.
+          // Main screen: unread and read digest lists.
           Column {
             width: parent.width
             visible: root.page === "list"
             spacing: Style.space(8)
 
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: [
+                  { id: "unread", label: "Unread" },
+                  { id: "read", label: "Read" }
+                ]
+
+                Button {
+                  required property var modelData
+                  width: (content.width - Style.space(6)) / 2
+                  height: Math.max(Style.space(40), implicitHeight)
+                  text: String(modelData.label) + "  " + root.digestsForTab(modelData.id).length
+                  selected: root.digestTab === modelData.id
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.bodySmall
+                  focusable: true
+                  onClicked: root.digestTab = String(modelData.id)
+                }
+              }
+            }
+
             Text {
-              visible: OmaDigest.OmaDigestStore.digestHistory.length === 0
+              visible: root.digestsForTab(root.digestTab).length === 0
               width: parent.width
               horizontalAlignment: Text.AlignHCenter
-              text: OmaDigest.OmaDigestStore.digestState === "working"
+              text: root.digestTab === "unread" && OmaDigest.OmaDigestStore.digestState === "working"
                 ? "Building your first digest…"
-                : "No digests yet. Use + to generate one when you're ready."
+                : root.digestTab === "read"
+                  ? "Cleared digests will stay here."
+                  : "You're all caught up. Use + when new attention arrives."
               color: Qt.darker(root.foreground, 1.35)
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
@@ -453,7 +659,7 @@ Panel {
             }
 
             Repeater {
-              model: OmaDigest.OmaDigestStore.digestHistory
+              model: root.digestsForTab(root.digestTab)
 
               Rectangle {
                 required property var modelData
@@ -552,6 +758,7 @@ Panel {
               Row {
                 id: detailActions
                 spacing: Style.space(2)
+                anchors.verticalCenter: parent.verticalCenter
                 PanelActionButton {
                   visible: OmaDigest.OmaDigestStore.tts.configured
                   iconText: OmaDigest.OmaDigestStore.tts.state === "playing" ? "󰏤" : "󰋋"
@@ -735,6 +942,7 @@ Panel {
                 font.letterSpacing: 1
               }
               OmaDigest.DraftEditor {
+                id: integrationDraftEditor
                 kind: "integration"
                 width: parent.width
                 foreground: root.foreground
@@ -804,6 +1012,7 @@ Panel {
                 font.letterSpacing: 1
               }
               OmaDigest.DraftEditor {
+                id: templateDraftEditor
                 kind: "template"
                 width: parent.width
                 foreground: root.foreground

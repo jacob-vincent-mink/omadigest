@@ -23,7 +23,7 @@ enabled connector ─► normalized context ──────┤
                                       structured cited digest
 ```
 
-Attention items carry stable ID, source, app, bounded title/body, urgency, and timestamp. The broker keeps at most 500 in memory and seven daily mode-`0600` JSONL segments. Generation applies the selected template's stricter item budget.
+Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. The broker keeps at most 500 in memory and seven daily mode-`0600` JSONL segments. Deterministic routing may use aggregate application counts from count-only records, but generation excludes individual contentless evidence before model context assembly and again at the model boundary, then applies the selected template's stricter item budget.
 
 ## Pi runtime
 

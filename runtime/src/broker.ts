@@ -91,6 +91,7 @@ const commandSchema = z.discriminatedUnion("type", [
     context: contextSchema
   }).strict(),
   z.object({ type: z.literal("digest_history"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("digest_mark_read"), id: z.string().min(1).max(100), digestId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("digest_delete"), id: z.string().min(1).max(100), digestId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("digest_clear"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("shutdown") }).strict()
@@ -307,8 +308,10 @@ async function handle(raw: string): Promise<boolean> {
     return true;
   }
 
-  if (command.type === "digest_history" || command.type === "digest_delete" || command.type === "digest_clear") {
-    if (command.type === "digest_delete") digestHistory.delete(command.digestId);
+  if (command.type === "digest_history" || command.type === "digest_mark_read"
+    || command.type === "digest_delete" || command.type === "digest_clear") {
+    if (command.type === "digest_mark_read") digestHistory.markRead(command.digestId);
+    else if (command.type === "digest_delete") digestHistory.delete(command.digestId);
     else if (command.type === "digest_clear") digestHistory.clear();
     emit({ type: "digest_history", id: command.id, digests: digestHistory.list() });
     return true;
@@ -316,12 +319,12 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "digest_generate") {
     try {
-      const policyAllowed = attention.pending(200);
-      const appCounts = policyAllowed.reduce<Record<string, number>>((counts, item) => {
+      const policyCountable = attention.pending(200);
+      const appCounts = policyCountable.reduce<Record<string, number>>((counts, item) => {
         counts[item.app] = (counts[item.app] ?? 0) + 1;
         return counts;
       }, {});
-      const safeContext = { ...command.context, itemCount: policyAllowed.length, appCounts };
+      const safeContext = { ...command.context, itemCount: policyCountable.length, appCounts };
       const selectedId = command.templateId || selectTemplate(templates, safeContext).templateId;
       const template = templates.find((candidate) => candidate.manifest.id === selectedId);
       if (template === undefined) throw new Error("The selected digest template is unavailable");
@@ -332,7 +335,10 @@ async function handle(raw: string): Promise<boolean> {
         new Date(now.getTime() + 7 * 86_400_000).toISOString()
       );
       attention.ingest(connectorItems);
-      const items = attention.pending(template.manifest.context.maximumItems);
+      const pendingItems = attention.pending(template.manifest.context.maximumItems);
+      const items = privacy.evidenceForDigest(pendingItems);
+      const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
+      if (excludedIds.length > 0) attention.acknowledge(excludedIds);
       emit({ type: "digest_state", id: command.id, state: "working", templateId: selectedId });
       const digest = await runDigestAgent(template, items, pluginRoot);
       digestHistory.save(digest);
@@ -451,8 +457,13 @@ async function handle(raw: string): Promise<boolean> {
       return true;
     }
     try {
+      const evidence = privacy.evidenceForHandoff(attention.byIds(entry.sourceIds));
+      if (evidence.length === 0) {
+        emit({ type: "error", id: command.id, code: "handoff_evidence_unavailable", message: "This item has no content permitted for an agent handoff." });
+        return true;
+      }
       await launchDefaultAgent(formatDigestHandoff(digest.title, section.title, entry.headline,
-        entry.explanation, privacy.evidenceForHandoff(attention.byIds(entry.sourceIds))));
+        entry.explanation, evidence));
       emit({ type: "handoff", id: command.id, state: "launched", target: "default-agent" });
     } catch {
       emit({ type: "error", id: command.id, code: "handoff_failed", message: "The default Omarchy agent could not be launched." });
@@ -646,9 +657,8 @@ export function formatDigestHandoff(
   explanation: string,
   sources: AttentionItem[]
 ): string {
-  const evidence = sources.length === 0
-    ? "- The original retained source is unavailable; use the digest text and ask before guessing."
-    : sources.map((item, index) => [
+  if (sources.length === 0) throw new Error("Digest handoff requires permitted source evidence");
+  const evidence = sources.map((item, index) => [
       `Source ${index + 1}:`,
       `  id: ${item.id}`,
       `  application: ${item.app}`,

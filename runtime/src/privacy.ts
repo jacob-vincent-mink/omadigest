@@ -87,10 +87,19 @@ export class PrivacyPolicy {
 
   evidenceForHandoff(items: AttentionItem[]): AttentionItem[] {
     return items.flatMap((item) => {
+      if (!isActionableEvidence(item)) return [];
       if (item.source !== "notifications") return [item];
       const mode = this.modeFor(item.app);
-      if (mode === "ignore") return [];
-      return mode === "digest-and-handoff" ? [item] : [hiddenItem(item)];
+      return mode === "digest-and-handoff" ? [item] : [];
+    });
+  }
+
+  evidenceForDigest(items: AttentionItem[]): AttentionItem[] {
+    return items.filter((item) => {
+      if (!isActionableEvidence(item)) return false;
+      if (item.source !== "notifications") return true;
+      const mode = this.modeFor(item.app);
+      return mode === "digest" || mode === "digest-and-handoff";
     });
   }
 
@@ -117,5 +126,11 @@ export function normalizeApplication(value: string): string {
 }
 
 function hiddenItem(item: AttentionItem): AttentionItem {
-  return { ...item, title: "Notification content hidden by privacy policy", body: "" };
+  return { ...item, title: "", body: "", contentAvailable: false };
+}
+
+export function isActionableEvidence(item: AttentionItem): boolean {
+  if (item.contentAvailable === false) return false;
+  if (item.title === "Notification content hidden by privacy policy") return false;
+  return item.title.trim() !== "" || item.body.trim() !== "";
 }

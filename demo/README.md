@@ -1,70 +1,55 @@
 # OmaDigest demo production
 
-This demo uses the real notification intake, privacy policy, scoped draft agents, connector sandbox, template router, digest model, default-agent action handoff, and optional Herdr continuation. Nothing is preinstalled to fake the integration/template authoring sequence.
+The primary demo is scripted so visible transitions are fast, repeatable, and free of terminal windows. It still uses real Omarchy notifications, the real privacy policy, live scoped draft agents, the connector sandbox, deterministic template routing, and the configured digest model.
 
-## Safety and reset
+## Record the polished take
+
+Install the current plugin build, ensure workspace 9 is empty, then run:
 
 ```bash
-./demo/prepare.sh
-# record the demo
+npm run check
+./demo/run-demo.sh 9
+```
+
+The runner:
+
+1. backs up and prepares isolated OmaDigest state;
+2. records real Omarchy notification popups;
+3. triggers a real focus-reentry digest while omitting the model wait from the final video;
+4. demonstrates opening a digest moving it from Unread to Read;
+5. authors, reviews, accepts, configures, and enables a live GitHub integration;
+6. authors, reviews, and accepts a deterministic GitHub Triage template;
+7. generates and opens a GitHub-enriched digest; and
+8. concatenates the clean scenes under `demo/recordings/` before restoring the original state.
+
+Model and connector operations are not mocked. Recording simply stops during long model waits, then resumes on the resulting UI state. The final path is printed on success.
+
+## Privacy behavior in the take
+
+Safe GitHub, Calendar, and Omarchy notifications are emitted with DND off so their native Omarchy popups appear on screen. The Signal canary is emitted while DND is active and has an explicit `ignore` rule, so its content is neither displayed nor retained.
+
+Unknown `count-only` applications retain only app/time/urgency for deterministic aggregate routing. Their title and body are erased before persistence, and individual count-only records are rejected again before model context, citation validation, and handoff evidence.
+
+## Safety and recovery
+
+`prepare.sh` records its backup path in `${XDG_RUNTIME_DIR:-/tmp}/omadigest-demo-backup`. `run-demo.sh` restores that backup on success and in its exit trap. If a take is interrupted after the shell itself is killed, recover with:
+
+```bash
+omarchy-shell -q notifications setDnd off
 ./demo/restore.sh
 ```
 
-`prepare.sh` backs up only the OmaDigest state/configuration it changes. It does not copy or alter provider authentication. It installs a strict demo privacy policy, clears digest/attention state for the take, removes prior demo artifacts, compiles the intentionally crashing `crashing-sw` fixture with debug symbols, and records the backup path under `$XDG_RUNTIME_DIR`.
+The helper never copies or changes model-provider authentication. It uses the already authenticated `gh` CLI and never displays or stores a GitHub token in connector configuration.
 
-## Recording isolation
+## Manual scene capture
 
-Use CUA for every visible interaction. Start on an empty Hyprland workspace; do not move existing windows into it.
+For an alternate edit, use `start-recording.sh` and `stop-recording.sh` around individual semantic IPC calls:
 
 ```bash
 ./demo/start-recording.sh 9
-# CUA drives the visible demo
+omarchy-shell shell summon io.github.jacob-vincent-mink.omadigest
+omarchy-shell omadigest showDigests unread
 ./demo/stop-recording.sh
 ```
 
-`start-recording.sh` refuses to begin if workspace 9 already contains a window.
-
-## Act 1 — focus re-entry and action
-
-1. CUA opens OmaDigest once, then closes it, ensuring the DND trigger is active.
-2. From a demo terminal, run `./demo/notification-burst.sh`.
-3. Show the notification storm while DND is active.
-4. DND ends; OmaDigest automatically generates a digest.
-5. Open the digest. Signal is entirely absent because its policy is `ignore`.
-6. Select the `crashing-sw` entry and press **Send to agent**.
-7. Show the default Omarchy agent using `diagnose-crash`, the notification timestamp, and systemd-coredump to identify the deliberate null write in `crash_in_release_parser`.
-
-## Act 2 — author through OmaDigest
-
-### Integration
-
-1. Open **Settings → Integrations**.
-2. Paste `demo/github-integration-prompt.txt` into **Create an integration**.
-3. Press **Draft integration** and wait for the scoped result.
-4. Show the review: `manifest.json`, `connector.mjs`, tests, README, `gh` command permission, and GitHub hosts.
-5. Accept through OmaDigest. Do not copy files manually.
-6. Configure the GitHub Inbox card with an empty repository filter and include-read enabled.
-7. Enable it. The connector uses `/usr/bin/gh` with the currently authenticated account; no token is shown or stored in connector config.
-
-If the scoped draft needs broader follow-up, press **Continue in Herdr**. This creates an explicit OmaDigest workspace and agent with the request and bounded current draft. The broker hot-reloads valid files written to the user configuration tree.
-
-### Template
-
-1. Open **Settings → Templates**.
-2. Paste `demo/github-template-prompt.txt` into **Create a template**.
-3. Press **Draft template**.
-4. Open the resulting template details to show routing, sources, sections, limits, and readable instructions.
-5. Accept through OmaDigest.
-6. Generate a manual digest. The deterministic router selects GitHub Triage because GitHub Inbox is enabled.
-7. Show real authenticated GitHub notifications grouped into Needs action, CI and releases, Reviews and mentions, and No action.
-
-## Suggested edit
-
-- 0–8s: notification storm.
-- 8–20s: automatic digest and privacy payoff.
-- 20–38s: `crashing-sw` sent to the agent and diagnosed.
-- 38–62s: integration request, permission review, accept/configure.
-- 62–78s: template request, readable review, accept.
-- 78–95s: GitHub-enriched digest and closing mark.
-
-Keep the full source recording. Speed up model waits and use clean cuts between acts; never substitute a prewritten artifact for the visible OmaDigest draft/accept flow.
+CUA is reserved for visual inspection or recovery when semantic IPC reports an unexpected state; it is not the primary demo driver.
