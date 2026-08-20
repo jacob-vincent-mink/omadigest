@@ -31,6 +31,8 @@ Panel {
   property string digestTab: "unread"
   property string preparedDraftKind: ""
   property string settingsPage: "integrations"
+  property string sourcesView: "list"
+  property var selectedSource: null
   property var selectedTemplate: null
   property string templateEditMode: "view"
   property string authPromptValue: ""
@@ -259,6 +261,63 @@ Panel {
     return result
   }
 
+  function omarchySources() {
+    return [
+      {
+        id: "omarchy.notifications", name: "Notifications", kind: "core", enabled: true,
+        description: "Privacy-filtered evidence from Omarchy notifications.",
+        status: {
+          state: root.notificationService ? "green" : "red",
+          message: root.notificationService ? "Available through Omarchy" : "Notification service unavailable",
+          checkedAt: ""
+        },
+        categories: [
+          { id: "notification-evidence", label: "Notification evidence", description: "Privacy-filtered titles and bodies", enabled: true, defaultEnabled: true }
+        ],
+        setup: { summary: "Uses the first-party Omarchy notification service.", fields: [] },
+        permissions: {}
+      },
+      {
+        id: "omarchy.focus", name: "Focus / DND", kind: "core", enabled: true,
+        description: "Focus re-entry timing and digest triggers.",
+        status: {
+          state: root.notificationService ? "green" : "yellow",
+          message: root.notificationService ? "Focus timing available" : "Focus timing is limited",
+          checkedAt: ""
+        },
+        categories: [
+          { id: "focus-timing", label: "Focus timing", description: "DND exit timing and automatic triggers", enabled: true, defaultEnabled: true }
+        ],
+        setup: { summary: "Uses Omarchy idle and notification state for focus re-entry.", fields: [] },
+        permissions: {}
+      }
+    ]
+  }
+
+  function connectedServiceSources() {
+    return (OmaDigest.OmaDigestStore.integrations || []).filter(function(source) {
+      return String(source.kind || source.sourceKind || "connector") !== "core"
+    })
+  }
+
+  function openSource(source) {
+    root.selectedSource = source
+    root.sourcesView = "detail"
+    root.scrollToTop()
+  }
+
+  function openSourceAuthoring() {
+    root.selectedSource = null
+    root.sourcesView = "authoring"
+    root.scrollToTop()
+  }
+
+  function showSourceList() {
+    root.selectedSource = null
+    root.sourcesView = "list"
+    root.scrollToTop()
+  }
+
   function generationContext(trigger, focusMinutes) {
     return {
       trigger: trigger || "manual",
@@ -323,6 +382,18 @@ Panel {
         root.selectedTemplate = available[index]
         return
       }
+    }
+
+    function onIntegrationsChanged() {
+      if (!root.selectedSource || String(root.selectedSource.kind || root.selectedSource.sourceKind || "") === "core") return
+      var wanted = String(root.selectedSource.id || "")
+      var available = OmaDigest.OmaDigestStore.integrations || []
+      for (var index = 0; index < available.length; index++) {
+        if (String(available[index].id || "") !== wanted) continue
+        root.selectedSource = available[index]
+        return
+      }
+      if (root.sourcesView === "detail") root.showSourceList()
     }
 
     function onTemplateEditStateChanged() {
@@ -400,6 +471,8 @@ Panel {
       root.settingsPage = ["integrations", "templates", "privacy", "connections", "data"].indexOf(requested) >= 0
         ? requested : "integrations"
       root.selectedTemplate = null
+      root.selectedSource = null
+      root.sourcesView = "list"
       root.page = "settings"
       root.open()
       root.scrollToTop()
@@ -422,7 +495,10 @@ Panel {
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
       root.open()
-      if (requestedKind === "integration") integrationDraftEditor.setRequest(request)
+      if (requestedKind === "integration") {
+        root.sourcesView = "authoring"
+        integrationDraftEditor.setRequest(request)
+      }
       else templateDraftEditor.setRequest(request)
       root.scrollToBottom()
       OmaDigest.OmaDigestStore.startDraft(requestedKind, request)
@@ -435,7 +511,10 @@ Panel {
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
       root.open()
-      if (requestedKind === "integration") integrationDraftEditor.setRequest(request)
+      if (requestedKind === "integration") {
+        root.sourcesView = "authoring"
+        integrationDraftEditor.setRequest(request)
+      }
       else templateDraftEditor.setRequest(request)
       root.scrollToBottom()
       return "ok"
@@ -456,6 +535,7 @@ Panel {
 
     function showDraft(kind: string): string {
       root.settingsPage = String(kind) === "integration" ? "integrations" : "templates"
+      if (String(kind) === "integration") root.sourcesView = "authoring"
       root.page = "settings"
       root.open()
       root.scrollToBottom()
@@ -580,6 +660,8 @@ Panel {
         integrations: OmaDigest.OmaDigestStore.integrations,
         integrationSetup: OmaDigest.OmaDigestStore.integrationSetup,
         integrationStatus: OmaDigest.OmaDigestStore.integrationStatus,
+        sourcesView: root.sourcesView,
+        selectedSourceId: root.selectedSource ? String(root.selectedSource.id || "") : "",
         attentionCount: root.attentionAvailableCount,
         unreadCount: root.digestsForTab("unread").length,
         readCount: root.digestsForTab("read").length
@@ -697,10 +779,15 @@ Panel {
               PanelActionButton {
                 visible: root.page === "detail" || root.page === "settings"
                 iconText: "󰅁"
-                tooltipText: "Back to digests"
+                tooltipText: root.page === "settings" && root.settingsPage === "integrations" && root.sourcesView !== "list"
+                  ? "Back to sources" : "Back to digests"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
-                onClicked: root.page = "list"
+                onClicked: {
+                  if (root.page === "settings" && root.settingsPage === "integrations" && root.sourcesView !== "list")
+                    root.showSourceList()
+                  else root.page = "list"
+                }
               }
 
               PanelActionButton {
@@ -1070,7 +1157,7 @@ Panel {
 
               Repeater {
                 model: [
-                  { id: "integrations", label: "Integrations" },
+                  { id: "integrations", label: "Sources" },
                   { id: "templates", label: "Templates" },
                   { id: "privacy", label: "Privacy" },
                   { id: "connections", label: "Connections" },
@@ -1101,6 +1188,7 @@ Panel {
                       root.settingsPage = String(modelData.id)
                       if (root.settingsPage === "templates") root.selectedTemplate = null
                       if (root.settingsPage === "connections") root.connectionView = "overview"
+                      if (root.settingsPage === "integrations") root.showSourceList()
                     }
                   }
                 }
@@ -1109,84 +1197,20 @@ Panel {
 
             Column {
               width: parent.width
-              visible: root.settingsPage === "integrations"
-              spacing: Style.space(12)
+              visible: root.settingsPage === "integrations" && root.sourcesView === "list"
+              spacing: Style.space(8)
 
               Text {
-                text: "BUILT INTO OMARCHY"
+                text: "OMARCHY"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
                 font.letterSpacing: 1
-              }
-
-              Rectangle {
-                width: parent.width
-                height: coreSources.implicitHeight + Style.space(20)
-                radius: Style.cornerRadius
-                color: Style.normalFillFor(root.foreground, Color.accent)
-                border.width: Style.spacing.hairline
-                border.color: Style.normalBorderFor(root.foreground, Color.accent)
-
-                Column {
-                  id: coreSources
-                  anchors.fill: parent
-                  anchors.margins: Style.space(10)
-                  spacing: Style.space(8)
-
-                  Repeater {
-                    model: [
-                      { name: "Notifications", detail: "Privacy-filtered evidence from Omarchy's notification service" },
-                      { name: "Focus / DND", detail: "Automatic re-entry timing and digest triggers" }
-                    ]
-                    Row {
-                      required property var modelData
-                      width: parent.width
-                      height: sourceText.implicitHeight
-                      spacing: Style.space(8)
-
-                      Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "●"
-                        color: Color.accent
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.caption
-                      }
-                      Text {
-                        id: sourceText
-                        width: parent.width - Style.space(22)
-                        text: String(modelData.name) + "\n" + String(modelData.detail)
-                        color: root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.bodySmall
-                        wrapMode: Text.WordWrap
-                      }
-                    }
-                  }
-                }
-              }
-
-              Text {
-                text: "OPTIONAL CONTEXT"
-                color: Qt.darker(root.foreground, 1.35)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 1
-              }
-
-              Text {
-                visible: OmaDigest.OmaDigestStore.integrations.length === 0
-                width: parent.width
-                text: "No integrations installed."
-                color: Qt.darker(root.foreground, 1.35)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
               }
 
               Repeater {
-                model: OmaDigest.OmaDigestStore.integrations
+                model: root.omarchySources()
                 OmaDigest.IntegrationCard {
                   required property var modelData
                   integration: modelData
@@ -1194,16 +1218,137 @@ Panel {
                   foreground: root.foreground
                   accent: Color.accent
                   fontFamily: root.fontFamily
+                  onOpenRequested: function(source) { root.openSource(source) }
                 }
               }
 
               Text {
-                text: "CREATE AN INTEGRATION"
+                topPadding: Style.space(5)
+                text: "CONNECTED SERVICES"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
                 font.letterSpacing: 1
+              }
+
+              Text {
+                visible: root.connectedServiceSources().length === 0
+                width: parent.width
+                text: "No connected services yet."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+
+              Repeater {
+                model: root.connectedServiceSources()
+                OmaDigest.IntegrationCard {
+                  required property var modelData
+                  integration: modelData
+                  width: parent.width
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  onOpenRequested: function(source) { root.openSource(source) }
+                }
+              }
+
+              Button {
+                width: parent.width
+                height: Style.space(40)
+                text: "Add source"
+                iconText: "+"
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                leftAlign: true
+                bordered: true
+                focusable: true
+                onClicked: root.openSourceAuthoring()
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "integrations" && root.sourcesView === "detail"
+              spacing: Style.space(10)
+
+              Button {
+                width: parent.width
+                height: Style.space(32)
+                text: "Back to sources"
+                iconText: "󰅁"
+                leftAlign: true
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                focusable: true
+                onClicked: root.showSourceList()
+              }
+
+              Column {
+                width: parent.width
+                spacing: Style.space(2)
+                Text {
+                  width: parent.width
+                  text: root.selectedSource ? String(root.selectedSource.name || "Source") : "Source"
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                  elide: Text.ElideRight
+                }
+                Text {
+                  width: parent.width
+                  text: root.selectedSource ? String(root.selectedSource.description || "") : ""
+                  color: Qt.darker(root.foreground, 1.35)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+              }
+
+              OmaDigest.IntegrationCard {
+                visible: root.selectedSource !== null
+                integration: root.selectedSource || ({ id: "", name: "", kind: "core" })
+                detail: true
+                width: parent.width
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "integrations" && root.sourcesView === "authoring"
+              spacing: Style.space(10)
+
+              Button {
+                width: parent.width
+                height: Style.space(32)
+                text: "Back to sources"
+                iconText: "󰅁"
+                leftAlign: true
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                focusable: true
+                onClicked: root.showSourceList()
+              }
+              Text {
+                width: parent.width
+                text: "ADD SOURCE"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+                font.letterSpacing: 1
+                elide: Text.ElideRight
               }
               OmaDigest.DraftEditor {
                 id: integrationDraftEditor

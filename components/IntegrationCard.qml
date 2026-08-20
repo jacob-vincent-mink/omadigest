@@ -3,106 +3,445 @@ import QtQuick.Controls as QQC
 import qs.Commons
 import qs.Ui
 
-Column {
+Rectangle {
   id: root
 
   required property var integration
+  property bool detail: false
   property color foreground: Color.foreground
   property color accent: Color.accent
   property string fontFamily: Style.font.family
   property var values: ({})
-  readonly property var connectorStatus: OmaDigestStore.integrationStatus[String(root.integration.id)]
-    || OmaDigestStore.integrationSetup[String(root.integration.id)]
+  property bool detailsExpanded: false
+
+  signal openRequested(var integration)
+
+  readonly property string sourceId: String(root.integration.id || "")
+  readonly property string sourceKind: String(root.integration.kind || root.integration.sourceKind || "connector")
+  readonly property bool isCore: sourceKind === "core"
+  readonly property var setup: root.integration.setup || ({})
+  readonly property var authentication: root.integration.authentication || root.integration.auth
+    || (root.integration.actions && root.integration.actions.authentication) || null
+  readonly property var setupAction: root.integration.setupAction || root.setup.action
+    || (root.integration.actions && root.integration.actions.setup) || null
+  readonly property var categories: root.integration.categories || []
+  readonly property var liveStatus: OmaDigestStore.integrationStatus[root.sourceId]
+    || OmaDigestStore.integrationSetup[root.sourceId] || null
+  readonly property var status: root.liveStatus || root.integration.status || null
+  readonly property string statusState: root.normalizedStatusState()
+  readonly property string statusLabel: root.normalizedStatusLabel()
+  readonly property color statusColor: statusState === "green" ? "#62b879"
+    : statusState === "red" ? Color.urgent : "#d6a84b"
+  readonly property bool needsAuthentication: root.statusState === "red" && root.authentication !== null
+    || ["authentication_required", "auth-required", "unauthenticated"].indexOf(
+      String(root.status && root.status.state || "").toLowerCase()) >= 0
+  readonly property bool needsSetup: !root.needsAuthentication && !root.isCore
+    && !(root.liveStatus && root.liveStatus.ready === true)
+    && ((root.setup.fields || []).length > 0 || root.setupAction !== null
+      || (root.status !== null && root.statusState === "red"))
+  readonly property string contextActionLabel: root.needsAuthentication
+    ? "Authenticate"
+    : root.needsSetup ? "Set up" : ""
+  readonly property bool sourceEnabled: root.integration.enabled !== false
+  readonly property string categorySummary: root.categorySummaryText()
+  readonly property bool checking: root.status && root.status.checking === true
 
   width: parent ? parent.width : Style.space(420)
-  spacing: Style.space(7)
+  height: detail ? detailContent.implicitHeight + Style.space(22) : Style.space(58)
+  radius: Style.cornerRadius
+  color: root.detail ? Style.normalFillFor(root.foreground, root.accent)
+    : (rowMouse.containsMouse || root.activeFocus
+      ? Style.hoverFillFor(root.foreground, root.accent) : "transparent")
+  border.width: root.detail || rowMouse.containsMouse || root.activeFocus ? Style.spacing.hairline : 0
+  border.color: root.activeFocus ? root.accent : Style.normalBorderFor(root.foreground, root.accent)
+  activeFocusOnTab: !root.detail
+  Keys.onReturnPressed: if (!root.detail) root.openRequested(root.integration)
+  Keys.onEnterPressed: if (!root.detail) root.openRequested(root.integration)
+  Keys.onSpacePressed: if (!root.detail) root.openRequested(root.integration)
+
+  function normalizedStatusState() {
+    if (root.status && root.status.checking === true) return "yellow"
+    var state = String(root.status && root.status.state || "").toLowerCase()
+    if (["green", "ready", "connected", "healthy", "ok"].indexOf(state) >= 0) return "green"
+    if (["red", "error", "failed", "authentication_required", "auth-required", "unauthenticated"].indexOf(state) >= 0)
+      return "red"
+    if (["yellow", "warning", "degraded", "setup_required", "setup-required", "checking", "unknown"].indexOf(state) >= 0)
+      return "yellow"
+    if (root.status && root.status.ready === true) return "green"
+    if (root.status && root.status.ready === false) return "red"
+    if ((root.setup.fields || []).length > 0) return "red"
+    return "yellow"
+  }
+
+  function normalizedStatusLabel() {
+    if (root.status && root.status.checking === true) return "Checking status"
+    var message = String(root.status && root.status.message || "").trim()
+    if (message) return message
+    if (root.statusState === "green") return root.sourceEnabled ? "Connected" : "Available, turned off"
+    if (root.needsAuthentication) return "Authentication required"
+    if (root.statusState === "red" && (root.setup.fields || []).length > 0) return "Setup required"
+    return "Status not checked"
+  }
+
+  function categorySummaryText() {
+    if (root.needsAuthentication) return "Authentication required"
+    if (root.needsSetup) return "Setup required"
+    if (root.categories.length > 0) {
+      var enabledCount = 0
+      for (var index = 0; index < root.categories.length; index++) {
+        var category = root.categories[index]
+        if (category.enabled === true || (category.enabled === undefined && category.defaultEnabled === true)) enabledCount++
+      }
+      return enabledCount + " of " + root.categories.length + " categories"
+    }
+    return root.statusLabel
+  }
+
+  function activateContextAction() {
+    if (root.needsAuthentication) {
+      OmaDigestStore.authenticateIntegration(root.sourceId, root.authentication || ({}))
+      return
+    }
+    if (root.needsSetup && (root.setup.fields || []).length === 0) {
+      if (root.setupAction) OmaDigestStore.runIntegrationSetupAction(root.sourceId, root.setupAction)
+      else OmaDigestStore.setupIntegration(root.sourceId, ({}))
+    }
+  }
 
   function setValue(key, value) {
-    var next = Object.assign({}, values)
+    var next = Object.assign({}, root.values)
     next[String(key)] = value
-    values = next
+    root.values = next
   }
 
-  Toggle {
-    width: parent.width
-    label: String(root.integration.name)
-    description: String(root.integration.description)
-    foreground: root.foreground
-    accent: root.accent
-    fontFamily: root.fontFamily
-    checked: root.integration.enabled === true
-    onClicked: OmaDigestStore.setIntegrationEnabled(root.integration.id, !root.integration.enabled)
-  }
+  Row {
+    id: compactRow
+    visible: !root.detail
+    anchors.fill: parent
+    anchors.leftMargin: Style.space(10)
+    anchors.rightMargin: Style.space(8)
+    spacing: Style.space(9)
 
-  Text {
-    width: parent.width
-    text: String(root.integration.setup.summary || "")
-    color: Qt.darker(root.foreground, 1.35)
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
-    wrapMode: Text.WordWrap
-  }
-
-  Rectangle {
-    width: parent.width
-    height: integrationStatusRow.implicitHeight + Style.space(16)
-    radius: Style.cornerRadius
-    color: Style.normalFillFor(root.foreground, root.accent)
-    border.width: Style.spacing.hairline
-    border.color: Style.normalBorderFor(root.foreground, root.accent)
-
-    Row {
-      id: integrationStatusRow
-      anchors.left: parent.left
-      anchors.right: parent.right
+    Rectangle {
+      width: Style.space(8)
+      height: width
+      radius: width / 2
       anchors.verticalCenter: parent.verticalCenter
-      anchors.margins: Style.space(8)
-      spacing: Style.space(8)
+      color: root.statusColor
+    }
+
+    Column {
+      width: parent.width - Style.space(17) - compactAction.width - compactChevron.width - parent.spacing * 3
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(1)
 
       Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: "●"
-        color: root.connectorStatus && root.connectorStatus.ready === true
-          ? root.accent : Qt.darker(root.foreground, 1.45)
+        width: parent.width
+        text: String(root.integration.name || "Source")
+        color: root.foreground
         font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.font.bodySmall
+        font.bold: true
+        elide: Text.ElideRight
       }
       Text {
-        width: parent.width - statusAction.width - Style.space(24)
-        anchors.verticalCenter: parent.verticalCenter
-        text: root.connectorStatus
-          ? String(root.connectorStatus.message || (root.connectorStatus.ready ? "Ready" : "Needs attention"))
-          : "Status not checked"
-        color: root.foreground
+        width: parent.width
+        text: root.categorySummary
+        color: Qt.darker(root.foreground, 1.4)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
         elide: Text.ElideRight
       }
-      Rectangle {
-        id: statusAction
-        width: Style.space(116)
+    }
+
+    Item {
+      id: compactAction
+      width: root.contextActionLabel ? Style.space(92) : Style.space(48)
+      height: parent.height
+      anchors.verticalCenter: parent.verticalCenter
+      z: 2
+
+      Button {
+        visible: root.contextActionLabel !== ""
+        anchors.centerIn: parent
+        width: parent.width
         height: Style.space(30)
+        text: root.contextActionLabel
+        foreground: root.foreground
+        accent: root.accent
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        bordered: true
+        focusable: true
+        onClicked: root.detail || (root.setup.fields || []).length > 0
+          ? root.openRequested(root.integration) : root.activateContextAction()
+      }
+
+      ToggleSwitch {
+        visible: root.contextActionLabel === ""
+        anchors.centerIn: parent
+        checked: root.sourceEnabled
+        interactive: !root.isCore
+        foreground: root.foreground
+        accent: root.accent
+        opacity: root.isCore ? 0.55 : 1
+        onToggled: OmaDigestStore.setIntegrationEnabled(root.sourceId, !root.sourceEnabled)
+      }
+    }
+
+    Text {
+      id: compactChevron
+      width: Style.space(16)
+      anchors.verticalCenter: parent.verticalCenter
+      horizontalAlignment: Text.AlignHCenter
+      text: "󰅂"
+      color: Qt.darker(root.foreground, 1.25)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+    }
+  }
+
+  MouseArea {
+    id: rowMouse
+    visible: !root.detail
+    anchors.fill: parent
+    hoverEnabled: true
+    cursorShape: Qt.PointingHandCursor
+    onClicked: {
+      root.forceActiveFocus()
+      root.openRequested(root.integration)
+    }
+  }
+
+  Column {
+    id: detailContent
+    visible: root.detail
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    anchors.margins: Style.space(11)
+    spacing: Style.space(10)
+
+    Row {
+      width: parent.width
+      spacing: Style.space(8)
+
+      Rectangle {
+        width: Style.space(9)
+        height: width
+        radius: width / 2
         anchors.verticalCenter: parent.verticalCenter
-        radius: Style.cornerRadius
-        color: statusMouse.containsMouse
-          ? Style.hoverFillFor(root.foreground, root.accent)
-          : Style.normalFillFor(root.foreground, root.accent)
+        color: root.statusColor
+      }
+      Column {
+        width: parent.width - refreshButton.width - Style.space(17) - parent.spacing * 2
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(1)
         Text {
-          anchors.centerIn: parent
-          text: root.connectorStatus && root.connectorStatus.checking === true ? "Checking…" : "Check status"
+          width: parent.width
+          text: root.statusState === "green" ? "Ready" : root.statusState === "red" ? "Needs attention" : "Check recommended"
           color: root.foreground
           font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.bodySmall
           font.bold: true
+          elide: Text.ElideRight
         }
-        MouseArea {
-          id: statusMouse
-          anchors.fill: parent
-          enabled: !(root.connectorStatus && root.connectorStatus.checking === true)
-          hoverEnabled: true
-          cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-          onClicked: OmaDigestStore.checkIntegrationStatus(root.integration.id)
+        Text {
+          width: parent.width
+          text: root.statusLabel
+          color: Qt.darker(root.foreground, 1.35)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
         }
+      }
+      Button {
+        id: refreshButton
+        width: Style.space(84)
+        height: Style.space(30)
+        text: root.checking ? "Checking…" : "Refresh"
+        foreground: root.foreground
+        accent: root.accent
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        bordered: true
+        focusable: true
+        enabled: !root.isCore && !root.checking
+        onClicked: OmaDigestStore.checkIntegrationStatus(root.sourceId)
+      }
+    }
+
+    Text {
+      visible: root.status && root.status.checkedAt
+      width: parent.width
+      text: visible ? "Checked " + new Date(root.status.checkedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm") : ""
+      color: Qt.darker(root.foreground, 1.5)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      elide: Text.ElideRight
+    }
+
+    Button {
+      visible: root.contextActionLabel !== "" && (!root.needsSetup || (root.setup.fields || []).length === 0)
+      width: parent.width
+      height: visible ? Style.space(34) : 0
+      text: root.contextActionLabel
+      foreground: Color.background
+      background: root.accent
+      accent: root.accent
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
+      focusable: true
+      enabled: !root.needsSetup || (root.setup.fields || []).length === 0
+      onClicked: root.activateContextAction()
+    }
+
+    Repeater {
+      id: setupFields
+      model: root.needsSetup ? (root.setup.fields || []) : []
+
+      Column {
+        required property var modelData
+        width: parent.width
+        spacing: Style.space(3)
+
+        function clearSecret() {
+          if (String(modelData.type) === "secret") fieldInput.text = ""
+        }
+
+        Text {
+          width: parent.width
+          text: String(modelData.label || "Setting")
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          elide: Text.ElideRight
+        }
+        QQC.TextField {
+          id: fieldInput
+          visible: String(modelData.type) !== "boolean"
+          width: parent.width
+          placeholderText: String(modelData.placeholder || modelData.description || "")
+          echoMode: String(modelData.type) === "secret" ? TextInput.Password : TextInput.Normal
+          color: root.foreground
+          font.family: root.fontFamily
+          onTextChanged: root.setValue(modelData.key, text)
+        }
+        Toggle {
+          visible: String(modelData.type) === "boolean"
+          width: parent.width
+          label: String(modelData.label || "Setting")
+          description: String(modelData.description || "")
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          checked: root.values[modelData.key] === true
+          onClicked: root.setValue(modelData.key, !checked)
+        }
+      }
+    }
+
+    Button {
+      visible: root.needsSetup && (root.setup.fields || []).length > 0
+      width: parent.width
+      height: visible ? Style.space(34) : 0
+      text: String(root.setup.actionLabel || "Set up")
+      foreground: Color.background
+      background: root.accent
+      accent: root.accent
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
+      focusable: true
+      onClicked: OmaDigestStore.setupIntegration(root.sourceId, root.values)
+    }
+
+    Toggle {
+      width: parent.width
+      label: "Use in digests"
+      description: root.isCore ? "Built into Omarchy and always available" : "Allow templates to request this source"
+      foreground: root.foreground
+      accent: root.accent
+      fontFamily: root.fontFamily
+      checked: root.sourceEnabled
+      enabled: !root.isCore
+      opacity: root.isCore ? 0.65 : 1
+      onClicked: OmaDigestStore.setIntegrationEnabled(root.sourceId, !root.sourceEnabled)
+    }
+
+    Column {
+      visible: root.categories.length > 0
+      width: parent.width
+      spacing: Style.space(6)
+
+      Text {
+        text: "CATEGORIES"
+        color: Qt.darker(root.foreground, 1.35)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        font.letterSpacing: 1
+      }
+      Repeater {
+        model: root.categories
+        Toggle {
+          required property var modelData
+          width: parent.width
+          label: String(modelData.label || modelData.id || "Category")
+          description: String(modelData.description || "")
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          checked: modelData.enabled === true || (modelData.enabled === undefined && modelData.defaultEnabled === true)
+          enabled: !root.isCore
+          opacity: root.isCore ? 0.65 : 1
+          onClicked: OmaDigestStore.setIntegrationCategoryEnabled(
+            root.sourceId, String(modelData.id || ""), !checked)
+        }
+      }
+    }
+
+    Button {
+      width: parent.width
+      height: Style.space(32)
+      text: (root.detailsExpanded ? "Hide " : "Show ") + (root.isCore ? "connection details" : "permissions")
+      iconText: root.detailsExpanded ? "󰅀" : "󰅂"
+      leftAlign: true
+      foreground: Qt.darker(root.foreground, 1.2)
+      accent: root.accent
+      fontFamily: root.fontFamily
+      fontSize: Style.font.caption
+      focusable: true
+      onClicked: root.detailsExpanded = !root.detailsExpanded
+    }
+
+    Column {
+      visible: root.detailsExpanded
+      width: parent.width
+      spacing: Style.space(5)
+
+      Text {
+        width: parent.width
+        text: String(root.setup.summary || root.integration.description || "No additional connection details.")
+        color: Qt.darker(root.foreground, 1.3)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
+      }
+      Text {
+        width: parent.width
+        text: {
+          var permissions = root.integration.permissions || ({})
+          var pieces = []
+          if ((permissions.networkHosts || []).length) pieces.push("Network: " + permissions.networkHosts.join(", "))
+          if ((permissions.commands || []).length) pieces.push("Commands: " + permissions.commands.join(", "))
+          if ((permissions.readPaths || []).length) pieces.push("Reads: " + permissions.readPaths.join(", "))
+          if ((permissions.writePaths || []).length) pieces.push("Writes: " + permissions.writePaths.join(", "))
+          return pieces.length ? pieces.join("\n") : "No additional permissions declared."
+        }
+        color: Qt.darker(root.foreground, 1.4)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
       }
     }
   }
@@ -110,92 +449,13 @@ Column {
   Connections {
     target: OmaDigestStore
     function onIntegrationSetupChanged() {
-      var status = OmaDigestStore.integrationSetup[String(root.integration.id)]
-      if (!status || status.ready !== true) return
+      var setupResult = OmaDigestStore.integrationSetup[root.sourceId]
+      if (!setupResult || setupResult.ready !== true) return
       root.values = ({})
       for (var index = 0; index < setupFields.count; index++) {
         var item = setupFields.itemAt(index)
         if (item && item.clearSecret) item.clearSecret()
       }
     }
-  }
-
-  Repeater {
-    id: setupFields
-    model: root.integration.setup.fields || []
-
-    Column {
-      required property var modelData
-      width: parent.width
-      spacing: Style.space(3)
-
-      function clearSecret() {
-        if (String(modelData.type) === "secret") fieldInput.text = ""
-      }
-
-      Text {
-        width: parent.width
-        text: String(modelData.label)
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.bodySmall
-      }
-
-      QQC.TextField {
-        id: fieldInput
-        visible: String(modelData.type) !== "boolean"
-        width: parent.width
-        placeholderText: String(modelData.placeholder || modelData.description || "")
-        echoMode: String(modelData.type) === "secret" ? TextInput.Password : TextInput.Normal
-        color: root.foreground
-        font.family: root.fontFamily
-        onTextChanged: root.setValue(modelData.key, text)
-      }
-
-      Toggle {
-        visible: String(modelData.type) === "boolean"
-        width: parent.width
-        label: String(modelData.label)
-        description: String(modelData.description)
-        foreground: root.foreground
-        accent: root.accent
-        fontFamily: root.fontFamily
-        checked: root.values[modelData.key] === true
-        onClicked: root.setValue(modelData.key, !checked)
-      }
-    }
-  }
-
-  Rectangle {
-    visible: (root.integration.setup.fields || []).length > 0
-    width: Style.space(170)
-    height: visible ? Style.space(34) : 0
-    radius: Style.cornerRadius
-    color: root.accent
-
-    Text {
-      anchors.centerIn: parent
-      text: String(root.integration.setup.actionLabel || "Set up")
-      color: Color.background
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.bodySmall
-      font.bold: true
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      cursorShape: Qt.PointingHandCursor
-      onClicked: OmaDigestStore.setupIntegration(root.integration.id, root.values)
-    }
-  }
-
-  Text {
-    visible: OmaDigestStore.integrationSetup[String(root.integration.id)] !== undefined
-    width: parent.width
-    text: visible ? String(OmaDigestStore.integrationSetup[String(root.integration.id)].message || "") : ""
-    color: visible && OmaDigestStore.integrationSetup[String(root.integration.id)].ready ? root.accent : root.foreground
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
-    wrapMode: Text.WordWrap
   }
 }

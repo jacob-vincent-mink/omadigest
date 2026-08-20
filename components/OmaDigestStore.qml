@@ -289,6 +289,47 @@ Scope {
     })
   }
 
+  function setIntegrationCategoryEnabled(integrationId, categoryId, enabled) {
+    var target = String(integrationId || "")
+    var category = String(categoryId || "")
+    if (!target || !category) return
+    send({
+      type: "integration_category_set_enabled",
+      id: "integration-category-" + nextId++,
+      integrationId: target,
+      categoryId: category,
+      enabled: enabled === true
+    })
+  }
+
+  function authenticateIntegration(integrationId, action) {
+    var target = String(integrationId || "")
+    if (!target) return
+    var metadata = action || ({})
+    var actionId = typeof metadata === "string" ? metadata
+      : String(metadata.id || metadata.actionId || "authenticate")
+    send({
+      type: "integration_authenticate",
+      id: "integration-auth-" + nextId++,
+      integrationId: target,
+      actionId: actionId
+    })
+  }
+
+  function runIntegrationSetupAction(integrationId, action) {
+    var target = String(integrationId || "")
+    if (!target) return
+    var metadata = action || ({})
+    var actionId = typeof metadata === "string" ? metadata
+      : String(metadata.id || metadata.actionId || "setup")
+    send({
+      type: "integration_setup_action",
+      id: "integration-setup-action-" + nextId++,
+      integrationId: target,
+      actionId: actionId
+    })
+  }
+
   function selectTemplate(trigger, itemCount, focusMinutes, appCounts, connectors) {
     var id = "route-" + nextId++
     state = "routing"
@@ -473,7 +514,12 @@ Scope {
     }
     if (event.type === "integration_setup") {
       var nextSetup = Object.assign({}, integrationSetup)
-      nextSetup[String(event.integrationId)] = { ready: event.ready === true, message: String(event.message || "") }
+      nextSetup[String(event.integrationId)] = {
+        ready: event.ready === true,
+        state: String(event.state || (event.ready === true ? "ready" : "error")),
+        message: String(event.message || ""),
+        checkedAt: String(event.checkedAt || "")
+      }
       integrationSetup = nextSetup
       status = String(event.message || (event.ready ? "Integration ready" : "Integration setup failed"))
       return
@@ -486,7 +532,11 @@ Scope {
     if (event.type === "integration_status") {
       var statuses = Object.assign({}, integrationStatus)
       statuses[String(event.integrationId)] = {
-        checking: false, ready: event.ready === true, message: String(event.message || "")
+        checking: false,
+        ready: event.ready === true,
+        state: String(event.state || (event.ready === true ? "ready" : "error")),
+        message: String(event.message || ""),
+        checkedAt: String(event.checkedAt || new Date().toISOString())
       }
       integrationStatus = statuses
       status = event.ready === true ? "Integration ready" : "Integration needs attention"
