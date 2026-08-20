@@ -13,6 +13,8 @@
 - [x] Center the microphone toggle with the drafting button.
 - [x] Replace inline voice/read-mode forms with compact selectors and a separate read-mode configuration view.
 - [x] Add explicit per-entry handoff to the default Omarchy agent with retained cited evidence and crash-report correlation context.
+- [x] Hide read-aloud controls until TTS is configured.
+- [x] Mark successful digest inputs seen (with an explicit mark-seen action) without deleting retained correlation evidence.
 
 ## In progress
 

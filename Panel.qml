@@ -113,7 +113,10 @@ Panel {
       byId[id] = result[position]
     }
     var deduplicated = []
-    for (var item = 0; item < order.length; item++) deduplicated.push(byId[order[item]])
+    for (var item = 0; item < order.length; item++) {
+      var candidateId = order[item]
+      if (!OmaDigest.OmaDigestStore.acknowledgedAttention[candidateId]) deduplicated.push(byId[candidateId])
+    }
     return deduplicated
   }
 
@@ -305,6 +308,15 @@ Panel {
                 fontFamily: root.fontFamily
                 enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
                 onClicked: root.generateDigest("manual", 0)
+              }
+
+              PanelActionButton {
+                visible: root.page === "list" && root.attentionAvailableCount > 0
+                iconText: "✓"
+                tooltipText: "Mark all attention items seen"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: OmaDigest.OmaDigestStore.acknowledgeAttention(root.currentAttentionItems())
               }
 
               PanelActionButton {
@@ -515,8 +527,9 @@ Panel {
                 id: detailActions
                 spacing: Style.space(2)
                 PanelActionButton {
+                  visible: OmaDigest.OmaDigestStore.tts.configured
                   iconText: OmaDigest.OmaDigestStore.tts.state === "playing" ? "󰏤" : "󰋋"
-                  tooltipText: OmaDigest.OmaDigestStore.tts.configured ? "Read digest" : "Configure read mode"
+                  tooltipText: "Read digest"
                   foreground: root.foreground
                   fontFamily: root.fontFamily
                   enabled: OmaDigest.OmaDigestStore.tts.configured

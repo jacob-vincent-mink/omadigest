@@ -32,6 +32,7 @@ Scope {
   property var digestHistory: []
   property string digestState: "idle"
   property int attentionCount: 0
+  property var acknowledgedAttention: ({})
   property var agentConnection: ({ connected: false, provider: "", model: "" })
   property var authMethods: []
   property var auth: ({ phase: "idle", flowId: "", methodId: "", message: "", url: "", verificationUri: "", userCode: "", prompt: null })
@@ -122,6 +123,11 @@ Scope {
 
   function ingest(items) {
     send({ type: "attention_ingest", id: "attention-" + nextId++, items: items || [] })
+  }
+
+  function acknowledgeAttention(items) {
+    var ids = (items || []).map(function(item) { return String(item.id || "") }).filter(function(id) { return id !== "" })
+    if (ids.length) send({ type: "attention_acknowledge", id: "attention-" + nextId++, itemIds: ids.slice(0, 200) })
   }
 
   function requestDigestHistory() { send({ type: "digest_history", id: "history-" + nextId++ }) }
@@ -278,6 +284,10 @@ Scope {
     }
     if (event.type === "attention") {
       attentionCount = Number(event.count || 0)
+      var nextAcknowledged = {}
+      var ids = event.acknowledgedIds || []
+      for (var index = 0; index < ids.length; index++) nextAcknowledged[String(ids[index])] = true
+      acknowledgedAttention = nextAcknowledged
       return
     }
     if (event.type === "digest_state") {

@@ -24712,11 +24712,11 @@ var require_ponyfill_es2018 = __commonJS({
           throw new TypeError(`${context} is not a function.`);
         }
       }
-      function isObject7(x4) {
+      function isObject8(x4) {
         return typeof x4 === "object" && x4 !== null || typeof x4 === "function";
       }
       function assertObject(x4, context) {
-        if (!isObject7(x4)) {
+        if (!isObject8(x4)) {
           throw new TypeError(`${context} is not an object.`);
         }
       }
@@ -30919,7 +30919,7 @@ var require_gaxios = __commonJS({
     var retry_js_1 = require_retry3();
     var stream_1 = __require("stream");
     var interceptor_js_1 = require_interceptor();
-    var randomUUID14 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
+    var randomUUID15 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
     var HTTP_STATUS_NO_CONTENT = 204;
     var Gaxios = class {
       agentCache = /* @__PURE__ */ new Map();
@@ -31192,7 +31192,7 @@ var require_gaxios = __commonJS({
          */
         ["Blob", "File", "FormData"].includes(opts.data?.constructor?.name || "");
         if (opts.multipart?.length) {
-          const boundary = await randomUUID14();
+          const boundary = await randomUUID15();
           preparedHeaders.set("content-type", `multipart/related; boundary=${boundary}`);
           opts.body = stream_1.Readable.from(this.getMultipartRequest(opts.multipart, boundary));
         } else if (shouldDirectlyPassData) {
@@ -36219,11 +36219,11 @@ var require_verify_stream = __commonJS({
     var toString2 = require_tostring();
     var util = __require("util");
     var JWS_REGEX = /^[a-zA-Z0-9\-_]+?\.[a-zA-Z0-9\-_]+?\.([a-zA-Z0-9\-_]+)?$/;
-    function isObject7(thing) {
+    function isObject8(thing) {
       return Object.prototype.toString.call(thing) === "[object Object]";
     }
     function safeJsonParse(thing) {
-      if (isObject7(thing))
+      if (isObject8(thing))
         return thing;
       try {
         return JSON.parse(thing);
@@ -163316,7 +163316,7 @@ var require_snapshot_recorder = __commonJS({
   "node_modules/@earendil-works/pi-coding-agent/node_modules/undici/lib/mock/snapshot-recorder.js"(exports, module) {
     "use strict";
     var { writeFile: writeFile3, readFile: readFile7, mkdir: mkdir3 } = __require("node:fs/promises");
-    var { dirname: dirname31, resolve: resolve17 } = __require("node:path");
+    var { dirname: dirname32, resolve: resolve17 } = __require("node:path");
     var { setTimeout: setTimeout2, clearTimeout: clearTimeout2 } = __require("node:timers");
     var { InvalidArgumentError, UndiciError } = require_errors2();
     var { hashId, isUrlExcludedFactory, normalizeHeaders, createHeaderFilters } = require_snapshot_utils();
@@ -163562,7 +163562,7 @@ var require_snapshot_recorder = __commonJS({
           throw new InvalidArgumentError("Snapshot path is required");
         }
         const resolvedPath = resolve17(path16);
-        await mkdir3(dirname31(resolvedPath), { recursive: true });
+        await mkdir3(dirname32(resolvedPath), { recursive: true });
         const data = Array.from(this.#snapshots.entries()).map(([hash2, snapshot]) => ({
           hash: hash2,
           snapshot
@@ -175446,7 +175446,7 @@ ${captureLines}` : capture.stack;
 // runtime/src/broker.ts
 import { createInterface as createInterface5 } from "node:readline";
 import { execFile as execFile4 } from "node:child_process";
-import { randomUUID as randomUUID13 } from "node:crypto";
+import { randomUUID as randomUUID14 } from "node:crypto";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 import { resolve as resolve16 } from "node:path";
 
@@ -178431,13 +178431,13 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
     }
     return propValues;
   });
-  const isObject7 = isObject;
+  const isObject8 = isObject;
   const catchall = def.catchall;
   let value2;
   inst._zod.parse = (payload, ctx) => {
     value2 ?? (value2 = _normalized.value);
     const input = payload.value;
-    if (!isObject7(input)) {
+    if (!isObject8(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -178535,7 +178535,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     return (payload, ctx) => fn(shape, payload, ctx);
   };
   let fastpass;
-  const isObject7 = isObject;
+  const isObject8 = isObject;
   const jit = !globalConfig.jitless;
   const allowsEval2 = allowsEval;
   const fastEnabled = jit && allowsEval2.value;
@@ -178544,7 +178544,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
   inst._zod.parse = (payload, ctx) => {
     value2 ?? (value2 = _normalized.value);
     const input = payload.value;
-    if (!isObject7(input)) {
+    if (!isObject8(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -278906,8 +278906,9 @@ function toolError(message) {
 }
 
 // runtime/src/attention.ts
-import { appendFileSync as appendFileSync4, chmodSync as chmodSync4, existsSync as existsSync28, mkdirSync as mkdirSync16, readFileSync as readFileSync24, readdirSync as readdirSync13, rmSync as rmSync6, statSync as statSync14 } from "node:fs";
-import { join as join44 } from "node:path";
+import { appendFileSync as appendFileSync4, chmodSync as chmodSync4, existsSync as existsSync28, mkdirSync as mkdirSync16, readFileSync as readFileSync24, readdirSync as readdirSync13, renameSync as renameSync6, rmSync as rmSync6, statSync as statSync14, writeFileSync as writeFileSync15 } from "node:fs";
+import { randomUUID as randomUUID10 } from "node:crypto";
+import { dirname as dirname27, join as join44 } from "node:path";
 var attentionItemSchema = external_exports.object({
   id: external_exports.string().min(1).max(200),
   source: external_exports.string().min(1).max(80),
@@ -278919,11 +278920,15 @@ var attentionItemSchema = external_exports.object({
 }).strict();
 var AttentionStore = class {
   #eventsDir;
+  #seenPath;
   #items = /* @__PURE__ */ new Map();
+  #seen = /* @__PURE__ */ new Set();
   constructor(env2 = process.env) {
     const state2 = env2.XDG_STATE_HOME?.startsWith("/") ? env2.XDG_STATE_HOME : env2.HOME?.startsWith("/") ? join44(env2.HOME, ".local", "state") : "/tmp";
     this.#eventsDir = join44(state2, "omadigest", "events");
+    this.#seenPath = join44(state2, "omadigest", "seen.json");
     this.#load();
+    this.#loadSeen();
   }
   ingest(rawItems) {
     const items = external_exports.array(attentionItemSchema).max(200).parse(rawItems);
@@ -278932,6 +278937,7 @@ var AttentionStore = class {
     const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const path16 = join44(this.#eventsDir, `${day}.jsonl`);
     for (const item of items) {
+      if (!this.#items.has(item.id)) this.#seen.delete(item.id);
       this.#items.delete(item.id);
       this.#items.set(item.id, item);
       appendFileSync4(path16, `${JSON.stringify(item)}
@@ -278944,6 +278950,22 @@ var AttentionStore = class {
   }
   recent(limit2) {
     return [...this.#items.values()].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)).slice(0, Math.max(1, Math.min(200, limit2)));
+  }
+  pending(limit2) {
+    return [...this.#items.values()].filter((item) => !this.#seen.has(item.id)).sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)).slice(0, Math.max(1, Math.min(200, limit2)));
+  }
+  acknowledge(ids) {
+    for (const id of ids.slice(0, 500)) if (this.#items.has(id)) this.#seen.add(id);
+    while (this.#seen.size > 5e3) {
+      const first = this.#seen.values().next().value;
+      if (first === void 0) break;
+      this.#seen.delete(first);
+    }
+    this.#saveSeen();
+    return this.pending(500).length;
+  }
+  acknowledgedIds() {
+    return [...this.#items.keys()].filter((id) => this.#seen.has(id));
   }
   byIds(ids) {
     return ids.slice(0, 32).flatMap((id) => {
@@ -278974,6 +278996,22 @@ var AttentionStore = class {
     }
     this.#trimMemory();
   }
+  #loadSeen() {
+    try {
+      if (statSync14(this.#seenPath).size > 1024 * 1024) return;
+      const value2 = JSON.parse(readFileSync24(this.#seenPath, "utf8"));
+      if (!isObject6(value2) || value2.version !== 1 || !Array.isArray(value2.ids)) return;
+      for (const id of value2.ids.slice(-5e3)) if (typeof id === "string") this.#seen.add(id);
+    } catch {
+    }
+  }
+  #saveSeen() {
+    mkdirSync16(dirname27(this.#seenPath), { recursive: true, mode: 448 });
+    const temporary = `${this.#seenPath}.${randomUUID10()}.tmp`;
+    writeFileSync15(temporary, `${JSON.stringify({ version: 1, ids: [...this.#seen] })}
+`, { mode: 384 });
+    renameSync6(temporary, this.#seenPath);
+  }
   #trimMemory() {
     while (this.#items.size > 500) {
       const first = this.#items.keys().next().value;
@@ -278996,12 +279034,15 @@ var AttentionStore = class {
     }
   }
 };
+function isObject6(value2) {
+  return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
+}
 
 // runtime/src/drafts.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { mkdirSync as mkdirSync17, renameSync as renameSync6, rmSync as rmSync7, writeFileSync as writeFileSync15 } from "node:fs";
-import { dirname as dirname27, join as join45 } from "node:path";
-import { randomUUID as randomUUID10 } from "node:crypto";
+import { mkdirSync as mkdirSync17, renameSync as renameSync7, rmSync as rmSync7, writeFileSync as writeFileSync16 } from "node:fs";
+import { dirname as dirname28, join as join45 } from "node:path";
+import { randomUUID as randomUUID11 } from "node:crypto";
 function installDraft(configRoot2, draft) {
   if (draft.kind === "out-of-scope" || draft.kind === "clarification")
     throw new Error("Only complete template or integration drafts can be installed");
@@ -279009,12 +279050,12 @@ function installDraft(configRoot2, draft) {
 }
 function installTemplate(configRoot2, draft) {
   const destination = join45(configRoot2, "templates", draft.compiled.id);
-  const temporary = `${destination}.draft-${randomUUID10()}`;
+  const temporary = `${destination}.draft-${randomUUID11()}`;
   mkdirSync17(temporary, { recursive: true, mode: 448 });
   try {
-    writeFileSync15(join45(temporary, "SKILL.md"), `${draft.skillMarkdown.trim()}
+    writeFileSync16(join45(temporary, "SKILL.md"), `${draft.skillMarkdown.trim()}
 `, { mode: 384 });
-    writeFileSync15(join45(temporary, "template.compiled.json"), `${JSON.stringify(draft.compiled, null, 2)}
+    writeFileSync16(join45(temporary, "template.compiled.json"), `${JSON.stringify(draft.compiled, null, 2)}
 `, { mode: 384 });
     replaceDirectory(temporary, destination);
   } catch (error48) {
@@ -279028,13 +279069,13 @@ function installIntegration(configRoot2, draft) {
   if (manifestFile === void 0) throw new Error("Integration draft has no manifest");
   const manifest = integrationManifestSchema.parse(JSON.parse(manifestFile.content));
   const destination = join45(configRoot2, "integrations", manifest.id);
-  const temporary = `${destination}.draft-${randomUUID10()}`;
+  const temporary = `${destination}.draft-${randomUUID11()}`;
   mkdirSync17(temporary, { recursive: true, mode: 448 });
   try {
     for (const file2 of draft.files) {
       const path16 = join45(temporary, file2.path);
-      mkdirSync17(dirname27(path16), { recursive: true, mode: 448 });
-      writeFileSync15(path16, file2.content, { mode: 384 });
+      mkdirSync17(dirname28(path16), { recursive: true, mode: 448 });
+      writeFileSync16(path16, file2.content, { mode: 384 });
     }
     const restrictedEnvironment = { PATH: process.env.PATH || "/usr/bin", HOME: "/nonexistent", LANG: process.env.LANG || "C.UTF-8" };
     execFileSync2(process.execPath, ["--check", join45(temporary, "connector.mjs")], {
@@ -279083,21 +279124,21 @@ function installIntegration(configRoot2, draft) {
   return "integration";
 }
 function replaceDirectory(temporary, destination) {
-  mkdirSync17(dirname27(destination), { recursive: true, mode: 448 });
-  const backup = `${destination}.backup-${randomUUID10()}`;
+  mkdirSync17(dirname28(destination), { recursive: true, mode: 448 });
+  const backup = `${destination}.backup-${randomUUID11()}`;
   let backedUp = false;
   try {
     try {
-      renameSync6(destination, backup);
+      renameSync7(destination, backup);
       backedUp = true;
     } catch {
     }
-    renameSync6(temporary, destination);
+    renameSync7(temporary, destination);
     if (backedUp) rmSync7(backup, { recursive: true, force: true });
   } catch (error48) {
     if (backedUp) {
       try {
-        renameSync6(backup, destination);
+        renameSync7(backup, destination);
       } catch {
       }
     }
@@ -279109,7 +279150,7 @@ function replaceDirectory(temporary, destination) {
 import { execFile as execFile2 } from "node:child_process";
 import { access as access4, mkdir, readFile as readFile5, rm } from "node:fs/promises";
 import { constants as constants7 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname28, join as join46 } from "node:path";
+import { delimiter as delimiter2, dirname as dirname29, join as join46 } from "node:path";
 var DictationService = class {
   #env;
   #transcript;
@@ -279129,7 +279170,7 @@ var DictationService = class {
   async start() {
     const status = await this.status();
     if (!status.available || this.#voxtype === void 0) throw new Error("Voxtype is not ready");
-    await mkdir(dirname28(this.#transcript), { recursive: true, mode: 448 });
+    await mkdir(dirname29(this.#transcript), { recursive: true, mode: 448 });
     await rm(this.#transcript, { force: true });
     const result = await run(this.#voxtype, [
       "record",
@@ -279190,8 +279231,8 @@ function run(file2, args, timeout) {
 // runtime/src/tts.ts
 import { execFile as execFile3, spawn as spawn13 } from "node:child_process";
 import { mkdir as mkdir2, readFile as readFile6, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
-import { dirname as dirname29, join as join47 } from "node:path";
-import { randomUUID as randomUUID11 } from "node:crypto";
+import { dirname as dirname30, join as join47 } from "node:path";
+import { randomUUID as randomUUID12 } from "node:crypto";
 var speechConfigSchema = external_exports.object({
   provider: external_exports.enum(["openai-compatible", "elevenlabs"]),
   endpoint: external_exports.string().min(1).max(2048),
@@ -279223,8 +279264,8 @@ var SpeechService = class {
     validateSpeechEndpoint(validated.endpoint);
     if (apiKey.trim() === "" || apiKey.length > 2e4) throw new Error("A valid TTS API key is required");
     await storeSecret(validated.provider, apiKey.trim());
-    await mkdir2(dirname29(this.#configPath), { recursive: true, mode: 448 });
-    const temporary = `${this.#configPath}.${randomUUID11()}.tmp`;
+    await mkdir2(dirname30(this.#configPath), { recursive: true, mode: 448 });
+    const temporary = `${this.#configPath}.${randomUUID12()}.tmp`;
     await writeFile2(temporary, `${JSON.stringify(validated, null, 2)}
 `, { mode: 384 });
     const { rename } = await import("node:fs/promises");
@@ -279239,7 +279280,7 @@ var SpeechService = class {
     if (apiKey === void 0) throw new Error("The read-mode credential is unavailable");
     await this.stop();
     await mkdir2(this.#runtimeDir, { recursive: true, mode: 448 });
-    const audioPath = join47(this.#runtimeDir, `speech-${randomUUID11()}.mp3`);
+    const audioPath = join47(this.#runtimeDir, `speech-${randomUUID12()}.mp3`);
     const response = await synthesize(config2, apiKey, normalized);
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength === 0 || bytes.byteLength > 50 * 1024 * 1024) throw new Error("The TTS provider returned invalid audio");
@@ -279346,9 +279387,9 @@ function lookupSecret(provider) {
 }
 
 // runtime/src/digest-history.ts
-import { mkdirSync as mkdirSync18, readFileSync as readFileSync25, renameSync as renameSync7, statSync as statSync15, writeFileSync as writeFileSync16 } from "node:fs";
-import { dirname as dirname30, join as join48 } from "node:path";
-import { randomUUID as randomUUID12 } from "node:crypto";
+import { mkdirSync as mkdirSync18, readFileSync as readFileSync25, renameSync as renameSync8, statSync as statSync15, writeFileSync as writeFileSync17 } from "node:fs";
+import { dirname as dirname31, join as join48 } from "node:path";
+import { randomUUID as randomUUID13 } from "node:crypto";
 var MAX_HISTORY_BYTES = 5 * 1024 * 1024;
 var MAX_DIGESTS = 30;
 var DigestHistory = class {
@@ -279378,25 +279419,25 @@ var DigestHistory = class {
     try {
       if (statSync15(this.#path).size > MAX_HISTORY_BYTES) return { version: 1, digests: [] };
       const value2 = JSON.parse(readFileSync25(this.#path, "utf8"));
-      if (!isObject6(value2) || value2.version !== 1 || !Array.isArray(value2.digests)) return { version: 1, digests: [] };
+      if (!isObject7(value2) || value2.version !== 1 || !Array.isArray(value2.digests)) return { version: 1, digests: [] };
       return { version: 1, digests: value2.digests.filter(isDigest).slice(0, MAX_DIGESTS) };
     } catch {
       return { version: 1, digests: [] };
     }
   }
   #write(value2) {
-    mkdirSync18(dirname30(this.#path), { recursive: true, mode: 448 });
-    const temporary = `${this.#path}.${randomUUID12()}.tmp`;
-    writeFileSync16(temporary, `${JSON.stringify(value2)}
+    mkdirSync18(dirname31(this.#path), { recursive: true, mode: 448 });
+    const temporary = `${this.#path}.${randomUUID13()}.tmp`;
+    writeFileSync17(temporary, `${JSON.stringify(value2)}
 `, { mode: 384 });
-    renameSync7(temporary, this.#path);
+    renameSync8(temporary, this.#path);
   }
 };
 function isDigest(value2) {
-  if (!isObject6(value2) || typeof value2.id !== "string" || typeof value2.templateId !== "string" || typeof value2.title !== "string" || typeof value2.generatedAt !== "string" || !Array.isArray(value2.sections)) return false;
-  return value2.sections.every((section) => isObject6(section) && typeof section.title === "string" && Array.isArray(section.entries));
+  if (!isObject7(value2) || typeof value2.id !== "string" || typeof value2.templateId !== "string" || typeof value2.title !== "string" || typeof value2.generatedAt !== "string" || !Array.isArray(value2.sections)) return false;
+  return value2.sections.every((section) => isObject7(section) && typeof section.title === "string" && Array.isArray(section.entries));
 }
-function isObject6(value2) {
+function isObject7(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 }
 
@@ -279462,6 +279503,7 @@ var commandSchema = external_exports.discriminatedUnion("type", [
   external_exports.object({ type: external_exports.literal("tts_pause"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("tts_stop"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("attention_ingest"), id: external_exports.string().min(1).max(100), items: external_exports.array(attentionItemSchema).max(200) }).strict(),
+  external_exports.object({ type: external_exports.literal("attention_acknowledge"), id: external_exports.string().min(1).max(100), itemIds: external_exports.array(external_exports.string().min(1).max(200)).max(200) }).strict(),
   external_exports.object({
     type: external_exports.literal("digest_generate"),
     id: external_exports.string().min(1).max(100),
@@ -279510,6 +279552,9 @@ function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}
 `);
 }
+function emitAttention(id) {
+  emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
+}
 async function handle(raw) {
   let command;
   try {
@@ -279531,6 +279576,7 @@ async function handle(raw) {
       integrations: publicIntegrations(),
       authMethods: await discoverAgentAuthMethods()
     });
+    emitAttention("initialize");
     return true;
   }
   if (command.type === "agent_status") {
@@ -279582,11 +279628,16 @@ async function handle(raw) {
   }
   if (command.type === "attention_ingest") {
     try {
-      const count = attention.ingest(command.items);
-      emit({ type: "attention", id: command.id, count });
+      attention.ingest(command.items);
+      emitAttention(command.id);
     } catch {
       emit({ type: "error", id: command.id, code: "attention_invalid", message: "Some attention items were invalid." });
     }
+    return true;
+  }
+  if (command.type === "attention_acknowledge") {
+    attention.acknowledge(command.itemIds);
+    emitAttention(command.id);
     return true;
   }
   if (command.type === "digest_history" || command.type === "digest_delete" || command.type === "digest_clear") {
@@ -279607,11 +279658,13 @@ async function handle(raw) {
         new Date(now.getTime() + 7 * 864e5).toISOString()
       );
       attention.ingest(connectorItems);
-      const items = attention.recent(template.manifest.context.maximumItems);
+      const items = attention.pending(template.manifest.context.maximumItems);
       emit({ type: "digest_state", id: command.id, state: "working", templateId: selectedId });
       const digest = await runDigestAgent(template, items, pluginRoot);
       digestHistory.save(digest);
+      attention.acknowledge(items.map((item) => item.id));
       emit({ type: "digest", id: command.id, digest });
+      emitAttention(command.id);
     } catch (error48) {
       const message = error48 instanceof Error ? error48.message : "Digest generation failed.";
       emit({
@@ -279776,7 +279829,7 @@ async function handle(raw) {
 }
 function beginAuth(methodId) {
   if (authFlow !== void 0) cancelAuth(authFlow);
-  const flow = { id: randomUUID13(), methodId, controller: new AbortController() };
+  const flow = { id: randomUUID14(), methodId, controller: new AbortController() };
   authFlow = flow;
   emit({ type: "auth", phase: "starting", flowId: flow.id, methodId, message: "Starting secure sign-in\u2026" });
   void runAuth(flow);
@@ -279815,7 +279868,7 @@ function promptAuth(flow, prompt) {
     return Promise.reject(new Error("Authentication prompt was cancelled"));
   flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
   return new Promise((resolvePrompt, rejectPrompt) => {
-    const promptId = randomUUID13();
+    const promptId = randomUUID14();
     const signals = [flow.controller.signal, prompt.signal].filter((signal2) => signal2 !== void 0);
     const signal = signals.length === 1 ? signals[0] ?? flow.controller.signal : AbortSignal.any(signals);
     const onAbort = () => rejectPrompt(new Error("Authentication prompt was cancelled"));

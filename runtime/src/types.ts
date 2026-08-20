@@ -138,6 +138,7 @@ export type BrokerCommand =
   | { type: "tts_pause"; id: string }
   | { type: "tts_stop"; id: string }
   | { type: "attention_ingest"; id: string; items: AttentionItem[] }
+  | { type: "attention_acknowledge"; id: string; itemIds: string[] }
   | { type: "digest_generate"; id: string; templateId?: string; context: GenerationContext }
   | { type: "digest_history"; id: string }
   | { type: "digest_delete"; id: string; digestId: string }
@@ -158,7 +159,7 @@ export type BrokerEvent =
   | { type: "auth"; id?: string; phase: "starting" | "browser" | "device_code" | "prompt" | "info" | "complete" | "cancelled" | "error"; flowId: string; methodId: string; message?: string; url?: string; verificationUri?: string; userCode?: string; prompt?: AgentAuthPrompt }
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
-  | { type: "attention"; id: string; count: number }
+  | { type: "attention"; id: string; count: number; acknowledgedIds: string[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest"; id: string; digest: Digest }
   | { type: "digest_history"; id: string; digests: Digest[] }

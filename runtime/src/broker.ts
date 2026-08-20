@@ -73,6 +73,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tts_pause"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("tts_stop"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("attention_ingest"), id: z.string().min(1).max(100), items: z.array(attentionItemSchema).max(200) }).strict(),
+  z.object({ type: z.literal("attention_acknowledge"), id: z.string().min(1).max(100), itemIds: z.array(z.string().min(1).max(200)).max(200) }).strict(),
   z.object({
     type: z.literal("digest_generate"),
     id: z.string().min(1).max(100),
@@ -134,6 +135,10 @@ function emit(event: BrokerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
+function emitAttention(id: string): void {
+  emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
+}
+
 async function handle(raw: string): Promise<boolean> {
   let command: z.infer<typeof commandSchema>;
   try {
@@ -156,6 +161,7 @@ async function handle(raw: string): Promise<boolean> {
       integrations: publicIntegrations(),
       authMethods: await discoverAgentAuthMethods()
     });
+    emitAttention("initialize");
     return true;
   }
 
@@ -212,11 +218,17 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_ingest") {
     try {
-      const count = attention.ingest(command.items);
-      emit({ type: "attention", id: command.id, count });
+      attention.ingest(command.items);
+      emitAttention(command.id);
     } catch {
       emit({ type: "error", id: command.id, code: "attention_invalid", message: "Some attention items were invalid." });
     }
+    return true;
+  }
+
+  if (command.type === "attention_acknowledge") {
+    attention.acknowledge(command.itemIds);
+    emitAttention(command.id);
     return true;
   }
 
@@ -239,11 +251,13 @@ async function handle(raw: string): Promise<boolean> {
         new Date(now.getTime() + 7 * 86_400_000).toISOString()
       );
       attention.ingest(connectorItems);
-      const items = attention.recent(template.manifest.context.maximumItems);
+      const items = attention.pending(template.manifest.context.maximumItems);
       emit({ type: "digest_state", id: command.id, state: "working", templateId: selectedId });
       const digest = await runDigestAgent(template, items, pluginRoot);
       digestHistory.save(digest);
+      attention.acknowledge(items.map((item) => item.id));
       emit({ type: "digest", id: command.id, digest });
+      emitAttention(command.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Digest generation failed.";
       emit({

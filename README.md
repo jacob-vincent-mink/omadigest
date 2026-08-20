@@ -12,7 +12,7 @@ OmaDigest listens to Omarchy's existing notification service, groups bounded att
 
 ## What makes it different
 
-- **Briefings, not another notification history.** It answers “what needs me?” instead of repeating every popup.
+- **Briefings, not another notification history.** It answers “what needs me?” instead of repeating every popup. Successful digests mark their input seen while retaining cited evidence for later agent correlation.
 - **Skills you can describe.** Tell the drafting agent what kind of digest you want; review its readable `SKILL.md` and deterministic trigger policy before accepting it.
 - **Real context, selectively.** A notification can route OmaDigest to an enabled calendar or developer-tool integration without granting blanket desktop access.
 - **Citations by construction.** The model submits a typed digest, and every factual entry must cite a supplied source ID.

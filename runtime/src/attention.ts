@@ -1,5 +1,6 @@
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { AttentionItem } from "./types.js";
 
@@ -15,14 +16,18 @@ export const attentionItemSchema = z.object({
 
 export class AttentionStore {
   readonly #eventsDir: string;
+  readonly #seenPath: string;
   readonly #items = new Map<string, AttentionItem>();
+  readonly #seen = new Set<string>();
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
     const state = env.XDG_STATE_HOME?.startsWith("/")
       ? env.XDG_STATE_HOME
       : env.HOME?.startsWith("/") ? join(env.HOME, ".local", "state") : "/tmp";
     this.#eventsDir = join(state, "omadigest", "events");
+    this.#seenPath = join(state, "omadigest", "seen.json");
     this.#load();
+    this.#loadSeen();
   }
 
   ingest(rawItems: AttentionItem[]): number {
@@ -32,6 +37,7 @@ export class AttentionStore {
     const day = new Date().toISOString().slice(0, 10);
     const path = join(this.#eventsDir, `${day}.jsonl`);
     for (const item of items) {
+      if (!this.#items.has(item.id)) this.#seen.delete(item.id);
       this.#items.delete(item.id);
       this.#items.set(item.id, item);
       appendFileSync(path, `${JSON.stringify(item)}\n`, { encoding: "utf8", mode: 0o600 });
@@ -46,6 +52,28 @@ export class AttentionStore {
     return [...this.#items.values()]
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
       .slice(0, Math.max(1, Math.min(200, limit)));
+  }
+
+  pending(limit: number): AttentionItem[] {
+    return [...this.#items.values()]
+      .filter((item) => !this.#seen.has(item.id))
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+      .slice(0, Math.max(1, Math.min(200, limit)));
+  }
+
+  acknowledge(ids: string[]): number {
+    for (const id of ids.slice(0, 500)) if (this.#items.has(id)) this.#seen.add(id);
+    while (this.#seen.size > 5_000) {
+      const first = this.#seen.values().next().value as string | undefined;
+      if (first === undefined) break;
+      this.#seen.delete(first);
+    }
+    this.#saveSeen();
+    return this.pending(500).length;
+  }
+
+  acknowledgedIds(): string[] {
+    return [...this.#items.keys()].filter((id) => this.#seen.has(id));
   }
 
   byIds(ids: string[]): AttentionItem[] {
@@ -75,6 +103,22 @@ export class AttentionStore {
     this.#trimMemory();
   }
 
+  #loadSeen(): void {
+    try {
+      if (statSync(this.#seenPath).size > 1024 * 1024) return;
+      const value: unknown = JSON.parse(readFileSync(this.#seenPath, "utf8"));
+      if (!isObject(value) || value.version !== 1 || !Array.isArray(value.ids)) return;
+      for (const id of value.ids.slice(-5_000)) if (typeof id === "string") this.#seen.add(id);
+    } catch { /* Start with no acknowledgements. */ }
+  }
+
+  #saveSeen(): void {
+    mkdirSync(dirname(this.#seenPath), { recursive: true, mode: 0o700 });
+    const temporary = `${this.#seenPath}.${randomUUID()}.tmp`;
+    writeFileSync(temporary, `${JSON.stringify({ version: 1, ids: [...this.#seen] })}\n`, { mode: 0o600 });
+    renameSync(temporary, this.#seenPath);
+  }
+
   #trimMemory(): void {
     while (this.#items.size > 500) {
       const first = this.#items.keys().next().value as string | undefined;
@@ -91,4 +135,8 @@ export class AttentionStore {
       try { rmSync(join(this.#eventsDir, name)); } catch { /* Retry on next ingest. */ }
     }
   }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

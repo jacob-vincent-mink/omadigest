@@ -34,4 +34,19 @@ describe("AttentionStore", () => {
     expect(attention.recent(1)[0]?.title).toBe("New");
     expect(attention.byIds(["1", "missing", "2"]).map((item) => item.title)).toEqual(["Old", "New"]);
   });
+
+  it("acknowledges pending items without deleting retained evidence", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-attention-seen-"));
+    roots.push(root);
+    const env = { XDG_STATE_HOME: root, HOME: root };
+    const attention = new AttentionStore(env);
+    attention.ingest([
+      { id: "crash", source: "notifications", app: "Omarchy", title: "Process crashed", body: "nvim", urgency: "critical", occurredAt: "2026-08-20T11:00:00.000Z" }
+    ]);
+    expect(attention.pending(10)).toHaveLength(1);
+    attention.acknowledge(["crash"]);
+    expect(attention.pending(10)).toEqual([]);
+    expect(attention.byIds(["crash"])[0]?.body).toBe("nvim");
+    expect(new AttentionStore(env).acknowledgedIds()).toEqual(["crash"]);
+  });
 });
