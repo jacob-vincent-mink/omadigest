@@ -21,7 +21,7 @@
 
 ## In progress
 
-- [ ] Build the scripted `crashing-sw` notification/coredump storyline and authenticated `gh` integration/template demo.
+- [x] Build and validate the scripted `crashing-sw` notification/coredump storyline and authenticated `gh` integration/template demo.
 - [ ] Live-test every settings and template-detail navigation path.
 - [ ] Complete a real OAuth sign-in and re-test digest/template/integration agents.
 - [ ] Evaluate provider-linked read mode: reuse a connected OpenAI API credential only with explicit opt-in when its API project has speech access. Do not assume Codex/ChatGPT or Grok/X subscriptions include TTS API access, and do not repurpose scoped OAuth tokens.
@@ -29,7 +29,8 @@
 ## Release validation
 
 - [ ] Audit every panel state for centered button text/icons, vertically centered row controls, bounded text, consistent spacing, and no overlap across themes.
-- [ ] Live-test notification ingestion, DND-ended generation, and scheduled generation.
+- [x] Live-test notification ingestion and DND-ended generation.
+- [ ] Live-test scheduled generation.
 - [ ] Live-test Google Calendar setup and synchronization.
 - [ ] Live-test Voxtype dictation and its microphone placement/state changes.
 - [ ] Test read mode with real provider credentials.

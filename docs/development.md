@@ -10,8 +10,9 @@ runtime/test/                deterministic unit tests
 templates/                   bundled digest skills
 integrations/                bundled removable connectors
 skills/                      private drafting-agent instructions
-docs/                        product and security contracts
-assets/                      monochrome theme-tinted mark
+docs/                        usage, product, and security contracts
+assets/                      monochrome runtime and README marks
+.github/workflows/           repository CI
 ```
 
 ## Build and test
@@ -35,6 +36,21 @@ omarchy plugin validate "$PWD"
 ```
 
 Never edit `/usr/share/omarchy`; use it only as the canonical host-contract reference.
+
+## Marketplace repository contract
+
+The public repository follows the [Omarchy Plugins development guide](https://omarchyplugins.com/develop.html):
+
+- permanent namespaced ID and root `manifest.json`;
+- one `bar-widget` kind whose `BarWidget.qml` loads its nested panel;
+- matching `moduleName` in the bar and panel;
+- root README, MIT license, safe install/update/removal instructions, and documented retained data;
+- checked-in entry points and runtime bundle with no symlinks;
+- external runtime and optional dependencies documented;
+- local `omarchy plugin validate` and `qmllint` commands documented;
+- public CI for the portable TypeScript, test, audit, bundle, and manifest checks.
+
+A clean UI `preview.png` is optional under the marketplace contract and remains a release task; do not substitute a logo or a desktop capture containing unrelated windows.
 
 ## Broker smoke test
 

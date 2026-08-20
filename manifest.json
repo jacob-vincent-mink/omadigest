@@ -3,7 +3,7 @@
   "id": "io.github.jacob-vincent-mink.omadigest",
   "name": "OmaDigest",
   "version": "0.1.0",
-  "author": "Jacob Vincent-Mink",
+  "author": "Jacob Mink",
   "license": "MIT",
   "description": "Turn interruptions into cited, skill-shaped briefings with selectively enriched context.",
   "kinds": ["bar-widget"],

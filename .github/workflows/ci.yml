@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Verify checked-in broker bundle
+        run: git diff --exit-code -- runtime/dist
+      - run: node --test integrations/*/connector.test.mjs
+      - run: npm audit
+      - name: Validate manifest JSON and entry point
+        run: |
+          node -e 'const m=require("./manifest.json"); if(m.schemaVersion!==1 || m.id!=="io.github.jacob-vincent-mink.omadigest" || m.entryPoints?.barWidget!=="BarWidget.qml") process.exit(1)'
+          test -f BarWidget.qml
