@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
@@ -18,8 +18,10 @@ import { openRouterOAuth } from "../../node_modules/@earendil-works/pi-coding-ag
 import { kimiCodingOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js";
 import { xaiOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/xai.js";
 import { createRadiusOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/radius.js";
+import type { AuthInteraction, AuthType } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
 import { compiledTemplateSchema } from "./template-schema.js";
 import { integrationManifestSchema } from "./integration-schema.js";
+import { integrationConfigRoot } from "./integrations.js";
 import type { AttentionItem, Digest, DigestTemplate } from "./types.js";
 
 registerBundledOAuthFlowLoaders({
@@ -55,23 +57,84 @@ export type DraftResult = TemplateDraft | IntegrationDraft | {
   suggestedPrompt: string;
 };
 
+export type AgentAuthMethod = {
+  id: string;
+  providerId: string;
+  authType: "oauth" | "api_key";
+  label: string;
+  description: string;
+};
+
+const AGENT_PROVIDER_IDS = new Set(["openai-codex", "openai", "xai"]);
+const agentConfigRoot = integrationConfigRoot();
+const agentPreferencePath = join(agentConfigRoot, "agent.json");
+let preferredProvider = readPreferredProvider();
 let runtimePromise: Promise<ModelRuntime> | undefined;
 
 function modelRuntime(): Promise<ModelRuntime> {
-  runtimePromise ??= ModelRuntime.create({ allowModelNetwork: false });
+  mkdirSync(agentConfigRoot, { recursive: true, mode: 0o700 });
+  runtimePromise ??= ModelRuntime.create({
+    authPath: join(agentConfigRoot, "auth.json"),
+    modelsPath: join(agentConfigRoot, "models.json"),
+    modelsStorePath: join(agentConfigRoot, "models-store.json"),
+    allowModelNetwork: false
+  });
   return runtimePromise;
+}
+
+async function availableAgentModels(runtime: ModelRuntime) {
+  const models = preferredProvider ? await runtime.getAvailable(preferredProvider) : await runtime.getAvailable();
+  return models.filter((model) => AGENT_PROVIDER_IDS.has(String((model as any).provider || "")));
+}
+
+export async function discoverAgentAuthMethods(): Promise<AgentAuthMethod[]> {
+  const runtime = await modelRuntime();
+  const methods: AgentAuthMethod[] = [];
+  for (const provider of runtime.getProviders()) {
+    if (!AGENT_PROVIDER_IDS.has(provider.id)) continue;
+    if (provider.auth.oauth !== undefined) methods.push({
+      id: `${provider.id}::oauth`, providerId: provider.id, authType: "oauth",
+      label: provider.id === "openai-codex" ? "Codex with ChatGPT" : provider.id === "xai" ? "Grok with X" : provider.auth.oauth.name,
+      description: provider.id === "openai-codex"
+        ? "Sign in with a ChatGPT Plus or Pro subscription."
+        : provider.id === "xai" ? "Sign in with your X or Grok subscription." : `Sign in to ${provider.name} in your browser.`
+    });
+    if (provider.auth.apiKey?.login !== undefined) methods.push({
+      id: `${provider.id}::api_key`, providerId: provider.id, authType: "api_key",
+      label: `${provider.name} API key`, description: "Store a provider API key in OmaDigest's private configuration."
+    });
+  }
+  return methods;
+}
+
+export async function loginAgentProvider(methodId: string, interaction: AuthInteraction): Promise<void> {
+  const methods = await discoverAgentAuthMethods();
+  const method = methods.find((candidate) => candidate.id === methodId);
+  if (method === undefined) throw new Error("That sign-in method is unavailable.");
+  const runtime = await modelRuntime();
+  await runtime.login(method.providerId, method.authType as AuthType, interaction);
+  preferredProvider = method.providerId;
+  mkdirSync(agentConfigRoot, { recursive: true, mode: 0o700 });
+  writeFileSync(agentPreferencePath, `${JSON.stringify({ provider: preferredProvider })}\n`, { mode: 0o600 });
 }
 
 export async function agentConnectionStatus(): Promise<{ connected: boolean; provider: string; model: string }> {
   try {
-    const models = await (await modelRuntime()).getAvailable();
+    const models = await availableAgentModels(await modelRuntime());
     const model = selectAgentModel(models);
     return model === undefined
-      ? { connected: false, provider: "", model: "" }
+      ? { connected: false, provider: preferredProvider, model: "" }
       : { connected: true, provider: String((model as any).provider || ""), model: String(model.id) };
   } catch {
-    return { connected: false, provider: "", model: "" };
+    return { connected: false, provider: preferredProvider, model: "" };
   }
+}
+
+function readPreferredProvider(): string {
+  try {
+    const provider = String(JSON.parse(readFileSync(agentPreferencePath, "utf8")).provider || "");
+    return AGENT_PROVIDER_IDS.has(provider) ? provider : "";
+  } catch { return ""; }
 }
 
 const templatePolicy = Type.Object({
@@ -117,7 +180,7 @@ export async function runDraftAgent(
     throw new Error("Draft requests must contain between 1 and 20,000 characters");
 
   const runtime = await modelRuntime();
-  const models = await runtime.getAvailable();
+  const models = await availableAgentModels(runtime);
   const model = selectAgentModel(models);
   if (model === undefined) throw new Error("Authenticate a model with Pi before drafting");
 
@@ -250,7 +313,7 @@ export async function runDigestAgent(
 ): Promise<Digest> {
   if (items.length === 0) throw new Error("There are no attention items to digest");
   const runtime = await modelRuntime();
-  const models = await runtime.getAvailable();
+  const models = await availableAgentModels(runtime);
   const model = selectAgentModel(models);
   if (model === undefined) throw new Error("Authenticate a model with Pi before generating a digest");
 

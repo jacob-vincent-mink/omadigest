@@ -28,6 +28,7 @@ Panel {
   property string page: "list"
   property string settingsPage: "integrations"
   property var selectedTemplate: null
+  property string authPromptValue: ""
   property string ttsProvider: "openai-compatible"
   property var historyItems: []
   property double dndStartedAt: 0
@@ -266,7 +267,8 @@ Panel {
               Text {
                 width: parent.width
                 text: root.page === "list"
-                  ? root.attentionAvailableCount + " attention items · " + OmaDigest.OmaDigestStore.status
+                  ? (OmaDigest.OmaDigestStore.digestState === "working"
+                    ? "Generating a digest…" : root.attentionAvailableCount + " attention items")
                   : root.page === "settings" ? "Templates, integrations, and connections" : ""
                 visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
@@ -307,6 +309,81 @@ Panel {
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 onClicked: root.page = "settings"
+              }
+            }
+          }
+
+          Rectangle {
+            visible: root.page === "list" && OmaDigest.OmaDigestStore.errorMessage !== ""
+            width: parent.width
+            height: visible ? errorContent.implicitHeight + Style.space(20) : 0
+            radius: Style.cornerRadius
+            color: Style.normalFillFor(root.foreground, Color.error)
+            border.width: Style.spacing.hairline
+            border.color: Color.error
+
+            Column {
+              id: errorContent
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.margins: Style.space(10)
+              spacing: Style.space(5)
+
+              Row {
+                width: parent.width
+                Text {
+                  width: parent.width - dismissError.width
+                  text: OmaDigest.OmaDigestStore.errorCode === "model_not_connected"
+                    ? "Connect an AI model" : "OmaDigest couldn't complete that action"
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                  wrapMode: Text.WordWrap
+                }
+                Text {
+                  id: dismissError
+                  text: "×"
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -Style.space(6)
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: OmaDigest.OmaDigestStore.clearError()
+                  }
+                }
+              }
+
+              Text {
+                width: parent.width
+                text: OmaDigest.OmaDigestStore.errorCode === "model_not_connected"
+                  ? "Digest generation needs an authenticated Pi model. Open Connections for the current status."
+                  : OmaDigest.OmaDigestStore.errorMessage
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Text {
+                visible: OmaDigest.OmaDigestStore.errorCode === "model_not_connected"
+                text: "Open Connections →"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                MouseArea {
+                  anchors.fill: parent
+                  anchors.margins: -Style.space(5)
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.settingsPage = "connections"
+                    root.page = "settings"
+                  }
+                }
               }
             }
           }
@@ -800,6 +877,229 @@ Panel {
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.bodySmall
                     wrapMode: Text.WordWrap
+                  }
+                }
+              }
+
+              Text {
+                text: "SIGN IN"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+              Text {
+                width: parent.width
+                text: "Choose a provider. Browser-based sign-in opens automatically; API keys stay in OmaDigest's private configuration."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.authMethods
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: authMethodText.implicitHeight + Style.space(18)
+                  radius: Style.cornerRadius
+                  color: authMethodMouse.containsMouse
+                    ? Style.hoverFillFor(root.foreground, Color.accent)
+                    : Style.normalFillFor(root.foreground, Color.accent)
+                  opacity: ["starting", "browser", "device_code", "prompt", "info"].indexOf(OmaDigest.OmaDigestStore.auth.phase) >= 0 ? 0.5 : 1
+
+                  Row {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.margins: Style.space(9)
+                    spacing: Style.space(8)
+                    Text {
+                      id: authMethodText
+                      width: parent.width - authMethodAction.width - Style.space(10)
+                      text: String(modelData.label) + "\n" + String(modelData.description)
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      wrapMode: Text.WordWrap
+                    }
+                    Text {
+                      id: authMethodAction
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "Sign in"
+                      color: Color.accent
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
+                  }
+                  MouseArea {
+                    id: authMethodMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    enabled: ["starting", "browser", "device_code", "prompt", "info"].indexOf(OmaDigest.OmaDigestStore.auth.phase) < 0
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: {
+                      root.authPromptValue = ""
+                      OmaDigest.OmaDigestStore.beginAuth(modelData.id)
+                    }
+                  }
+                }
+              }
+
+              Rectangle {
+                visible: OmaDigest.OmaDigestStore.auth.phase !== "idle"
+                width: parent.width
+                height: visible ? authFlowContent.implicitHeight + Style.space(20) : 0
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground,
+                  OmaDigest.OmaDigestStore.auth.phase === "error" ? Color.error : Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: OmaDigest.OmaDigestStore.auth.phase === "error" ? Color.error : Color.accent
+
+                Column {
+                  id: authFlowContent
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(8)
+
+                  Text {
+                    width: parent.width
+                    text: OmaDigest.OmaDigestStore.auth.phase === "complete" ? "Connected"
+                      : OmaDigest.OmaDigestStore.auth.phase === "error" ? "Sign-in failed" : "Sign-in in progress"
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                  }
+                  Text {
+                    visible: text !== ""
+                    width: parent.width
+                    text: String(OmaDigest.OmaDigestStore.auth.message || "")
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+                  Text {
+                    visible: OmaDigest.OmaDigestStore.auth.userCode !== ""
+                    text: visible ? "Code: " + OmaDigest.OmaDigestStore.auth.userCode : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.subtitle
+                    font.bold: true
+                  }
+
+                  Rectangle {
+                    visible: OmaDigest.OmaDigestStore.auth.url !== "" || OmaDigest.OmaDigestStore.auth.verificationUri !== ""
+                    width: Style.space(190)
+                    height: visible ? Style.space(34) : 0
+                    radius: Style.cornerRadius
+                    color: Color.accent
+                    Text {
+                      anchors.centerIn: parent
+                      text: "Open sign-in page"
+                      color: Color.background
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                    }
+                    MouseArea {
+                      anchors.fill: parent
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: OmaDigest.OmaDigestStore.openAuthUrl()
+                    }
+                  }
+
+                  Repeater {
+                    model: OmaDigest.OmaDigestStore.auth.prompt
+                      && OmaDigest.OmaDigestStore.auth.prompt.kind === "select"
+                      ? (OmaDigest.OmaDigestStore.auth.prompt.options || []) : []
+                    Rectangle {
+                      required property var modelData
+                      width: parent.width
+                      height: Style.space(34)
+                      radius: Style.cornerRadius
+                      color: root.authPromptValue === modelData.id
+                        ? Style.selectedFillFor(root.foreground, Color.accent)
+                        : Style.normalFillFor(root.foreground, Color.accent)
+                      Text {
+                        anchors.centerIn: parent
+                        text: String(modelData.label)
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                      }
+                      MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.authPromptValue = String(modelData.id)
+                      }
+                    }
+                  }
+
+                  QQC.TextField {
+                    id: authPromptInput
+                    visible: OmaDigest.OmaDigestStore.auth.prompt
+                      && OmaDigest.OmaDigestStore.auth.prompt.kind !== "select"
+                    width: parent.width
+                    placeholderText: visible ? String(OmaDigest.OmaDigestStore.auth.prompt.placeholder
+                      || OmaDigest.OmaDigestStore.auth.prompt.message || "") : ""
+                    echoMode: visible && OmaDigest.OmaDigestStore.auth.prompt.kind === "secret"
+                      ? TextInput.Password : TextInput.Normal
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    onVisibleChanged: if (visible) text = ""
+                  }
+
+                  Row {
+                    visible: OmaDigest.OmaDigestStore.auth.prompt !== null
+                      || ["starting", "browser", "device_code", "info"].indexOf(OmaDigest.OmaDigestStore.auth.phase) >= 0
+                    height: visible ? Style.space(34) : 0
+                    spacing: Style.space(8)
+
+                    Rectangle {
+                      visible: OmaDigest.OmaDigestStore.auth.prompt !== null
+                      width: Style.space(120)
+                      height: parent.height
+                      radius: Style.cornerRadius
+                      color: Color.accent
+                      Text {
+                        anchors.centerIn: parent
+                        text: "Continue"
+                        color: Color.background
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                      }
+                      MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: OmaDigest.OmaDigestStore.respondAuth(
+                          OmaDigest.OmaDigestStore.auth.prompt.kind === "select" ? root.authPromptValue : authPromptInput.text)
+                      }
+                    }
+                    Rectangle {
+                      width: Style.space(100)
+                      height: parent.height
+                      radius: Style.cornerRadius
+                      color: Style.normalFillFor(root.foreground, Color.accent)
+                      Text {
+                        anchors.centerIn: parent
+                        text: "Cancel"
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                      }
+                      MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: OmaDigest.OmaDigestStore.cancelAuth()
+                      }
+                    }
                   }
                 }
               }

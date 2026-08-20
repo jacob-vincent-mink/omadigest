@@ -5,7 +5,7 @@ OmaDigest processes private notification, calendar, model, and speech data. Its 
 ## Trust boundaries
 
 - **Quickshell UI:** presentation and bounded snapshots from public Omarchy services. It does not perform network or filesystem work.
-- **Broker:** trusted local authority for persistence, credentials, model sessions, connector processes, and validation.
+- **Broker:** trusted local authority for persistence, credentials, model sessions, connector processes, and validation. Provider credentials are written mode `0600` under `${XDG_CONFIG_HOME:-~/.config}/omadigest/auth.json`; OAuth URLs and prompts cross the QML boundary, but tokens do not.
 - **Pi model provider:** receives only the selected skill and bounded attention evidence for one generation.
 - **Integration:** separately launched, source-specific code with user authority constrained by process options and protocol.
 - **TTS provider:** receives finalized read-mode text only.

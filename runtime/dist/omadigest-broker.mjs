@@ -30919,7 +30919,7 @@ var require_gaxios = __commonJS({
     var retry_js_1 = require_retry3();
     var stream_1 = __require("stream");
     var interceptor_js_1 = require_interceptor();
-    var randomUUID13 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
+    var randomUUID14 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
     var HTTP_STATUS_NO_CONTENT = 204;
     var Gaxios = class {
       agentCache = /* @__PURE__ */ new Map();
@@ -31192,7 +31192,7 @@ var require_gaxios = __commonJS({
          */
         ["Blob", "File", "FormData"].includes(opts.data?.constructor?.name || "");
         if (opts.multipart?.length) {
-          const boundary = await randomUUID13();
+          const boundary = await randomUUID14();
           preparedHeaders.set("content-type", `multipart/related; boundary=${boundary}`);
           opts.body = stream_1.Readable.from(this.getMultipartRequest(opts.multipart, boundary));
         } else if (shouldDirectlyPassData) {
@@ -175446,6 +175446,7 @@ ${captureLines}` : capture.stack;
 // runtime/src/broker.ts
 import { createInterface as createInterface5 } from "node:readline";
 import { execFile as execFile4 } from "node:child_process";
+import { randomUUID as randomUUID13 } from "node:crypto";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 import { resolve as resolve16 } from "node:path";
 
@@ -189665,7 +189666,7 @@ function isObject3(value2) {
 }
 
 // runtime/src/agent.ts
-import { readFileSync as readFileSync23 } from "node:fs";
+import { mkdirSync as mkdirSync15, readFileSync as readFileSync23, writeFileSync as writeFileSync14 } from "node:fs";
 import { randomUUID as randomUUID9 } from "node:crypto";
 import { join as join43 } from "node:path";
 
@@ -278553,18 +278554,73 @@ registerBundledOAuthFlowLoaders({
 var MAX_REQUEST_CHARS = 2e4;
 var MAX_FILE_CHARS = 12e4;
 var MAX_DRAFT_CHARS = 3e5;
+var AGENT_PROVIDER_IDS = /* @__PURE__ */ new Set(["openai-codex", "openai", "xai"]);
+var agentConfigRoot = integrationConfigRoot();
+var agentPreferencePath = join43(agentConfigRoot, "agent.json");
+var preferredProvider = readPreferredProvider();
 var runtimePromise;
 function modelRuntime() {
-  runtimePromise ??= ModelRuntime.create({ allowModelNetwork: false });
+  mkdirSync15(agentConfigRoot, { recursive: true, mode: 448 });
+  runtimePromise ??= ModelRuntime.create({
+    authPath: join43(agentConfigRoot, "auth.json"),
+    modelsPath: join43(agentConfigRoot, "models.json"),
+    modelsStorePath: join43(agentConfigRoot, "models-store.json"),
+    allowModelNetwork: false
+  });
   return runtimePromise;
+}
+async function availableAgentModels(runtime) {
+  const models = preferredProvider ? await runtime.getAvailable(preferredProvider) : await runtime.getAvailable();
+  return models.filter((model) => AGENT_PROVIDER_IDS.has(String(model.provider || "")));
+}
+async function discoverAgentAuthMethods() {
+  const runtime = await modelRuntime();
+  const methods = [];
+  for (const provider of runtime.getProviders()) {
+    if (!AGENT_PROVIDER_IDS.has(provider.id)) continue;
+    if (provider.auth.oauth !== void 0) methods.push({
+      id: `${provider.id}::oauth`,
+      providerId: provider.id,
+      authType: "oauth",
+      label: provider.id === "openai-codex" ? "Codex with ChatGPT" : provider.id === "xai" ? "Grok with X" : provider.auth.oauth.name,
+      description: provider.id === "openai-codex" ? "Sign in with a ChatGPT Plus or Pro subscription." : provider.id === "xai" ? "Sign in with your X or Grok subscription." : `Sign in to ${provider.name} in your browser.`
+    });
+    if (provider.auth.apiKey?.login !== void 0) methods.push({
+      id: `${provider.id}::api_key`,
+      providerId: provider.id,
+      authType: "api_key",
+      label: `${provider.name} API key`,
+      description: "Store a provider API key in OmaDigest's private configuration."
+    });
+  }
+  return methods;
+}
+async function loginAgentProvider(methodId, interaction) {
+  const methods = await discoverAgentAuthMethods();
+  const method = methods.find((candidate) => candidate.id === methodId);
+  if (method === void 0) throw new Error("That sign-in method is unavailable.");
+  const runtime = await modelRuntime();
+  await runtime.login(method.providerId, method.authType, interaction);
+  preferredProvider = method.providerId;
+  mkdirSync15(agentConfigRoot, { recursive: true, mode: 448 });
+  writeFileSync14(agentPreferencePath, `${JSON.stringify({ provider: preferredProvider })}
+`, { mode: 384 });
 }
 async function agentConnectionStatus() {
   try {
-    const models = await (await modelRuntime()).getAvailable();
+    const models = await availableAgentModels(await modelRuntime());
     const model = selectAgentModel(models);
-    return model === void 0 ? { connected: false, provider: "", model: "" } : { connected: true, provider: String(model.provider || ""), model: String(model.id) };
+    return model === void 0 ? { connected: false, provider: preferredProvider, model: "" } : { connected: true, provider: String(model.provider || ""), model: String(model.id) };
   } catch {
-    return { connected: false, provider: "", model: "" };
+    return { connected: false, provider: preferredProvider, model: "" };
+  }
+}
+function readPreferredProvider() {
+  try {
+    const provider = String(JSON.parse(readFileSync23(agentPreferencePath, "utf8")).provider || "");
+    return AGENT_PROVIDER_IDS.has(provider) ? provider : "";
+  } catch {
+    return "";
   }
 }
 var templatePolicy = typebox_exports2.Object({
@@ -278604,7 +278660,7 @@ async function runDraftAgent(kind, request, pluginRoot2, timeoutMs = 18e4) {
   if (normalized === "" || normalized.length > MAX_REQUEST_CHARS)
     throw new Error("Draft requests must contain between 1 and 20,000 characters");
   const runtime = await modelRuntime();
-  const models = await runtime.getAvailable();
+  const models = await availableAgentModels(runtime);
   const model = selectAgentModel(models);
   if (model === void 0) throw new Error("Authenticate a model with Pi before drafting");
   let result;
@@ -278729,7 +278785,7 @@ async function runDraftAgent(kind, request, pluginRoot2, timeoutMs = 18e4) {
 async function runDigestAgent(template, items, pluginRoot2, timeoutMs = 18e4) {
   if (items.length === 0) throw new Error("There are no attention items to digest");
   const runtime = await modelRuntime();
-  const models = await runtime.getAvailable();
+  const models = await availableAgentModels(runtime);
   const model = selectAgentModel(models);
   if (model === void 0) throw new Error("Authenticate a model with Pi before generating a digest");
   let emitted;
@@ -278850,7 +278906,7 @@ function toolError(message) {
 }
 
 // runtime/src/attention.ts
-import { appendFileSync as appendFileSync4, chmodSync as chmodSync4, existsSync as existsSync28, mkdirSync as mkdirSync15, readFileSync as readFileSync24, readdirSync as readdirSync13, rmSync as rmSync6, statSync as statSync14 } from "node:fs";
+import { appendFileSync as appendFileSync4, chmodSync as chmodSync4, existsSync as existsSync28, mkdirSync as mkdirSync16, readFileSync as readFileSync24, readdirSync as readdirSync13, rmSync as rmSync6, statSync as statSync14 } from "node:fs";
 import { join as join44 } from "node:path";
 var attentionItemSchema = external_exports.object({
   id: external_exports.string().min(1).max(200),
@@ -278872,7 +278928,7 @@ var AttentionStore = class {
   ingest(rawItems) {
     const items = external_exports.array(attentionItemSchema).max(200).parse(rawItems);
     if (items.length === 0) return this.#items.size;
-    mkdirSync15(this.#eventsDir, { recursive: true, mode: 448 });
+    mkdirSync16(this.#eventsDir, { recursive: true, mode: 448 });
     const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const path16 = join44(this.#eventsDir, `${day}.jsonl`);
     for (const item of items) {
@@ -278937,7 +278993,7 @@ var AttentionStore = class {
 
 // runtime/src/drafts.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { mkdirSync as mkdirSync16, renameSync as renameSync6, rmSync as rmSync7, writeFileSync as writeFileSync14 } from "node:fs";
+import { mkdirSync as mkdirSync17, renameSync as renameSync6, rmSync as rmSync7, writeFileSync as writeFileSync15 } from "node:fs";
 import { dirname as dirname27, join as join45 } from "node:path";
 import { randomUUID as randomUUID10 } from "node:crypto";
 function installDraft(configRoot2, draft) {
@@ -278948,11 +279004,11 @@ function installDraft(configRoot2, draft) {
 function installTemplate(configRoot2, draft) {
   const destination = join45(configRoot2, "templates", draft.compiled.id);
   const temporary = `${destination}.draft-${randomUUID10()}`;
-  mkdirSync16(temporary, { recursive: true, mode: 448 });
+  mkdirSync17(temporary, { recursive: true, mode: 448 });
   try {
-    writeFileSync14(join45(temporary, "SKILL.md"), `${draft.skillMarkdown.trim()}
+    writeFileSync15(join45(temporary, "SKILL.md"), `${draft.skillMarkdown.trim()}
 `, { mode: 384 });
-    writeFileSync14(join45(temporary, "template.compiled.json"), `${JSON.stringify(draft.compiled, null, 2)}
+    writeFileSync15(join45(temporary, "template.compiled.json"), `${JSON.stringify(draft.compiled, null, 2)}
 `, { mode: 384 });
     replaceDirectory(temporary, destination);
   } catch (error48) {
@@ -278967,12 +279023,12 @@ function installIntegration(configRoot2, draft) {
   const manifest = integrationManifestSchema.parse(JSON.parse(manifestFile.content));
   const destination = join45(configRoot2, "integrations", manifest.id);
   const temporary = `${destination}.draft-${randomUUID10()}`;
-  mkdirSync16(temporary, { recursive: true, mode: 448 });
+  mkdirSync17(temporary, { recursive: true, mode: 448 });
   try {
     for (const file2 of draft.files) {
       const path16 = join45(temporary, file2.path);
-      mkdirSync16(dirname27(path16), { recursive: true, mode: 448 });
-      writeFileSync14(path16, file2.content, { mode: 384 });
+      mkdirSync17(dirname27(path16), { recursive: true, mode: 448 });
+      writeFileSync15(path16, file2.content, { mode: 384 });
     }
     const restrictedEnvironment = { PATH: process.env.PATH || "/usr/bin", HOME: "/nonexistent", LANG: process.env.LANG || "C.UTF-8" };
     execFileSync2(process.execPath, ["--check", join45(temporary, "connector.mjs")], {
@@ -279021,7 +279077,7 @@ function installIntegration(configRoot2, draft) {
   return "integration";
 }
 function replaceDirectory(temporary, destination) {
-  mkdirSync16(dirname27(destination), { recursive: true, mode: 448 });
+  mkdirSync17(dirname27(destination), { recursive: true, mode: 448 });
   const backup = `${destination}.backup-${randomUUID10()}`;
   let backedUp = false;
   try {
@@ -279284,7 +279340,7 @@ function lookupSecret(provider) {
 }
 
 // runtime/src/digest-history.ts
-import { mkdirSync as mkdirSync17, readFileSync as readFileSync25, renameSync as renameSync7, statSync as statSync15, writeFileSync as writeFileSync15 } from "node:fs";
+import { mkdirSync as mkdirSync18, readFileSync as readFileSync25, renameSync as renameSync7, statSync as statSync15, writeFileSync as writeFileSync16 } from "node:fs";
 import { dirname as dirname30, join as join48 } from "node:path";
 import { randomUUID as randomUUID12 } from "node:crypto";
 var MAX_HISTORY_BYTES = 5 * 1024 * 1024;
@@ -279320,9 +279376,9 @@ var DigestHistory = class {
     }
   }
   #write(value2) {
-    mkdirSync17(dirname30(this.#path), { recursive: true, mode: 448 });
+    mkdirSync18(dirname30(this.#path), { recursive: true, mode: 448 });
     const temporary = `${this.#path}.${randomUUID12()}.tmp`;
-    writeFileSync15(temporary, `${JSON.stringify(value2)}
+    writeFileSync16(temporary, `${JSON.stringify(value2)}
 `, { mode: 384 });
     renameSync7(temporary, this.#path);
   }
@@ -279376,6 +279432,10 @@ var commandSchema = external_exports.discriminatedUnion("type", [
     prompt: external_exports.string().min(1).max(1e4)
   }).strict(),
   external_exports.object({ type: external_exports.literal("agent_status"), id: external_exports.string().min(1).max(100) }).strict(),
+  external_exports.object({ type: external_exports.literal("auth_begin"), id: external_exports.string().min(1).max(100), methodId: external_exports.string().regex(/^[a-z0-9-]+::(?:oauth|api_key)$/) }).strict(),
+  external_exports.object({ type: external_exports.literal("auth_response"), id: external_exports.string().min(1).max(100), flowId: external_exports.string().uuid(), promptId: external_exports.string().uuid(), value: external_exports.string().max(32768) }).strict(),
+  external_exports.object({ type: external_exports.literal("auth_cancel"), id: external_exports.string().min(1).max(100), flowId: external_exports.string().uuid() }).strict(),
+  external_exports.object({ type: external_exports.literal("auth_open_url"), id: external_exports.string().min(1).max(100), url: external_exports.string().url().max(2048) }).strict(),
   external_exports.object({ type: external_exports.literal("dictation_status"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("dictation_start"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("dictation_stop"), id: external_exports.string().min(1).max(100) }).strict(),
@@ -279416,6 +279476,7 @@ var integrationRoots = {
   user: resolve16(configRoot, "integrations"),
   state: resolve16(configRoot, "integration-state.json")
 };
+var authFlow;
 function publicIntegrations() {
   return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).map(({ manifest, source, enabled }) => ({
     id: manifest.id,
@@ -279451,13 +279512,34 @@ async function handle(raw) {
       type: "ready",
       protocolVersion: PROTOCOL_VERSION,
       templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
-      integrations: publicIntegrations()
+      integrations: publicIntegrations(),
+      authMethods: await discoverAgentAuthMethods()
     });
     return true;
   }
   if (command.type === "agent_status") {
     const status = await agentConnectionStatus();
     emit({ type: "agent_status", id: command.id, ...status });
+    return true;
+  }
+  if (command.type === "auth_begin") {
+    beginAuth(command.methodId);
+    return true;
+  }
+  if (command.type === "auth_response") {
+    if (authFlow?.id === command.flowId && authFlow.prompt?.id === command.promptId) {
+      const prompt = authFlow.prompt;
+      delete authFlow.prompt;
+      prompt.resolve(command.value);
+    }
+    return true;
+  }
+  if (command.type === "auth_cancel") {
+    if (authFlow?.id === command.flowId) cancelAuth(authFlow);
+    return true;
+  }
+  if (command.type === "auth_open_url") {
+    if (isAllowedExternalUrl(command.url)) void launchExternalUrl(command.url);
     return true;
   }
   if (command.type === "dictation_status" || command.type === "dictation_start" || command.type === "dictation_stop" || command.type === "dictation_cancel") {
@@ -279515,7 +279597,13 @@ async function handle(raw) {
       digestHistory.save(digest);
       emit({ type: "digest", id: command.id, digest });
     } catch (error48) {
-      emit({ type: "error", id: command.id, code: "digest_failed", message: error48 instanceof Error ? error48.message : "Digest generation failed." });
+      const message = error48 instanceof Error ? error48.message : "Digest generation failed.";
+      emit({
+        type: "error",
+        id: command.id,
+        code: message.startsWith("Authenticate a model") ? "model_not_connected" : "digest_failed",
+        message
+      });
     }
     return true;
   }
@@ -279559,7 +279647,8 @@ async function handle(raw) {
         type: "ready",
         protocolVersion: PROTOCOL_VERSION,
         templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
-        integrations: publicIntegrations()
+        integrations: publicIntegrations(),
+        authMethods: await discoverAgentAuthMethods()
       });
     } catch (error48) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error48 instanceof Error ? error48.message : "The draft could not be installed." });
@@ -279574,11 +279663,12 @@ async function handle(raw) {
       while (pendingDrafts.size > 8) pendingDrafts.delete(pendingDrafts.keys().next().value);
       emit({ type: "draft", id: command.id, draft });
     } catch (error48) {
+      const message = error48 instanceof Error ? error48.message : "The drafting agent failed.";
       emit({
         type: "error",
         id: command.id,
-        code: "draft_failed",
-        message: error48 instanceof Error ? error48.message : "The drafting agent failed."
+        code: message.startsWith("Authenticate a model") ? "model_not_connected" : "draft_failed",
+        message
       });
     }
     return true;
@@ -279645,6 +279735,138 @@ async function handle(raw) {
     });
   }
   return true;
+}
+function beginAuth(methodId) {
+  if (authFlow !== void 0) cancelAuth(authFlow);
+  const flow = { id: randomUUID13(), methodId, controller: new AbortController() };
+  authFlow = flow;
+  emit({ type: "auth", phase: "starting", flowId: flow.id, methodId, message: "Starting secure sign-in\u2026" });
+  void runAuth(flow);
+}
+async function runAuth(flow) {
+  try {
+    await loginAgentProvider(flow.methodId, {
+      signal: flow.controller.signal,
+      prompt: (prompt) => promptAuth(flow, prompt),
+      notify: (event) => notifyAuth(flow, event)
+    });
+    if (flow.controller.signal.aborted || authFlow?.id !== flow.id) return;
+    const status = await agentConnectionStatus();
+    emit({ type: "agent_status", id: `auth-${flow.id}`, ...status });
+    emit({ type: "auth_methods", methods: await discoverAgentAuthMethods() });
+    emit({ type: "auth", phase: "complete", flowId: flow.id, methodId: flow.methodId, message: "Connected. OmaDigest is ready to generate." });
+  } catch (error48) {
+    if (flow.controller.signal.aborted) {
+      emit({ type: "auth", phase: "cancelled", flowId: flow.id, methodId: flow.methodId, message: "Sign-in cancelled." });
+    } else {
+      emit({
+        type: "auth",
+        phase: "error",
+        flowId: flow.id,
+        methodId: flow.methodId,
+        message: error48 instanceof Error ? error48.message : "Sign-in could not be completed."
+      });
+    }
+  } finally {
+    flow.prompt?.cleanup();
+    if (authFlow?.id === flow.id) authFlow = void 0;
+  }
+}
+function promptAuth(flow, prompt) {
+  if (flow.controller.signal.aborted || authFlow?.id !== flow.id)
+    return Promise.reject(new Error("Authentication prompt was cancelled"));
+  flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
+  return new Promise((resolvePrompt, rejectPrompt) => {
+    const promptId = randomUUID13();
+    const signals = [flow.controller.signal, prompt.signal].filter((signal2) => signal2 !== void 0);
+    const signal = signals.length === 1 ? signals[0] ?? flow.controller.signal : AbortSignal.any(signals);
+    const onAbort = () => rejectPrompt(new Error("Authentication prompt was cancelled"));
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    flow.prompt = {
+      id: promptId,
+      resolve: (value2) => {
+        cleanup();
+        resolvePrompt(value2);
+      },
+      reject: (error48) => {
+        cleanup();
+        rejectPrompt(error48);
+      },
+      cleanup
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (prompt.type === "manual_code") return;
+    emit({
+      type: "auth",
+      phase: "prompt",
+      flowId: flow.id,
+      methodId: flow.methodId,
+      prompt: {
+        id: promptId,
+        kind: prompt.type,
+        message: prompt.message,
+        ..."placeholder" in prompt && prompt.placeholder !== void 0 ? { placeholder: prompt.placeholder } : {},
+        ...prompt.type === "select" ? { options: prompt.options.map((option) => ({ ...option })) } : {}
+      }
+    });
+  });
+}
+function notifyAuth(flow, event) {
+  if (authFlow?.id !== flow.id || flow.controller.signal.aborted) return;
+  if (event.type === "auth_url") {
+    if (isAllowedExternalUrl(event.url)) {
+      emit({
+        type: "auth",
+        phase: "browser",
+        flowId: flow.id,
+        methodId: flow.methodId,
+        url: event.url,
+        message: event.instructions ?? "Complete sign-in in your browser."
+      });
+      void launchExternalUrl(event.url);
+    }
+    return;
+  }
+  if (event.type === "device_code") {
+    if (isAllowedExternalUrl(event.verificationUri)) {
+      emit({
+        type: "auth",
+        phase: "device_code",
+        flowId: flow.id,
+        methodId: flow.methodId,
+        verificationUri: event.verificationUri,
+        userCode: event.userCode,
+        message: "Enter this code on the provider sign-in page."
+      });
+      void launchExternalUrl(event.verificationUri);
+    }
+    return;
+  }
+  emit({ type: "auth", phase: "info", flowId: flow.id, methodId: flow.methodId, message: event.message });
+}
+function cancelAuth(flow) {
+  if (authFlow?.id === flow.id) authFlow = void 0;
+  flow.controller.abort();
+  flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
+}
+function isAllowedExternalUrl(raw) {
+  try {
+    const url2 = new URL(raw);
+    return (url2.protocol === "https:" || url2.protocol === "http:") && url2.username === "" && url2.password === "";
+  } catch {
+    return false;
+  }
+}
+function launchExternalUrl(url2) {
+  return new Promise((resolveLaunch, rejectLaunch) => {
+    const child = execFile4(
+      "omarchy",
+      ["launch", "browser", url2],
+      { timeout: 1e4, windowsHide: true },
+      (error48) => error48 === null ? resolveLaunch() : rejectLaunch(error48)
+    );
+    child.unref();
+  });
 }
 function launchDefaultAgent(prompt) {
   return new Promise((resolveLaunch, rejectLaunch) => {

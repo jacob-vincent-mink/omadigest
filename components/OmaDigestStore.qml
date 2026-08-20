@@ -33,12 +33,20 @@ Scope {
   property string digestState: "idle"
   property int attentionCount: 0
   property var agentConnection: ({ connected: false, provider: "", model: "" })
+  property var authMethods: []
+  property var auth: ({ phase: "idle", flowId: "", methodId: "", message: "", url: "", verificationUri: "", userCode: "", prompt: null })
   property bool dictationAvailable: false
   property string dictationState: "idle"
   property string transcript: ""
   property var tts: ({ configured: false, state: "idle", config: null })
+  property string errorCode: ""
   property string errorMessage: ""
   property int nextId: 1
+
+  function clearError() {
+    errorCode = ""
+    errorMessage = ""
+  }
 
   function send(command) {
     if (!broker.running) return
@@ -47,6 +55,7 @@ Scope {
 
   function startDraft(kind, request) {
     var text = String(request || "").trim()
+    clearError()
     if (!text) return
     draftKind = kind === "integration" ? "integration" : "template"
     draftState = "working"
@@ -72,6 +81,22 @@ Scope {
   }
 
   function requestAgentStatus() { send({ type: "agent_status", id: "agent-" + nextId++ }) }
+  function beginAuth(methodId) {
+    clearError()
+    send({ type: "auth_begin", id: "auth-" + nextId++, methodId: String(methodId) })
+  }
+  function respondAuth(value) {
+    if (!auth.flowId || !auth.prompt) return
+    send({ type: "auth_response", id: "auth-" + nextId++, flowId: auth.flowId, promptId: auth.prompt.id, value: String(value || "") })
+  }
+  function cancelAuth() {
+    if (!auth.flowId) return
+    send({ type: "auth_cancel", id: "auth-" + nextId++, flowId: auth.flowId })
+  }
+  function openAuthUrl() {
+    var url = String(auth.url || auth.verificationUri || "")
+    if (url) send({ type: "auth_open_url", id: "auth-" + nextId++, url: url })
+  }
 
   function requestDictationStatus() {
     send({ type: "dictation_status", id: "dictation-" + nextId++ })
@@ -102,6 +127,7 @@ Scope {
   }
 
   function generateDigest(context, templateId) {
+    clearError()
     digestState = "working"
     digest = null
     var command = { type: "digest_generate", id: "digest-" + nextId++, context: context }
@@ -110,6 +136,7 @@ Scope {
   }
 
   function configureTts(provider, endpoint, model, voice, speed, apiKey) {
+    clearError()
     send({
       type: "tts_configure",
       id: "tts-" + nextId++,
@@ -182,6 +209,7 @@ Scope {
       status = "Ready to build a briefing"
       templates = event.templates || []
       integrations = event.integrations || []
+      authMethods = event.authMethods || []
       root.requestAgentStatus()
       root.requestDictationStatus()
       root.requestTtsStatus()
@@ -215,6 +243,20 @@ Scope {
         provider: String(event.provider || ""),
         model: String(event.model || "")
       }
+      return
+    }
+    if (event.type === "auth_methods") {
+      authMethods = event.methods || []
+      return
+    }
+    if (event.type === "auth") {
+      auth = {
+        phase: String(event.phase || "idle"), flowId: String(event.flowId || ""),
+        methodId: String(event.methodId || ""), message: String(event.message || ""),
+        url: String(event.url || ""), verificationUri: String(event.verificationUri || ""),
+        userCode: String(event.userCode || ""), prompt: event.prompt || null
+      }
+      if (auth.phase === "complete") clearError()
       return
     }
     if (event.type === "dictation") {
@@ -278,8 +320,9 @@ Scope {
       state = String(event.code || "") === "protocol_mismatch" ? "error" : "ready"
       if (String(event.id || "").indexOf("draft-") === 0) draftState = "error"
       if (String(event.id || "").indexOf("digest-") === 0) digestState = "error"
+      errorCode = String(event.code || "unknown")
       errorMessage = String(event.message || "OmaDigest encountered an error.")
-      status = errorMessage
+      status = "Ready"
     }
   }
 

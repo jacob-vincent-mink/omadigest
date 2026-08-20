@@ -27,7 +27,7 @@ Attention items carry stable ID, source, app, bounded title/body, urgency, and t
 
 ## Pi runtime
 
-The broker embeds `@earendil-works/pi-coding-agent` and reuses the user's authenticated Pi model catalog. It disables model-network catalog refresh at runtime and discovers no user extensions, project instructions, or unrelated skills.
+The broker embeds `@earendil-works/pi-coding-agent` and exposes Pi's typed provider authentication through **Settings → Connections**. Codex/ChatGPT and Grok OAuth open in the system browser; OpenAI and xAI API-key prompts stay inside the panel. Credentials and the selected provider live in OmaDigest's private configuration rather than the shell or QML process. The runtime disables model-network catalog refresh and discovers no user extensions, project instructions, or unrelated skills.
 
 Every agent operation uses an in-memory session and settings. The selected authoring skill is injected directly into the system prompt; Pi's probabilistic skill invocation does not govern routing.
 

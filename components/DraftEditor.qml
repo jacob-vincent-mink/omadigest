@@ -47,9 +47,11 @@ Column {
   }
 
   Row {
+    x: Math.max(0, (parent.width - implicitWidth) / 2)
     spacing: Style.space(8)
 
     PanelActionButton {
+      anchors.verticalCenter: parent.verticalCenter
       iconText: OmaDigestStore.dictationState === "recording" ? "󰍬" : "󰍭"
       tooltipText: OmaDigestStore.dictationAvailable ? "Dictate" : "Voxtype is unavailable"
       foreground: root.foreground

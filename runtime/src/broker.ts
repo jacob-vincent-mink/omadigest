@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { z } from "zod";
@@ -7,7 +8,8 @@ import { loadTemplates } from "./templates.js";
 import { selectTemplate } from "./selector.js";
 import { discoverIntegrations, integrationConfigRoot, setIntegrationEnabled } from "./integrations.js";
 import { IntegrationRuntime } from "./integration-runtime.js";
-import { agentConnectionStatus, runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
+import { agentConnectionStatus, discoverAgentAuthMethods, loginAgentProvider, runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
+import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
 import { AttentionStore, attentionItemSchema } from "./attention.js";
 import { installDraft } from "./drafts.js";
 import { DictationService } from "./dictation.js";
@@ -53,6 +55,10 @@ const commandSchema = z.discriminatedUnion("type", [
     prompt: z.string().min(1).max(10_000)
   }).strict(),
   z.object({ type: z.literal("agent_status"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("auth_begin"), id: z.string().min(1).max(100), methodId: z.string().regex(/^[a-z0-9-]+::(?:oauth|api_key)$/) }).strict(),
+  z.object({ type: z.literal("auth_response"), id: z.string().min(1).max(100), flowId: z.string().uuid(), promptId: z.string().uuid(), value: z.string().max(32_768) }).strict(),
+  z.object({ type: z.literal("auth_cancel"), id: z.string().min(1).max(100), flowId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("auth_open_url"), id: z.string().min(1).max(100), url: z.string().url().max(2048) }).strict(),
   z.object({ type: z.literal("dictation_status"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("dictation_start"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("dictation_stop"), id: z.string().min(1).max(100) }).strict(),
@@ -97,6 +103,14 @@ const integrationRoots = {
   state: resolve(configRoot, "integration-state.json")
 };
 
+type AuthFlow = {
+  id: string;
+  methodId: string;
+  controller: AbortController;
+  prompt?: { id: string; resolve: (value: string) => void; reject: (error: Error) => void; cleanup: () => void };
+};
+let authFlow: AuthFlow | undefined;
+
 function publicIntegrations(): PublicIntegration[] {
   return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
     .map(({ manifest, source, enabled }) => ({
@@ -135,7 +149,8 @@ async function handle(raw: string): Promise<boolean> {
       type: "ready",
       protocolVersion: PROTOCOL_VERSION,
       templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
-      integrations: publicIntegrations()
+      integrations: publicIntegrations(),
+      authMethods: await discoverAgentAuthMethods()
     });
     return true;
   }
@@ -143,6 +158,27 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "agent_status") {
     const status = await agentConnectionStatus();
     emit({ type: "agent_status", id: command.id, ...status });
+    return true;
+  }
+
+  if (command.type === "auth_begin") {
+    beginAuth(command.methodId);
+    return true;
+  }
+  if (command.type === "auth_response") {
+    if (authFlow?.id === command.flowId && authFlow.prompt?.id === command.promptId) {
+      const prompt = authFlow.prompt;
+      delete authFlow.prompt;
+      prompt.resolve(command.value);
+    }
+    return true;
+  }
+  if (command.type === "auth_cancel") {
+    if (authFlow?.id === command.flowId) cancelAuth(authFlow);
+    return true;
+  }
+  if (command.type === "auth_open_url") {
+    if (isAllowedExternalUrl(command.url)) void launchExternalUrl(command.url);
     return true;
   }
 
@@ -205,7 +241,13 @@ async function handle(raw: string): Promise<boolean> {
       digestHistory.save(digest);
       emit({ type: "digest", id: command.id, digest });
     } catch (error) {
-      emit({ type: "error", id: command.id, code: "digest_failed", message: error instanceof Error ? error.message : "Digest generation failed." });
+      const message = error instanceof Error ? error.message : "Digest generation failed.";
+      emit({
+        type: "error",
+        id: command.id,
+        code: message.startsWith("Authenticate a model") ? "model_not_connected" : "digest_failed",
+        message
+      });
     }
     return true;
   }
@@ -252,7 +294,8 @@ async function handle(raw: string): Promise<boolean> {
         type: "ready",
         protocolVersion: PROTOCOL_VERSION,
         templates: templates.map(({ manifest, instructions }) => ({ ...manifest, instructions })),
-        integrations: publicIntegrations()
+        integrations: publicIntegrations(),
+        authMethods: await discoverAgentAuthMethods()
       });
     } catch (error) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error instanceof Error ? error.message : "The draft could not be installed." });
@@ -268,11 +311,12 @@ async function handle(raw: string): Promise<boolean> {
       while (pendingDrafts.size > 8) pendingDrafts.delete(pendingDrafts.keys().next().value as string);
       emit({ type: "draft", id: command.id, draft });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "The drafting agent failed.";
       emit({
         type: "error",
         id: command.id,
-        code: "draft_failed",
-        message: error instanceof Error ? error.message : "The drafting agent failed."
+        code: message.startsWith("Authenticate a model") ? "model_not_connected" : "draft_failed",
+        message
       });
     }
     return true;
@@ -343,6 +387,111 @@ async function handle(raw: string): Promise<boolean> {
     });
   }
   return true;
+}
+
+function beginAuth(methodId: string): void {
+  if (authFlow !== undefined) cancelAuth(authFlow);
+  const flow: AuthFlow = { id: randomUUID(), methodId, controller: new AbortController() };
+  authFlow = flow;
+  emit({ type: "auth", phase: "starting", flowId: flow.id, methodId, message: "Starting secure sign-in…" });
+  void runAuth(flow);
+}
+
+async function runAuth(flow: AuthFlow): Promise<void> {
+  try {
+    await loginAgentProvider(flow.methodId, {
+      signal: flow.controller.signal,
+      prompt: (prompt) => promptAuth(flow, prompt),
+      notify: (event) => notifyAuth(flow, event)
+    });
+    if (flow.controller.signal.aborted || authFlow?.id !== flow.id) return;
+    const status = await agentConnectionStatus();
+    emit({ type: "agent_status", id: `auth-${flow.id}`, ...status });
+    emit({ type: "auth_methods", methods: await discoverAgentAuthMethods() });
+    emit({ type: "auth", phase: "complete", flowId: flow.id, methodId: flow.methodId, message: "Connected. OmaDigest is ready to generate." });
+  } catch (error) {
+    if (flow.controller.signal.aborted) {
+      emit({ type: "auth", phase: "cancelled", flowId: flow.id, methodId: flow.methodId, message: "Sign-in cancelled." });
+    } else {
+      emit({ type: "auth", phase: "error", flowId: flow.id, methodId: flow.methodId,
+        message: error instanceof Error ? error.message : "Sign-in could not be completed." });
+    }
+  } finally {
+    flow.prompt?.cleanup();
+    if (authFlow?.id === flow.id) authFlow = undefined;
+  }
+}
+
+function promptAuth(flow: AuthFlow, prompt: AuthPrompt): Promise<string> {
+  if (flow.controller.signal.aborted || authFlow?.id !== flow.id)
+    return Promise.reject(new Error("Authentication prompt was cancelled"));
+  flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
+  return new Promise<string>((resolvePrompt, rejectPrompt) => {
+    const promptId = randomUUID();
+    const signals = [flow.controller.signal, prompt.signal].filter((signal): signal is AbortSignal => signal !== undefined);
+    const signal = signals.length === 1 ? (signals[0] ?? flow.controller.signal) : AbortSignal.any(signals);
+    const onAbort = () => rejectPrompt(new Error("Authentication prompt was cancelled"));
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    flow.prompt = {
+      id: promptId,
+      resolve: (value) => { cleanup(); resolvePrompt(value); },
+      reject: (error) => { cleanup(); rejectPrompt(error); },
+      cleanup
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    // OAuth callback servers race this compatibility prompt and resolve it themselves.
+    if (prompt.type === "manual_code") return;
+    emit({
+      type: "auth", phase: "prompt", flowId: flow.id, methodId: flow.methodId,
+      prompt: {
+        id: promptId, kind: prompt.type, message: prompt.message,
+        ...("placeholder" in prompt && prompt.placeholder !== undefined ? { placeholder: prompt.placeholder } : {}),
+        ...(prompt.type === "select" ? { options: prompt.options.map((option) => ({ ...option })) } : {})
+      }
+    });
+  });
+}
+
+function notifyAuth(flow: AuthFlow, event: AuthEvent): void {
+  if (authFlow?.id !== flow.id || flow.controller.signal.aborted) return;
+  if (event.type === "auth_url") {
+    if (isAllowedExternalUrl(event.url)) {
+      emit({ type: "auth", phase: "browser", flowId: flow.id, methodId: flow.methodId, url: event.url,
+        message: event.instructions ?? "Complete sign-in in your browser." });
+      void launchExternalUrl(event.url);
+    }
+    return;
+  }
+  if (event.type === "device_code") {
+    if (isAllowedExternalUrl(event.verificationUri)) {
+      emit({ type: "auth", phase: "device_code", flowId: flow.id, methodId: flow.methodId,
+        verificationUri: event.verificationUri, userCode: event.userCode, message: "Enter this code on the provider sign-in page." });
+      void launchExternalUrl(event.verificationUri);
+    }
+    return;
+  }
+  emit({ type: "auth", phase: "info", flowId: flow.id, methodId: flow.methodId, message: event.message });
+}
+
+function cancelAuth(flow: AuthFlow): void {
+  if (authFlow?.id === flow.id) authFlow = undefined;
+  flow.controller.abort();
+  flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
+}
+
+function isAllowedExternalUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return (url.protocol === "https:" || url.protocol === "http:") && url.username === "" && url.password === "";
+  } catch { return false; }
+}
+
+function launchExternalUrl(url: string): Promise<void> {
+  return new Promise((resolveLaunch, rejectLaunch) => {
+    const child = execFile("omarchy", ["launch", "browser", url], { timeout: 10_000, windowsHide: true },
+      (error) => error === null ? resolveLaunch() : rejectLaunch(error));
+    child.unref();
+  });
 }
 
 function launchDefaultAgent(prompt: string): Promise<void> {

@@ -57,7 +57,7 @@ Requirements:
 
 - Omarchy Quattro with shell plugin support
 - Node.js 22 or newer
-- an authenticated Pi model for drafting and generation
+- a supported provider account; connect Codex/ChatGPT, OpenAI, or Grok from **Settings → Connections**
 - optional: Voxtype for dictation
 - optional: `secret-tool` and `mpv` for read mode and integration secrets
 

@@ -97,6 +97,22 @@ export type PublicIntegration = {
   permissions: { networkHosts: string[]; commands: string[]; readPaths: string[]; writePaths: string[] };
 };
 
+export type AgentAuthMethod = {
+  id: string;
+  providerId: string;
+  authType: "oauth" | "api_key";
+  label: string;
+  description: string;
+};
+
+export type AgentAuthPrompt = {
+  id: string;
+  kind: "text" | "secret" | "select";
+  message: string;
+  placeholder?: string;
+  options?: Array<{ id: string; label: string; description?: string }>;
+};
+
 export type BrokerCommand =
   | { type: "initialize"; protocolVersion: number }
   | { type: "select_template"; id: string; context: GenerationContext }
@@ -107,6 +123,10 @@ export type BrokerCommand =
   | { type: "draft_reject"; id: string; draftId: string }
   | { type: "handoff_default_agent"; id: string; prompt: string }
   | { type: "agent_status"; id: string }
+  | { type: "auth_begin"; id: string; methodId: string }
+  | { type: "auth_response"; id: string; flowId: string; promptId: string; value: string }
+  | { type: "auth_cancel"; id: string; flowId: string }
+  | { type: "auth_open_url"; id: string; url: string }
   | { type: "dictation_status"; id: string }
   | { type: "dictation_start"; id: string }
   | { type: "dictation_stop"; id: string }
@@ -124,7 +144,7 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[] }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }
   | { type: "integration_setup"; id: string; integrationId: string; ready: boolean; message: string }
@@ -133,6 +153,8 @@ export type BrokerEvent =
   | { type: "draft_saved"; id: string; draftId: string; kind: "template" | "integration" }
   | { type: "handoff"; id: string; state: "launched" }
   | { type: "agent_status"; id: string; connected: boolean; provider: string; model: string }
+  | { type: "auth_methods"; id?: string; methods: AgentAuthMethod[] }
+  | { type: "auth"; id?: string; phase: "starting" | "browser" | "device_code" | "prompt" | "info" | "complete" | "cancelled" | "error"; flowId: string; methodId: string; message?: string; url?: string; verificationUri?: string; userCode?: string; prompt?: AgentAuthPrompt }
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
   | { type: "attention"; id: string; count: number }
