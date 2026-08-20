@@ -25,6 +25,7 @@ TTS keys and integration `secret` fields are stored through Secret Service (`sec
 Generated source can be dangerous. OmaDigest therefore:
 
 - gives the authoring model no file/shell/network tools;
+- launches a digest action in the default Omarchy agent only after **Send to agent** is clicked, framing cited notification and connector fields as untrusted evidence rather than instructions;
 - accepts only allowlisted relative files and bounded sizes;
 - validates the manifest and JavaScript syntax;
 - shows the proposal before acceptance;

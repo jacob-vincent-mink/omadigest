@@ -48,6 +48,13 @@ export class AttentionStore {
       .slice(0, Math.max(1, Math.min(200, limit)));
   }
 
+  byIds(ids: string[]): AttentionItem[] {
+    return ids.slice(0, 32).flatMap((id) => {
+      const item = this.#items.get(id);
+      return item === undefined ? [] : [item];
+    });
+  }
+
   #load(): void {
     if (!existsSync(this.#eventsDir)) return;
     let names: string[];

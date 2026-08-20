@@ -32,5 +32,6 @@ describe("AttentionStore", () => {
       { id: "2", source: "x", app: "X", title: "New", body: "", urgency: "critical", occurredAt: "2026-08-20T11:00:00.000Z" }
     ]);
     expect(attention.recent(1)[0]?.title).toBe("New");
+    expect(attention.byIds(["1", "missing", "2"]).map((item) => item.title)).toEqual(["Old", "New"]);
   });
 });

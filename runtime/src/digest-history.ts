@@ -19,6 +19,7 @@ export class DigestHistory {
   }
 
   list(): Digest[] { return this.#read().digests; }
+  get(id: string): Digest | undefined { return this.#read().digests.find((digest) => digest.id === id); }
 
   save(digest: Digest): void {
     const current = this.#read().digests.filter((item) => item.id !== digest.id);

@@ -80,6 +80,14 @@ Scope {
     send({ type: "handoff_default_agent", id: "handoff-" + nextId++, prompt: String(prompt || "") })
   }
 
+  function handoffDigestEntry(digestId, sectionIndex, entryIndex) {
+    clearError()
+    send({
+      type: "digest_handoff", id: "handoff-" + nextId++, digestId: String(digestId),
+      sectionIndex: Number(sectionIndex), entryIndex: Number(entryIndex)
+    })
+  }
+
   function requestAgentStatus() { send({ type: "agent_status", id: "agent-" + nextId++ }) }
   function beginAuth(methodId) {
     clearError()

@@ -541,7 +541,9 @@ Panel {
               model: OmaDigest.OmaDigestStore.digest ? OmaDigest.OmaDigestStore.digest.sections : []
 
               Column {
+                id: sectionDelegate
                 required property var modelData
+                required property int index
                 width: parent.width
                 spacing: Style.space(6)
 
@@ -558,19 +560,52 @@ Panel {
                   model: modelData.entries || []
                   Rectangle {
                     required property var modelData
+                    required property int index
                     width: parent.width
-                    height: entryText.implicitHeight + Style.space(18)
+                    height: entryContent.implicitHeight + Style.space(18)
                     radius: Style.cornerRadius
                     color: Style.normalFillFor(root.foreground, Color.accent)
-                    Text {
-                      id: entryText
+
+                    Column {
+                      id: entryContent
                       anchors.fill: parent
                       anchors.margins: Style.space(9)
-                      text: String(modelData.headline) + "\n" + String(modelData.explanation)
-                      color: root.foreground
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.bodySmall
-                      wrapMode: Text.WordWrap
+                      spacing: Style.space(7)
+
+                      Text {
+                        width: parent.width
+                        text: String(modelData.headline) + "\n" + String(modelData.explanation)
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        wrapMode: Text.WordWrap
+                      }
+
+                      Rectangle {
+                        x: parent.width - width
+                        width: Style.space(138)
+                        height: Style.space(30)
+                        radius: Style.cornerRadius
+                        color: agentMouse.containsMouse
+                          ? Style.hoverFillFor(root.foreground, Color.accent)
+                          : Style.normalFillFor(root.foreground, Color.accent)
+                        Text {
+                          anchors.centerIn: parent
+                          text: "Send to agent  →"
+                          color: Color.accent
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                          font.bold: true
+                        }
+                        MouseArea {
+                          id: agentMouse
+                          anchors.fill: parent
+                          hoverEnabled: true
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: OmaDigest.OmaDigestStore.handoffDigestEntry(
+                            OmaDigest.OmaDigestStore.digest.id, sectionDelegate.index, index)
+                        }
+                      }
                     }
                   }
                 }

@@ -31,6 +31,8 @@ OmaDigest uses separate, narrow sessions:
 
 These sessions receive no Pi `bash`, `read`, `write`, `edit`, browser, web, or device tools. An unrelated drafting request can only propose a prompt for the system's default agent. OmaDigest launches that prompt through `omarchy agent prompt` only after the user presses **Open in default agent**.
 
+Every digest entry also has **Send to agent**. This is an explicit handoff to the default Omarchy agent with the selected digest item and its retained cited notifications or connector records. Crash notifications include the originating application and timestamp so the agent can invoke the `diagnose-crash` workflow and correlate the correct systemd-coredump instead of guessing from the summary.
+
 Generated integrations are staged as complete directories, schema-validated, syntax-checked, displayed for review, installed only after acceptance, and remain disabled until separately configured and enabled. Connector processes run outside Quickshell with Node's permission model, minimal environment, bounded I/O, and timeouts. See [Security](docs/security.md) for the honest limits.
 
 ## Architecture

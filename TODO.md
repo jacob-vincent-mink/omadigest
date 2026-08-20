@@ -12,6 +12,7 @@
 - [x] Present provider authentication as a polished **Connect OmaDigest** dropdown and Connect button; keep API-key prompts in-app and OAuth callbacks in the broker.
 - [x] Center the microphone toggle with the drafting button.
 - [x] Replace inline voice/read-mode forms with compact selectors and a separate read-mode configuration view.
+- [x] Add explicit per-entry handoff to the default Omarchy agent with retained cited evidence and crash-report correlation context.
 
 ## In progress
 

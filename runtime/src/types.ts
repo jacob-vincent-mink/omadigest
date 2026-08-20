@@ -122,6 +122,7 @@ export type BrokerCommand =
   | { type: "draft_accept"; id: string; draftId: string }
   | { type: "draft_reject"; id: string; draftId: string }
   | { type: "handoff_default_agent"; id: string; prompt: string }
+  | { type: "digest_handoff"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
   | { type: "agent_status"; id: string }
   | { type: "auth_begin"; id: string; methodId: string }
   | { type: "auth_response"; id: string; flowId: string; promptId: string; value: string }

@@ -25,6 +25,7 @@ describe("DigestHistory", () => {
     expect(history.list().map((item) => item.id)).toEqual([
       "00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001"
     ]);
+    expect(history.get("00000000-0000-4000-8000-000000000002")?.title).toBe("Digest 00000000-0000-4000-8000-000000000002");
     history.delete("00000000-0000-4000-8000-000000000002");
     expect(history.list()).toHaveLength(1);
     history.clear();
