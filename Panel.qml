@@ -1149,6 +1149,7 @@ Panel {
                     Column {
                       width: parent.width - voiceInputPicker.width - Style.space(10)
                       Text {
+                        width: parent.width
                         text: "Voice input"
                         color: root.foreground
                         font.family: root.fontFamily
@@ -1156,10 +1157,12 @@ Panel {
                         font.bold: true
                       }
                       Text {
-                        text: "Used by the centered microphone control while drafting."
+                        width: parent.width
+                        text: "Used by the microphone control while drafting."
                         color: Qt.darker(root.foreground, 1.4)
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption
+                        wrapMode: Text.WordWrap
                       }
                     }
                     Dropdown {
@@ -1180,6 +1183,7 @@ Panel {
                     Column {
                       width: parent.width - readModePicker.width - configureReadMode.width - Style.space(18)
                       Text {
+                        width: parent.width
                         text: "Read aloud"
                         color: root.foreground
                         font.family: root.fontFamily
@@ -1187,6 +1191,7 @@ Panel {
                         font.bold: true
                       }
                       Text {
+                        width: parent.width
                         text: OmaDigest.OmaDigestStore.tts.configured ? "Ready" : "Not configured"
                         color: Qt.darker(root.foreground, 1.4)
                         font.family: root.fontFamily
