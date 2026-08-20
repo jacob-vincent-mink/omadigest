@@ -1145,8 +1145,11 @@ Panel {
 
                   Row {
                     width: parent.width
+                    height: Math.max(voiceInputCopy.implicitHeight, voiceInputPicker.implicitHeight)
                     spacing: Style.space(10)
                     Column {
+                      id: voiceInputCopy
+                      anchors.verticalCenter: parent.verticalCenter
                       width: parent.width - voiceInputPicker.width - Style.space(10)
                       Text {
                         width: parent.width
@@ -1167,6 +1170,7 @@ Panel {
                     }
                     Dropdown {
                       id: voiceInputPicker
+                      anchors.verticalCenter: parent.verticalCenter
                       width: Style.space(150)
                       showLabel: false
                       options: [{ value: "voxtype", label: OmaDigest.OmaDigestStore.dictationAvailable ? "Voxtype" : "Unavailable" }]
@@ -1179,9 +1183,12 @@ Panel {
 
                   Row {
                     width: parent.width
+                    height: Math.max(readModeCopy.implicitHeight, Style.space(36))
                     spacing: Style.space(8)
                     Column {
-                      width: parent.width - readModePicker.width - configureReadMode.width - Style.space(18)
+                      id: readModeCopy
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: parent.width - readModePicker.width - configureReadMode.width - Style.space(16)
                       Text {
                         width: parent.width
                         text: "Read aloud"
@@ -1200,7 +1207,9 @@ Panel {
                     }
                     Dropdown {
                       id: readModePicker
+                      anchors.verticalCenter: parent.verticalCenter
                       width: Style.space(150)
+                      height: Style.space(36)
                       showLabel: false
                       options: [
                         { value: "openai-compatible", label: "OpenAI-compatible" },
@@ -1213,8 +1222,9 @@ Panel {
                     }
                     Rectangle {
                       id: configureReadMode
+                      anchors.verticalCenter: parent.verticalCenter
                       width: Style.space(88)
-                      height: Style.space(34)
+                      height: Style.space(36)
                       radius: Style.cornerRadius
                       color: Style.normalFillFor(root.foreground, Color.accent)
                       Text {
