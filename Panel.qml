@@ -248,11 +248,12 @@ Panel {
             width: parent.width
             spacing: Style.space(10)
 
-            Text {
-              text: "󰂚"
-              color: Color.accent
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.displaySmall
+            OmaDigest.OmaDigestMark {
+              width: Style.space(34)
+              height: width
+              size: width
+              accent: Color.accent
+              active: OmaDigest.OmaDigestStore.digestState === "working" || OmaDigest.OmaDigestStore.draftState === "working"
             }
 
             Column {
