@@ -1,0 +1,3 @@
+Create an OmaDigest template named GitHub Triage with id github-triage.
+
+It should use notifications plus io.github.jacob-vincent-mink.github-inbox, and only match when that connector is available. Make it a high-priority manual or scheduled template for release and maintenance work. Use these sections in order: Needs action, CI and releases, Reviews and mentions, No action. Prefer failed workflows, review requests, security notices, and release blockers; collapse repetitive activity; put informational successes in No action. Keep explanations concise, cite every entry, and cap the output at 12 entries.

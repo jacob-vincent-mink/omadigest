@@ -128,6 +128,7 @@ export type BrokerCommand =
   | { type: "draft_accept"; id: string; draftId: string }
   | { type: "draft_reject"; id: string; draftId: string }
   | { type: "handoff_default_agent"; id: string; prompt: string }
+  | { type: "handoff_herdr"; id: string; kind: "template" | "integration"; request: string; draftJson: string }
   | { type: "digest_handoff"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
   | { type: "agent_status"; id: string }
   | { type: "privacy_status"; id: string }
@@ -163,7 +164,7 @@ export type BrokerEvent =
   | { type: "draft_state"; id: string; state: "working" }
   | { type: "draft"; id: string; draft: unknown }
   | { type: "draft_saved"; id: string; draftId: string; kind: "template" | "integration" }
-  | { type: "handoff"; id: string; state: "launched" }
+  | { type: "handoff"; id: string; state: "launched"; target?: "default-agent" | "herdr" }
   | { type: "agent_status"; id: string; connected: boolean; provider: string; model: string }
   | { type: "privacy"; id: string; policy: PublicPrivacyPolicy }
   | { type: "auth_methods"; id?: string; methods: AgentAuthMethod[] }

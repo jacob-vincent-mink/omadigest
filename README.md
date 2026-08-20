@@ -33,6 +33,8 @@ These sessions receive no Pi `bash`, `read`, `write`, `edit`, browser, web, or d
 
 Every digest entry also has **Send to agent**. This is an explicit handoff to the default Omarchy agent with the selected digest item and its retained cited notifications or connector records. Crash notifications include the originating application and timestamp so the agent can invoke the `diagnose-crash` workflow and correlate the correct systemd-coredump instead of guessing from the summary.
 
+Reviewed template and integration drafts can be explicitly continued in Herdr when they need broader follow-up. OmaDigest creates a dedicated Herdr workspace, starts a coding agent, and submits the original request plus a bounded draft snapshot. The running broker then hot-reloads valid file-backed results; no Herdr work starts without the button click.
+
 Generated integrations are staged as complete directories, schema-validated, syntax-checked, displayed for review, installed only after acceptance, and remain disabled until separately configured and enabled. Connector processes run outside Quickshell with Node's permission model, minimal environment, bounded I/O, and timeouts. See [Security](docs/security.md) for the honest limits.
 
 ## Architecture

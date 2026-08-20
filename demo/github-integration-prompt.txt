@@ -1,0 +1,7 @@
+Create a self-contained OmaDigest integration named GitHub Inbox with id io.github.jacob-vincent-mink.github-inbox.
+
+Use the already authenticated `gh` CLI; do not request or store a GitHub token. Declare `gh` as the only command permission and `api.github.com` and `github.com` as network hosts. The setup screen should have an optional repository filter such as owner/repo and a boolean for including read notifications. Probe readiness with `gh api user`.
+
+For sync, call GitHub's notifications API through `gh api -X GET notifications`, request up to 30 notifications, optionally include read notifications, and optionally filter by exact repository full name. Return bounded work-sensitivity items with stable IDs, the notification reason and repository in the body, the GitHub updated_at timestamp, and a useful web URL when one can be derived. Handle malformed or missing fields defensively.
+
+Include manifest.json, connector.mjs, connector.test.mjs, and README.md. Keep the connector NDJSON protocol-compliant and deterministic in tests.

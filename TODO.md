@@ -17,6 +17,7 @@
 - [x] Mark successful digest inputs seen (with an explicit mark-seen action) without deleting retained correlation evidence.
 - [x] Add deterministic per-application notification privacy with protected Ignore defaults, Count only, Digest, and Digest + agent modes.
 - [x] Keep policy, templates, integrations, permissions, and enablement file-backed and hot-reload valid external agent edits.
+- [x] Add explicit template/integration follow-up handoff to a dedicated Herdr workspace.
 
 ## In progress
 

@@ -82,6 +82,13 @@ Scope {
     send({ type: "handoff_default_agent", id: "handoff-" + nextId++, prompt: String(prompt || "") })
   }
 
+  function handoffHerdr(kind, request, currentDraft) {
+    send({
+      type: "handoff_herdr", id: "handoff-" + nextId++, kind: String(kind),
+      request: String(request || ""), draftJson: JSON.stringify(currentDraft || null).slice(0, 120000)
+    })
+  }
+
   function handoffDigestEntry(digestId, sectionIndex, entryIndex) {
     clearError()
     send({
@@ -329,7 +336,7 @@ Scope {
       return
     }
     if (event.type === "handoff") {
-      status = "Opened in the default agent"
+      status = event.target === "herdr" ? "Continued in Herdr" : "Opened in the default agent"
       return
     }
     if (event.type === "integration_setup") {

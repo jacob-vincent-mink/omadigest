@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -104,7 +104,8 @@ export class IntegrationRuntime {
   #publicConfigPath(id: string): string { return join(this.#configRoot, "integration-config", `${id}.json`); }
 }
 
-function callConnector(integration: DiscoveredIntegration, request: Record<string, unknown>): Promise<Record<string, any>> {
+async function callConnector(integration: DiscoveredIntegration, request: Record<string, unknown>): Promise<Record<string, any>> {
+  const commandEnvironment = await connectorCommandEnvironment(integration);
   return new Promise((resolveCall, rejectCall) => {
     const args = [
       "--die-with-parent", "--unshare-all",
@@ -113,11 +114,21 @@ function callConnector(integration: DiscoveredIntegration, request: Record<strin
       "--ro-bind", "/lib64", "/lib64",
       "--ro-bind", "/etc", "/etc",
       "--ro-bind", integration.directory, "/integration",
-      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
+      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/commands",
       "--setenv", "HOME", "/nonexistent",
-      "--setenv", "PATH", "/usr/bin:/bin"
+      "--setenv", "PATH", "/commands"
     ];
-    if (integration.manifest.permissions.networkHosts.length > 0) args.push("--share-net");
+    for (const command of integration.manifest.permissions.commands) {
+      const executable = allowedConnectorCommand(command);
+      if (executable === undefined) { rejectCall(new Error(`Unsupported connector command: ${command}`)); return; }
+      args.push("--ro-bind", executable, `/commands/${command}`);
+    }
+    for (const [key, value] of Object.entries(commandEnvironment)) args.push("--setenv", key, value);
+    if (integration.manifest.permissions.networkHosts.length > 0) {
+      args.push("--share-net");
+      if (existsSync("/run/systemd/resolve"))
+        args.push("--dir", "/run", "--ro-bind", "/run/systemd/resolve", "/run/systemd/resolve");
+    }
     args.push("/usr/bin/node", "--permission", "--allow-fs-read=/integration");
     if (integration.manifest.permissions.networkHosts.length > 0) args.push("--allow-net");
     if (integration.manifest.permissions.commands.length > 0) args.push("--allow-child-process");
@@ -147,6 +158,26 @@ function callConnector(integration: DiscoveredIntegration, request: Record<strin
       } catch { rejectCall(new Error("Integration returned an invalid response")); }
     });
     child.stdin.end(`${JSON.stringify(request)}\n${JSON.stringify({ version: 1, type: "shutdown", id: randomUUID() })}\n`);
+  });
+}
+
+function allowedConnectorCommand(command: string): string | undefined {
+  return command === "gh" ? "/usr/bin/gh" : undefined;
+}
+
+async function connectorCommandEnvironment(integration: DiscoveredIntegration): Promise<Record<string, string>> {
+  if (!integration.manifest.permissions.commands.includes("gh")) return {};
+  const token = await executeForSecret("/usr/bin/gh", ["auth", "token"]);
+  if (token === "") throw new Error("GitHub CLI is not authenticated");
+  return { GH_TOKEN: token, GH_PAGER: "cat", GH_PROMPT_DISABLED: "1" };
+}
+
+function executeForSecret(file: string, args: string[]): Promise<string> {
+  return new Promise((resolveSecret, rejectSecret) => {
+    execFile(file, args, { encoding: "utf8", timeout: 10_000, maxBuffer: 64 * 1024 }, (error, stdout) => {
+      if (error !== null) rejectSecret(new Error("GitHub CLI authentication is unavailable"));
+      else resolveSecret(stdout.trim());
+    });
   });
 }
 

@@ -26,6 +26,7 @@ Generated source can be dangerous. OmaDigest therefore:
 
 - gives the authoring model no file/shell/network tools;
 - launches a digest action in the default Omarchy agent only after **Send to agent** is clicked, framing cited notification and connector fields as untrusted evidence rather than instructions;
+- starts broader template/integration follow-up in a dedicated Herdr workspace only after **Continue in Herdr** is clicked, passing the authoring request and a bounded draft snapshot while explicitly excluding credentials and unrelated files;
 - accepts only allowlisted relative files and bounded sizes;
 - validates the manifest and JavaScript syntax;
 - shows the proposal before acceptance;

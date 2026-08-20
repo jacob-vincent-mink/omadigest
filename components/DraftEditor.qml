@@ -159,6 +159,32 @@ Column {
   }
 
   Rectangle {
+    visible: root.currentDraft !== null
+    x: Math.max(0, (parent.width - width) / 2)
+    width: Style.space(170)
+    height: visible ? Style.space(36) : 0
+    radius: Style.cornerRadius
+    color: herdrMouse.containsMouse
+      ? Style.hoverFillFor(root.foreground, root.accent)
+      : Style.normalFillFor(root.foreground, root.accent)
+    Text {
+      anchors.centerIn: parent
+      text: "Continue in Herdr"
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+      font.bold: true
+    }
+    MouseArea {
+      id: herdrMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: OmaDigestStore.handoffHerdr(root.kind, request.text, root.currentDraft)
+    }
+  }
+
+  Rectangle {
     visible: root.currentDraft && root.currentDraft.kind === "out-of-scope"
     width: parent.width
     height: visible ? Style.space(36) : 0
