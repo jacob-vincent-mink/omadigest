@@ -291,8 +291,8 @@ Panel {
 
               PanelActionButton {
                 visible: root.page === "list"
-                iconText: OmaDigest.OmaDigestStore.digestState === "working" ? "󰔟" : "󰑐"
-                tooltipText: root.attentionAvailableCount > 0 ? "Generate digest" : "No attention items"
+                iconText: OmaDigest.OmaDigestStore.digestState === "working" ? "…" : "+"
+                tooltipText: root.attentionAvailableCount > 0 ? "Generate a new digest" : "No attention items"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
@@ -322,7 +322,7 @@ Panel {
               horizontalAlignment: Text.AlignHCenter
               text: OmaDigest.OmaDigestStore.digestState === "working"
                 ? "Building your first digest…"
-                : "No digests yet. Use the sparkle button when you're ready."
+                : "No digests yet. Use + to generate one when you're ready."
               color: Qt.darker(root.foreground, 1.35)
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
