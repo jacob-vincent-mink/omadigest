@@ -40,11 +40,11 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Inspectable configuration** — privacy, templates, integrations, permissions, setup, and enablement are file-backed and hot-reloadable.
 - **Theme-native UI** — the Quickshell panel, spacing, typography, and monochrome mark follow the active Omarchy theme.
 
-## 56-second demo
+## Demo
 
-[![Watch the OmaDigest demo](preview.png)](https://github.com/jacob-vincent-mink/omadigest/releases/download/v0.1.0/omadigest-demo.mp4)
+https://github.com/user-attachments/assets/1bfaaf85-1480-4b9f-a62c-b098f96d96a1
 
-[Watch the full demo (MP4)](https://github.com/jacob-vincent-mink/omadigest/releases/download/v0.1.0/omadigest-demo.mp4). Music: “Study and Relax” by Kevin MacLeod, from the [FreePD archive](https://github.com/0lhi/FreePD/blob/cf011c7016595833b550a88ff127f089188b25f8/Miscellaneous/Study%20and%20Relax.mp3), dedicated to the public domain under [CC0 1.0](https://github.com/0lhi/FreePD/blob/cf011c7016595833b550a88ff127f089188b25f8/LICENSE). See [Third-party materials](THIRD_PARTY_NOTICES.md) for all preview and demo-media credits.
+Music: “Study and Relax” by Kevin MacLeod, from the [FreePD archive](https://github.com/0lhi/FreePD/blob/cf011c7016595833b550a88ff127f089188b25f8/Miscellaneous/Study%20and%20Relax.mp3), dedicated to the public domain under [CC0 1.0](https://github.com/0lhi/FreePD/blob/cf011c7016595833b550a88ff127f089188b25f8/LICENSE). See [Third-party materials](THIRD_PARTY_NOTICES.md) for all preview and demo-media credits.
 
 ## Install
 
