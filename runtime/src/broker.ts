@@ -315,7 +315,6 @@ function emitAttention(id: string): void {
     type: "attention",
     id,
     digestibleCount,
-    countOnlyCount: pending.length - digestibleCount,
     acknowledgedIds: attention.acknowledgedIds()
   });
 }
@@ -586,9 +585,10 @@ async function handle(raw: string): Promise<boolean> {
         template = templates.find((candidate) => candidate.manifest.id === refinedId) ?? template;
       }
       const selectedId = template.manifest.id;
-      const pendingItems = attention.pending(template.manifest.context.maximumItems);
-      const items = privacy.evidenceForDigest(pendingItems);
-      const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
+      const pendingItems = attention.pending(200);
+      const { items, excludedIds } = privacy.selectDigestEvidence(
+        pendingItems, template.manifest.context.maximumItems
+      );
       if (excludedIds.length > 0) attention.acknowledge(excludedIds);
       if (items.length === 0) {
         emit({

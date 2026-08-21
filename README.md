@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2ea44f"></a>
 </p>
 
-OmaDigest is a native Omarchy attention layer. It observes the existing notification service, applies deterministic privacy policy before persistence, optionally gathers bounded context from removable integrations, selects a user-owned briefing template, and asks a tightly scoped Pi agent for a structured digest with source citations.
+OmaDigest is a native Omarchy attention layer and background agent. Built around a custom harness using [Pi](https://github.com/earendil-works/pi), it observes the existing notification service, applies deterministic privacy policy before persistence, optionally gathers bounded context from removable integrations, selects a user-owned briefing template, and asks a tightly scoped agent for a structured digest with source citations. When you need to focus, OmaDigest handles the feed without taking over the rest of your computer.
 
 It does **not** replace the notification daemon or put a general-purpose agent inside the shell.
 
@@ -165,7 +165,22 @@ Bundled service integrations cover GitHub, Google Calendar, X, Linear, Slack, To
 | [Security](docs/security.md) | Threat boundaries, privacy modes, credentials, and sandbox limits |
 | [Development](docs/development.md) | Repository layout, checks, smoke tests, and release requirements |
 
+## Why OmaDigest
+
+I am a believer in the agentic OS: a malleable computer where much of an application can be a focused interface backed by an agent with the right context and narrowly chosen tools. OmaDigest is an experiment in that shape. The Quickshell frontend stays small; the custom harness does the bounded collection, correlation, routing, and summarization behind it.
+
+The notification stream is a useful place to start because it already contains cross-application context, but usually presents it as isolated interruptions. An agent can collate related events, surface just-in-time information, and reduce context switching without becoming the main thing the user does with the computer.
+
+## Future plans
+
+- Just-in-time briefs, such as gathering relevant project context before an upcoming meeting.
+- Deeper correlation across notifications, connectors, local system state, and agent activity.
+- More useful integrations enabled by default.
+- A way for integrations to ship independently, potentially by building on Omarchy's existing plugin system.
+
 ## Development
+
+The MVP was built in one day on August 20, 2026 using Codex with GPT-5.6 Sol and Herdr.
 
 ```bash
 git clone git@github.com:jacob-vincent-mink/omadigest.git

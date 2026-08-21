@@ -238,7 +238,7 @@ export type BrokerEvent =
   | { type: "auth"; id?: string; phase: "starting" | "browser" | "device_code" | "prompt" | "info" | "complete" | "cancelled" | "error"; flowId: string; methodId: string; message?: string; url?: string; verificationUri?: string; userCode?: string; prompt?: AgentAuthPrompt }
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
-  | { type: "attention"; id: string; digestibleCount: number; countOnlyCount: number; acknowledgedIds: string[] }
+  | { type: "attention"; id: string; digestibleCount: number; acknowledgedIds: string[] }
   | { type: "template_suggestions"; id: string; suggestions: TemplateSuggestion[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest_skipped"; id: string; reason: string }

@@ -278913,6 +278913,14 @@ var PrivacyPolicy = class {
       return mode === "digest" || mode === "digest-and-handoff";
     });
   }
+  selectDigestEvidence(items, maximumItems) {
+    const eligible = this.evidenceForDigest(items.slice(0, 200));
+    const eligibleIds = new Set(eligible.map((item) => item.id));
+    return {
+      items: eligible.slice(0, Math.max(1, Math.min(200, maximumItems))),
+      excludedIds: items.slice(0, 200).filter((item) => !eligibleIds.has(item.id)).map((item) => item.id)
+    };
+  }
   #load() {
     try {
       if (statSync14(this.#path).size > 1024 * 1024) return;
@@ -281307,7 +281315,6 @@ function emitAttention(id) {
     type: "attention",
     id,
     digestibleCount,
-    countOnlyCount: pending.length - digestibleCount,
     acknowledgedIds: attention.acknowledgedIds()
   });
 }
@@ -281569,9 +281576,11 @@ async function handle(raw) {
         template = templates.find((candidate) => candidate.manifest.id === refinedId) ?? template;
       }
       const selectedId = template.manifest.id;
-      const pendingItems = attention.pending(template.manifest.context.maximumItems);
-      const items = privacy.evidenceForDigest(pendingItems);
-      const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
+      const pendingItems = attention.pending(200);
+      const { items, excludedIds } = privacy.selectDigestEvidence(
+        pendingItems,
+        template.manifest.context.maximumItems
+      );
       if (excludedIds.length > 0) attention.acknowledge(excludedIds);
       if (items.length === 0) {
         emit({

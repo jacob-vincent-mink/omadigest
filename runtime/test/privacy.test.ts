@@ -40,6 +40,20 @@ describe("PrivacyPolicy", () => {
     expect(policy.evidenceForDigest([hidden!, visible!]).map((item) => item.app)).toEqual(["GitHub"]);
   });
 
+  it("does not let newer private counts crowd eligible evidence out of a digest", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
+    roots.push(root);
+    const policy = new PrivacyPolicy(root);
+    policy.setRule("GitHub", "digest");
+    const visible = policy.filter(fixture("GitHub"))!;
+    const hidden = Array.from({ length: 40 }, (_, index) => policy.filter({
+      ...fixture(`Unknown ${index}`), id: `hidden-${index}`
+    })!);
+    const selected = policy.selectDigestEvidence([...hidden, visible], 1);
+    expect(selected.items.map((item) => item.app)).toEqual(["GitHub"]);
+    expect(selected.excludedIds).toHaveLength(40);
+  });
+
   it("persists explicit digest and handoff permissions", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
     roots.push(root);

@@ -103,6 +103,15 @@ export class PrivacyPolicy {
     });
   }
 
+  selectDigestEvidence(items: AttentionItem[], maximumItems: number): { items: AttentionItem[]; excludedIds: string[] } {
+    const eligible = this.evidenceForDigest(items.slice(0, 200));
+    const eligibleIds = new Set(eligible.map((item) => item.id));
+    return {
+      items: eligible.slice(0, Math.max(1, Math.min(200, maximumItems))),
+      excludedIds: items.slice(0, 200).filter((item) => !eligibleIds.has(item.id)).map((item) => item.id)
+    };
+  }
+
   #load(): void {
     try {
       if (statSync(this.#path).size > 1024 * 1024) return;

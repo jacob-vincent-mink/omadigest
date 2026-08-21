@@ -45,7 +45,6 @@ Scope {
   property var digestHistory: []
   property string digestState: "idle"
   property int attentionCount: 0
-  property int countOnlyAttentionCount: 0
   property var acknowledgedAttention: ({})
   property var agentConnection: ({ connected: false, provider: "", model: "" })
   property var authMethods: []
@@ -434,7 +433,6 @@ Scope {
     }
     if (event.type === "attention") {
       attentionCount = Number(event.digestibleCount || 0)
-      countOnlyAttentionCount = Number(event.countOnlyCount || 0)
       var nextAcknowledged = {}
       var ids = event.acknowledgedIds || []
       for (var index = 0; index < ids.length; index++) nextAcknowledged[String(ids[index])] = true
@@ -477,7 +475,6 @@ Scope {
       }
       if (dataDeleteTarget === "notification-history" || dataDeleteTarget === "all") {
         attentionCount = 0
-        countOnlyAttentionCount = 0
         acknowledgedAttention = ({})
       }
       if (dataDeleteTarget === "integrations" || dataDeleteTarget === "all") integrationSetup = ({})

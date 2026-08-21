@@ -26,8 +26,6 @@ Panel {
   readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
     ? String(notificationService.historyDir) : ""
   readonly property int attentionAvailableCount: OmaDigest.OmaDigestStore.attentionCount
-  readonly property int countOnlyAttentionCount: OmaDigest.OmaDigestStore.countOnlyAttentionCount
-  readonly property int totalAttentionCount: root.attentionAvailableCount + root.countOnlyAttentionCount
 
   property string page: "list"
   property string digestTab: "unread"
@@ -257,11 +255,8 @@ Panel {
 
   function attentionSummaryText() {
     var available = root.attentionAvailableCount
-    var countOnly = root.countOnlyAttentionCount
-    if (available > 0 && countOnly > 0) return available + " ready · " + countOnly + " count-only"
     if (available > 0) return available + (available === 1 ? " attention item" : " attention items")
-    if (countOnly > 0) return countOnly + (countOnly === 1 ? " count-only notification" : " count-only notifications")
-    return "No new attention"
+    return "All quiet"
   }
 
   function availableConnectors() {
@@ -718,7 +713,6 @@ Panel {
         sourcesView: root.sourcesView,
         selectedSourceId: root.selectedSource ? String(root.selectedSource.id || "") : "",
         attentionCount: root.attentionAvailableCount,
-        countOnlyAttentionCount: root.countOnlyAttentionCount,
         unreadCount: root.digestsForTab("unread").length,
         readCount: root.digestsForTab("read").length
       })
@@ -850,15 +844,16 @@ Panel {
                 visible: root.page === "list"
                 iconText: OmaDigest.OmaDigestStore.digestState === "working" ? "…" : "+"
                 tooltipText: root.attentionAvailableCount > 0 ? "Generate a new digest"
-                  : root.countOnlyAttentionCount > 0 ? "Count-only notifications stay private" : "No attention items"
+                  : "Nothing new to digest"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
+                opacity: enabled || OmaDigest.OmaDigestStore.digestState === "working" ? 1 : 0.35
                 onClicked: root.generateDigest("manual", 0)
               }
 
               PanelActionButton {
-                visible: root.page === "list" && root.totalAttentionCount > 0
+                visible: root.page === "list" && root.attentionAvailableCount > 0
                 iconText: "✓"
                 tooltipText: "Mark all attention items seen"
                 foreground: root.foreground
@@ -991,8 +986,8 @@ Panel {
               text: root.digestTab === "unread" && OmaDigest.OmaDigestStore.digestState === "working"
                 ? "Building your first digest…"
                 : root.digestTab === "read"
-                  ? "Cleared digests will stay here."
-                  : "You're all caught up. Use + when new attention arrives."
+                  ? "Digests you open stay here."
+                  : "Nothing needs your attention."
               color: Qt.darker(root.foreground, 1.35)
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
