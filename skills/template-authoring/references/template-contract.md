@@ -8,10 +8,14 @@ The compiled policy has:
 - `match.triggers`: any of `manual`, `dnd-ended`, or `scheduled`.
 - optional `minimumItems` and `minimumFocusMinutes`.
 - optional `applications` plus `minimumApplicationShare` from `0..1`.
+- optional broker-classified `intents` plus `minimumIntentShare` from `0..1`; intents are `failure`, `review`, `deadline`, `meeting`, `assignment`, `mention`, `request`, `completion`, `system`, or `update`.
+- optional `urgencies`: any of `low`, `normal`, or `critical`.
 - optional `requiresConnectors`; all must already be enabled and ready.
 - `context.connectors`, optional `connectorCategories` (a connector-ID to category-ID list map), `maximumItems`, and `maximumBytes`. Requested categories are deterministically intersected with the user's enabled categories; templates cannot enable categories.
 - `output.sections` and `maximumEntries`.
 
 Every declared match condition must pass. Matching templates are ranked by priority, then number of explicit conditions, then stable ID. A user's generation-time override wins over routing.
+
+Intent classification is deterministic broker policy, not model output. Templates may consume the classification but cannot redefine it or route directly on untrusted notification prose.
 
 `skillMarkdown` follows the Agent Skills format with `name` and `description` frontmatter. Its body should define the briefing goal, classification rules, citation requirements, uncertainty behavior, and style. It must not contain executable setup instructions.

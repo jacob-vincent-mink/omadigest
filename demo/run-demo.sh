@@ -103,6 +103,7 @@ stop_clip() {
 }
 
 command -v ffmpeg >/dev/null
+command -v ffprobe >/dev/null
 command -v jq >/dev/null
 command -v notify-send >/dev/null
 command -v gpu-screen-recorder >/dev/null
@@ -130,90 +131,117 @@ wait_for '.integrationStatus["io.github.jacob-vincent-mink.github"].ready == tru
 omarchy-shell omadigest enableIntegration "$github_integration" >/dev/null
 wait_for '.integrations | any(.id == "io.github.jacob-vincent-mink.github" and .enabled == true)' 'the enabled GitHub connector' 30
 
-log "Scene 1: built-in sources and live GitHub status"
-start_clip
-omarchy-shell omadigest showSettings integrations >/dev/null
-sleep 4.0
-stop_clip
-omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
-
 # Prime the panel's notification listener before the focus transition.
 omarchy-shell shell summon "$plugin_id" >/dev/null
 sleep 0.6
 omarchy-shell shell hide "$plugin_id" >/dev/null
 
-# Scene 2: real Omarchy notifications, then an automatic focus-reentry digest.
-log "Scene 2: notification storm and focus re-entry"
+# 00:00 — Hook: real Omarchy notifications arrive in quick succession.
+log "Scene 1/10: real notification burst"
 start_clip
-"$repo_root/demo/notification-burst.sh" >/dev/null
+"$repo_root/demo/notification-burst.sh" --visible >/dev/null
+sleep 0.7
+stop_clip
+omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
+
+# The private and system focus events are real, but happen off camera while DND
+# is active so the cut stays fast and protected content never appears.
+omarchy-shell omadigest beginFocus >/dev/null
+omarchy-shell notifications setDnd on >/dev/null
+"$repo_root/demo/notification-burst.sh" --focus >/dev/null
+
+# 00:03 — Re-entry starts a real automatic digest; the model wait is cut.
+log "Scene 2/10: focus re-entry"
+start_clip
+omarchy-shell notifications setDnd off >/dev/null
+notify-send --app-name="Omarchy" --urgency=low --expire-time=4500 \
+  "Focus session complete" "OmaDigest is preparing a concise release briefing."
 wait_for '.digestState == "working" or (.digestState == "ready" and .unreadCount > 0)' 'focus re-entry generation to start' 20
 sleep 0.8
 stop_clip
-wait_for '.digestState == "ready" and .unreadCount > 0' 'the automatic digest'
+wait_for '.digestState == "ready" and .unreadCount > 0 and (.digestTitle | length) > 0 and .digestTitle != "Today’s digest" and .digestTitle != "Today\u0027s digest"' 'the automatic digest'
 
-# Scene 3: opening the briefing marks it read; prove it moved to Read.
-log "Scene 3: digest and automatic read state"
+# 00:05 — Open the specific briefing, then prove reading moved it to Read.
+log "Scene 3/10: actionable briefing and automatic read state"
 start_clip
+omarchy-shell omadigest showDigests unread >/dev/null
+sleep 1.2
 omarchy-shell omadigest openNewest unread >/dev/null
 wait_for '.unreadCount == 0 and .readCount > 0' 'the automatic read-state update' 15
-sleep 3.5
+sleep 3.4
 omarchy-shell omadigest showDigests read >/dev/null
-sleep 1.8
-omarchy-shell omadigest openNewest read >/dev/null
-sleep 2.4
+sleep 1.2
 stop_clip
 
-# Scene 4: prove a packaged default can be edited manually or revised by the scoped agent.
-log "Scene 4: editable default template"
+# 00:11 — Scan the broad source catalog, then punch into live GitHub categories.
+log "Scene 4/10: source catalog and GitHub controls"
 start_clip
-omarchy-shell omadigest showTemplate focus-reentry >/dev/null
-sleep 2.0
-omarchy-shell omadigest editTemplate focus-reentry manual >/dev/null
-sleep 3.0
-omarchy-shell omadigest editTemplate focus-reentry agent >/dev/null
-sleep 3.0
+omarchy-shell omadigest showSettings integrations >/dev/null
+sleep 2.7
+[[ "$(omarchy-shell omadigest showSource "$github_integration")" == "ok" ]]
+wait_for '.sourcesView == "detail" and .selectedSourceId == "io.github.jacob-vincent-mink.github"' 'the GitHub source detail' 10
+sleep 3.4
 stop_clip
 
-# Scene 5: fill and submit the template request, cutting the model wait.
-log "Scene 5: request GitHub template"
+# 00:18 — Show learned pattern suggestion, then both packaged-template editors.
+wait_for '(.templateSuggestions | length) > 0' 'an evidence-backed template suggestion' 15
+log "Scene 5/10: smart suggestion and two template editing modes"
+start_clip
+omarchy-shell omadigest showSettings templates >/dev/null
+sleep 1.8
+omarchy-shell omadigest showTemplate focus-reentry >/dev/null
+sleep 1.0
+omarchy-shell omadigest editTemplate focus-reentry manual >/dev/null
+sleep 1.5
+omarchy-shell omadigest editTemplate focus-reentry agent >/dev/null
+sleep 2.0
+stop_clip
+
+# 00:23 — Submit a real template request, cutting only the model wait.
+log "Scene 6/10: submit a GitHub triage template"
 template_request="$(<"$repo_root/demo/github-template-prompt.txt")"
 omarchy-shell omadigest prepareDraft template "$template_request" >/dev/null
 start_clip
-sleep 1.8
+sleep 1.2
 omarchy-shell omadigest submitDraft template >/dev/null
 wait_for '(.draftState == "working" or .draftState == "ready") and .draftKind == "template"' 'template drafting to start' 15
-sleep 1.0
+sleep 1.1
 stop_clip
 wait_for '.draftState == "working" and (.draftPlan | length) > 0' 'the template work plan' 90
+
+# 00:26 — Resume on the model-authored plan instead of a static spinner.
+log "Scene 7/10: model-authored work plan"
 start_clip
-sleep 3.5
+omarchy-shell omadigest showDraft template >/dev/null
+sleep 3.4
 stop_clip
 wait_for '.draftState == "ready" and .draftKind == "template"' 'the template draft'
 
-# Scene 6: accept and inspect the resulting deterministic template.
-log "Scene 6: review and install GitHub template"
+# 00:30 — Review, accept, and immediately inspect the deterministic result.
+log "Scene 8/10: review and install the template"
 start_clip
 omarchy-shell omadigest showDraft template >/dev/null
-sleep 3.2
+sleep 3.0
 omarchy-shell omadigest acceptDraft >/dev/null
 wait_for '.draftState == "saved"' 'the installed template' 30
-sleep 1.2
+sleep 0.8
 omarchy-shell omadigest showTemplate "$github_template" >/dev/null
-sleep 3.0
+sleep 2.4
 stop_clip
 
-# Scene 7: real notification and connector evidence route through the new template.
-log "Scene 7: generate PR #482 report"
+# 00:37 — One more real notification routes through the newly installed template.
+log "Scene 9/10: route PR #482 through the new template"
+omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
+start_clip
 notify-send --app-name="GitHub" --urgency=normal --expire-time=4500 \
   "PR #482 updated" "Review feedback landed; prepare a focused pull-request report."
-sleep 0.8
 wait_for '.attentionCount > 0' 'fresh GitHub attention' 15
-start_clip
+sleep 0.8
 omarchy-shell omadigest showDigests unread >/dev/null
-sleep 1.0
+sleep 0.8
 omarchy-shell omadigest generate >/dev/null
 wait_for '.digestState == "working" or (.digestState == "ready" and .digestTemplateId == "github-triage")' 'PR report generation to start' 15
-sleep 1.0
+sleep 0.8
 stop_clip
 omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
 wait_for '.digestState == "ready" and .digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "i")) and .readCount > 0' 'the template-routed PR digest'
@@ -221,9 +249,11 @@ final_state="$(state)"
 jq -e '.digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "i"))' >/dev/null <<<"$final_state" \
   || { echo "The final digest did not expose the expected PR-specific title/template." >&2; exit 1; }
 
+# 00:41 — Payoff: a specifically named report with citations and agent action.
+log "Scene 10/10: PR-specific report payoff"
 start_clip
 omarchy-shell omadigest openCurrent >/dev/null
-sleep 4.0
+sleep 5.0
 stop_clip
 
 mkdir -p "$output_dir"
@@ -231,6 +261,11 @@ concat_file="$clip_root/concat.txt"
 for clip in "${clips[@]}"; do printf "file '%s'\n" "$clip" >> "$concat_file"; done
 output="$output_dir/omadigest-demo-$(date +%Y%m%d-%H%M%S).mp4"
 ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i "$concat_file" -c copy "$output"
+duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$output")"
+if ! awk -v seconds="$duration" 'BEGIN { exit !(seconds < 60) }'; then
+  echo "The finished cut is ${duration}s; the sizzle reel must remain under 60 seconds." >&2
+  exit 1
+fi
 
 "$repo_root/demo/restore.sh" >/dev/null
 prepared=false
@@ -242,4 +277,4 @@ hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = \"$original_workspace\" }))
 trap - EXIT INT TERM
 find "$clip_root" -depth -delete
 log "Finished"
-printf '%s\n' "$output"
+printf '%s (%0.1fs)\n' "$output" "$duration"

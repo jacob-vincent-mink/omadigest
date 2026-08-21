@@ -7,7 +7,7 @@
   "match": {
     "triggers": ["dnd-ended"],
     "minimumItems": 3,
-    "minimumFocusMinutes": 30
+    "minimumFocusMinutes": 5
   },
   "context": {
     "connectors": [

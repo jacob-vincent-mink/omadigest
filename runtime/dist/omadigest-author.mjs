@@ -14000,8 +14000,16 @@ var compiledTemplateSchema = external_exports.object({
     minimumFocusMinutes: external_exports.number().int().min(0).max(1440).optional(),
     applications: external_exports.array(external_exports.string().min(1).max(100)).max(32).optional(),
     minimumApplicationShare: external_exports.number().min(0).max(1).optional(),
+    intents: external_exports.array(external_exports.enum(["failure", "review", "deadline", "meeting", "assignment", "mention", "request", "completion", "system", "update"])).max(10).optional(),
+    minimumIntentShare: external_exports.number().min(0).max(1).optional(),
+    urgencies: external_exports.array(external_exports.enum(["low", "normal", "critical"])).max(3).optional(),
     requiresConnectors: external_exports.array(external_exports.string().min(1).max(80)).max(16).optional()
-  }).strict(),
+  }).strict().superRefine((value, context) => {
+    if (value.minimumApplicationShare !== void 0 && value.applications === void 0)
+      context.addIssue({ code: "custom", message: "minimumApplicationShare requires applications" });
+    if (value.minimumIntentShare !== void 0 && value.intents === void 0)
+      context.addIssue({ code: "custom", message: "minimumIntentShare requires intents" });
+  }),
   context: external_exports.object({
     connectors: external_exports.array(external_exports.string().min(1).max(80)).max(16),
     connectorCategories: connectorCategories.optional(),

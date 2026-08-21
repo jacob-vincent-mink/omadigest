@@ -1,6 +1,8 @@
 export const PROTOCOL_VERSION = 1;
 
 export type GenerationTrigger = "manual" | "dnd-ended" | "scheduled";
+export type AttentionIntent = "failure" | "review" | "deadline" | "meeting" | "assignment"
+  | "mention" | "request" | "completion" | "system" | "update";
 
 export type AttentionItem = {
   id: string;
@@ -9,6 +11,7 @@ export type AttentionItem = {
   title: string;
   body: string;
   category?: string | undefined;
+  intent?: AttentionIntent | undefined;
   contentAvailable?: boolean | undefined;
   urgency: "low" | "normal" | "critical";
   occurredAt: string;
@@ -35,7 +38,10 @@ export type GenerationContext = {
   trigger: GenerationTrigger;
   itemCount: number;
   focusMinutes: number;
+  automaticMinimumItems?: number | undefined;
   appCounts: Record<string, number>;
+  intentCounts?: Partial<Record<AttentionIntent, number>> | undefined;
+  urgencyCounts?: Record<"low" | "normal" | "critical", number> | undefined;
   availableConnectors: string[];
   now: string;
 };
@@ -46,7 +52,29 @@ export type TemplateMatch = {
   minimumFocusMinutes?: number;
   applications?: string[];
   minimumApplicationShare?: number;
+  intents?: AttentionIntent[];
+  minimumIntentShare?: number;
+  urgencies?: Array<"low" | "normal" | "critical">;
   requiresConnectors?: string[];
+};
+
+export type EvidenceGroup = {
+  id: string;
+  intent: AttentionIntent;
+  subject: string;
+  reason: "shared-reference" | "same-title" | "single";
+  sourceIds: string[];
+  items: AttentionItem[];
+};
+
+export type TemplateSuggestion = {
+  id: string;
+  title: string;
+  description: string;
+  prompt: string;
+  applications: string[];
+  intents: AttentionIntent[];
+  itemCount: number;
 };
 
 export type CompiledTemplate = {
@@ -179,6 +207,7 @@ export type BrokerCommand =
   | { type: "tts_stop"; id: string }
   | { type: "attention_ingest"; id: string; items: AttentionItem[] }
   | { type: "attention_acknowledge"; id: string; itemIds: string[] }
+  | { type: "template_suggestion_dismiss"; id: string; suggestionId: string }
   | { type: "digest_generate"; id: string; templateId?: string; context: GenerationContext }
   | { type: "digest_history"; id: string }
   | { type: "digest_mark_read"; id: string; digestId: string }
@@ -188,7 +217,7 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; templateSuggestions: TemplateSuggestion[] }
   | { type: "templates"; id: string; templates: PublicTemplate[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }
@@ -209,7 +238,9 @@ export type BrokerEvent =
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
   | { type: "attention"; id: string; count: number; acknowledgedIds: string[] }
+  | { type: "template_suggestions"; id: string; suggestions: TemplateSuggestion[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
+  | { type: "digest_skipped"; id: string; reason: string }
   | { type: "digest"; id: string; digest: Digest }
   | { type: "digest_history"; id: string; digests: Digest[] }
   | { type: "data_deleted"; id: string; target: DataDeletionTarget }

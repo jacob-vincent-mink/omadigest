@@ -1,6 +1,6 @@
 # OmaDigest demo production
 
-The primary demo is scripted so visible transitions are fast, repeatable, and free of terminal windows. It uses real Omarchy notifications, a live authenticated GitHub CLI connector, the real privacy policy, the scoped template agent, deterministic template routing, and the configured digest model.
+The primary demo is a sub-minute sizzle reel: fast, repeatable, and free of terminal windows. It uses real Omarchy notifications, a live authenticated GitHub CLI connector, the real privacy policy, the scoped template agent, deterministic template routing, and the configured digest model.
 
 ## Record the polished take
 
@@ -11,19 +11,34 @@ npm run check
 ./demo/run-demo.sh 9
 ```
 
-The runner:
+The runner records ten short shots and joins them with hard cuts:
 
 1. backs up and prepares isolated OmaDigest state;
-2. shows built-in Omarchy sources and the bundled connector's live `gh` identity;
-3. records real Omarchy notification popups;
-4. triggers a real focus-reentry digest while omitting the model wait from the final video;
-5. demonstrates opening a digest moving it from Unread to Read;
-6. opens both manual and constrained-agent editors for a packaged default template;
-7. authors, reviews, and accepts a deterministic GitHub Triage template with a visible model-authored plan;
-8. routes fresh PR notification and real connector evidence through that template and opens the specifically named report; and
-9. concatenates the clean scenes under `demo/recordings/` before restoring the original state.
+2. hooks with a burst of real native notifications;
+3. exits focus mode and starts a real automatic briefing;
+4. opens the specifically titled digest and shows reading it moving it to Read;
+5. scans the source catalog and opens the authenticated GitHub source's category controls;
+6. shows an evidence-backed template suggestion, then flips a packaged template between manual and constrained-agent editing;
+7. submits a GitHub Triage template request and resumes on the model-authored work plan;
+8. reviews, accepts, and inspects the deterministic template;
+9. routes a fresh PR #482 notification and connector evidence through it; and
+10. lands on the specifically named report with citations and an agent handoff.
 
-Model operations are not mocked. Recording simply stops during long model waits, then resumes on the resulting UI state. The final path is printed on success.
+Model operations are not mocked. Recording stops during long model waits and private DND-only events, then resumes on meaningful UI state. The runner measures the concatenated output and fails the take if it reaches 60 seconds. The final path and duration are printed on success.
+
+## Cut map
+
+| Approx. time | Shot | Feature density |
+| --- | --- | --- |
+| 00:00–00:03 | Notification burst | Native Omarchy notifications |
+| 00:03–00:05 | Focus complete | DND re-entry and automatic generation |
+| 00:05–00:11 | Briefing | Specific title, evidence, Unread → Read |
+| 00:11–00:18 | Sources | Broad catalog, live status, on/off, categories |
+| 00:18–00:25 | Template controls | Pattern suggestion, packaged default, manual edit, agent edit |
+| 00:25–00:32 | Agent work | Natural-language request and visible plan |
+| 00:32–00:39 | Template result | Review, validation, install, inspect |
+| 00:39–00:43 | PR routing | Real notification and deterministic template selection |
+| 00:43–00:49 | Payoff | PR-specific report, citations, send to agent |
 
 ## Record manually with demo hotkeys
 
@@ -45,7 +60,7 @@ A clean notification/re-entry take is:
 6. `Hyper+R` — leave DND and trigger automatic re-entry generation.
 7. `Hyper+V` — open the newest digest after it finishes; opening marks it read.
 
-For the authoring scenes, `Hyper+T` loads the template prompt into both the clipboard and OmaDigest editor. Use `Hyper+D` to submit it, `Hyper+A` to accept it, `Hyper+J` to emit the final PR #482 update, and `Hyper+G` to generate the routed digest. `Hyper+U` and `Hyper+E` switch between Unread and Read. A phone-friendly running order is in [`PHONE-CUE-SHEET.md`](PHONE-CUE-SHEET.md).
+For the authoring scenes, `Hyper+T` loads the template prompt into both the clipboard and OmaDigest editor. Use `Hyper+D` to submit it, `Hyper+A` to accept it, `Hyper+J` to emit the final PR #482 update, and `Hyper+G` to generate the routed digest. `Hyper+U` and `Hyper+E` switch between Unread and Read. A phone-friendly summary of the automated reel and compact manual fallback are in [`PHONE-CUE-SHEET.md`](PHONE-CUE-SHEET.md).
 
 Finish with `Hyper+X` to restore pre-demo state. Remove the bindings entirely with:
 

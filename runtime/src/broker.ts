@@ -17,6 +17,8 @@ import { DictationService } from "./dictation.js";
 import { SpeechService, speechConfigSchema } from "./tts.js";
 import { DigestHistory } from "./digest-history.js";
 import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
+import { automaticDigestDecision, classifyAttentionItem, enrichedGenerationContext, suggestTemplates } from "./intelligence.js";
+import { TemplateSuggestionStore } from "./template-suggestion-store.js";
 import { launchHerdrHandoff } from "./herdr.js";
 import { clearUserIntegrations, clearUserTemplates } from "./data-management.js";
 import { installAuthoringSkillLinks } from "./skill-install.js";
@@ -36,7 +38,10 @@ const contextSchema = z.object({
   trigger: z.enum(["manual", "dnd-ended", "scheduled"]),
   itemCount: z.number().int().min(0).max(10_000),
   focusMinutes: z.number().min(0).max(10_000),
+  automaticMinimumItems: z.number().int().min(1).max(200).optional(),
   appCounts: z.record(z.string(), z.number().int().min(0).max(10_000)),
+  intentCounts: z.record(z.string(), z.number().int().min(0).max(10_000)).optional(),
+  urgencyCounts: z.object({ low: z.number().int().min(0).max(10_000), normal: z.number().int().min(0).max(10_000), critical: z.number().int().min(0).max(10_000) }).strict().optional(),
   availableConnectors: z.array(z.string().min(1).max(80)).max(64),
   now: z.string().datetime()
 }).strict();
@@ -123,6 +128,10 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attention_ingest"), id: z.string().min(1).max(100), items: z.array(attentionItemSchema).max(200) }).strict(),
   z.object({ type: z.literal("attention_acknowledge"), id: z.string().min(1).max(100), itemIds: z.array(z.string().min(1).max(200)).max(200) }).strict(),
   z.object({
+    type: z.literal("template_suggestion_dismiss"), id: z.string().min(1).max(100),
+    suggestionId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/)
+  }).strict(),
+  z.object({
     type: z.literal("digest_generate"),
     id: z.string().min(1).max(100),
     templateId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).optional(),
@@ -152,8 +161,12 @@ let templates = loadAllTemplates();
 const pendingDrafts = new Map<string, DraftResult>();
 const attention = new AttentionStore();
 const privacy = new PrivacyPolicy(configRoot);
-attention.applyPolicy((item) => privacy.filter(item));
+attention.applyPolicy((item) => {
+  const filtered = privacy.filter(item);
+  return filtered === undefined ? undefined : classifyAttentionItem(filtered);
+});
 const digestHistory = new DigestHistory();
+const templateSuggestionStore = new TemplateSuggestionStore();
 const integrationRuntime = new IntegrationRuntime(configRoot);
 const sourceStatuses = new Map<string, SourceStatus>();
 const dictation = new DictationService();
@@ -298,6 +311,14 @@ function emitAttention(id: string): void {
   emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
 }
 
+function currentTemplateSuggestions() {
+  return suggestTemplates(attention.recent(200), templates, templateSuggestionStore.active());
+}
+
+function emitTemplateSuggestions(id: string): void {
+  emit({ type: "template_suggestions", id, suggestions: currentTemplateSuggestions() });
+}
+
 let configFingerprint = configurationFingerprint(configRoot);
 let configReloading = false;
 const configWatcher = setInterval(() => {
@@ -314,11 +335,15 @@ async function reloadFileBackedConfiguration(): Promise<void> {
   templates = loadAllTemplates();
   sourceStatuses.clear();
   privacy.reload();
-  attention.applyPolicy((item) => privacy.filter(item));
+  attention.applyPolicy((item) => {
+    const filtered = privacy.filter(item);
+    return filtered === undefined ? undefined : classifyAttentionItem(filtered);
+  });
   emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
   emit({ type: "integrations", id: "config-watch", integrations: publicIntegrations() });
   emit({ type: "privacy", id: "config-watch", policy: privacy.status() });
   emitAttention("config-watch");
+  emitTemplateSuggestions("config-watch");
 }
 
 function configurationFingerprint(root: string): string {
@@ -358,7 +383,8 @@ async function handle(raw: string): Promise<boolean> {
       templates: publicTemplates(),
       integrations: publicIntegrations(),
       authMethods: await discoverAgentAuthMethods(),
-      privacy: privacy.status()
+      privacy: privacy.status(),
+      templateSuggestions: currentTemplateSuggestions()
     });
     emitAttention("initialize");
     return true;
@@ -378,9 +404,13 @@ async function handle(raw: string): Promise<boolean> {
     try {
       if (command.type === "privacy_set_default") privacy.setDefault(command.mode);
       else privacy.setRule(command.app, command.mode);
-      attention.applyPolicy((item) => privacy.filter(item));
+      attention.applyPolicy((item) => {
+        const filtered = privacy.filter(item);
+        return filtered === undefined ? undefined : classifyAttentionItem(filtered);
+      });
       emit({ type: "privacy", id: command.id, policy: privacy.status() });
       emitAttention(command.id);
+      emitTemplateSuggestions(command.id);
     } catch (error) {
       emit({ type: "error", id: command.id, code: "privacy_invalid", message: error instanceof Error ? error.message : "Privacy settings could not be saved." });
     }
@@ -436,9 +466,10 @@ async function handle(raw: string): Promise<boolean> {
     try {
       attention.ingest(command.items.flatMap((item) => {
         const presented = privacy.filter(item);
-        return presented === undefined ? [] : [presented];
+        return presented === undefined ? [] : [classifyAttentionItem(presented)];
       }));
       emitAttention(command.id);
+      emitTemplateSuggestions(command.id);
     } catch {
       emit({ type: "error", id: command.id, code: "attention_invalid", message: "Some attention items were invalid." });
     }
@@ -448,6 +479,12 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "attention_acknowledge") {
     attention.acknowledge(command.itemIds);
     emitAttention(command.id);
+    return true;
+  }
+
+  if (command.type === "template_suggestion_dismiss") {
+    templateSuggestionStore.dismiss(command.suggestionId);
+    emitTemplateSuggestions(command.id);
     return true;
   }
 
@@ -483,6 +520,7 @@ async function handle(raw: string): Promise<boolean> {
       }
       if (deleteAll || command.target === "templates") {
         clearUserTemplates(configRoot);
+        templateSuggestionStore.clear();
         pendingDrafts.clear();
         templates = loadAllTemplates();
         emit({ type: "templates", id: command.id, templates: publicTemplates() });
@@ -490,6 +528,7 @@ async function handle(raw: string): Promise<boolean> {
       configFingerprint = configurationFingerprint(configRoot);
       emit({ type: "data_deleted", id: command.id, target: command.target });
       if (deleteAll || command.target === "notification-history") emitAttention(command.id);
+      if (deleteAll || command.target === "notification-history" || command.target === "templates") emitTemplateSuggestions(command.id);
     } catch (error) {
       emit({
         type: "error", id: command.id, code: "data_delete_failed",
@@ -502,13 +541,9 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "digest_generate") {
     try {
       const policyCountable = attention.pending(200);
-      const appCounts = policyCountable.reduce<Record<string, number>>((counts, item) => {
-        counts[item.app] = (counts[item.app] ?? 0) + 1;
-        return counts;
-      }, {});
-      const safeContext = { ...command.context, itemCount: policyCountable.length, appCounts };
-      const selectedId = command.templateId || selectTemplate(templates, safeContext).templateId;
-      const template = templates.find((candidate) => candidate.manifest.id === selectedId);
+      let safeContext = enrichedGenerationContext(command.context, policyCountable);
+      const initialSelectedId = command.templateId || selectTemplate(templates, safeContext).templateId;
+      let template = templates.find((candidate) => candidate.manifest.id === initialSelectedId);
       if (template === undefined) throw new Error("The selected digest template is unavailable");
       const now = new Date(command.context.now);
       const since = new Date(now.getTime() - 86_400_000);
@@ -529,17 +564,32 @@ async function handle(raw: string): Promise<boolean> {
           nativeSourceState
         )
       ]);
-      attention.ingest([...connectorItems, ...nativeItems]);
+      attention.ingest([...connectorItems, ...nativeItems].map(classifyAttentionItem));
+      safeContext = enrichedGenerationContext(command.context, attention.pending(200));
+      if (command.templateId === undefined) {
+        const refinedId = selectTemplate(templates, safeContext).templateId;
+        template = templates.find((candidate) => candidate.manifest.id === refinedId) ?? template;
+      }
+      const selectedId = template.manifest.id;
       const pendingItems = attention.pending(template.manifest.context.maximumItems);
       const items = privacy.evidenceForDigest(pendingItems);
       const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
       if (excludedIds.length > 0) attention.acknowledge(excludedIds);
+      if (command.context.trigger !== "manual") {
+        const decision = automaticDigestDecision(safeContext, items);
+        if (!decision.generate) {
+          emit({ type: "digest_skipped", id: command.id, reason: decision.reason });
+          emitAttention(command.id);
+          return true;
+        }
+      }
       emit({ type: "digest_state", id: command.id, state: "working", templateId: selectedId });
       const digest = await runDigestAgent(template, items, pluginRoot);
       digestHistory.save(digest);
       attention.acknowledge(items.map((item) => item.id));
       emit({ type: "digest", id: command.id, digest });
       emitAttention(command.id);
+      emitTemplateSuggestions(command.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Digest generation failed.";
       emit({
@@ -596,7 +646,8 @@ async function handle(raw: string): Promise<boolean> {
         templates: publicTemplates(),
         integrations: publicIntegrations(),
         authMethods: await discoverAgentAuthMethods(),
-        privacy: privacy.status()
+        privacy: privacy.status(),
+        templateSuggestions: currentTemplateSuggestions()
       });
     } catch (error) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error instanceof Error ? error.message : "The draft could not be installed." });
@@ -653,6 +704,7 @@ async function handle(raw: string): Promise<boolean> {
       configFingerprint = configurationFingerprint(configRoot);
       emit({ type: "templates", id: command.id, templates: publicTemplates() });
       emit({ type: "template_saved", id: command.id, templateId: command.templateId });
+      emitTemplateSuggestions(command.id);
     } catch (error) {
       emit({
         type: "error", id: command.id, code: "template_update_failed",

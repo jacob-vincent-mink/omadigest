@@ -1,6 +1,6 @@
 # OmaDigest recording prompt
 
-Record a concise, production-quality OmaDigest demo from this repository. Prefer the semantic demo runner over coordinate-driven computer use.
+Record a production-quality OmaDigest sizzle reel from this repository. The finished concatenated cut must be under 60 seconds. Prefer the semantic demo runner over coordinate-driven computer use.
 
 ## Preflight
 
@@ -22,9 +22,10 @@ Do not open a terminal on the recorded workspace. The runner invokes the real no
 
 For a human-paced take, install and use `demo/hotkeys.sh` as documented in `demo/README.md`. The hotkeys invoke the same semantic IPC and split notification/DND transitions into independently timed scenes.
 
-The finished video must visibly show:
+The finished video must visibly show, in a fast hook-to-payoff sequence:
 
 - built-in Omarchy sources plus the bundled GitHub connector's live authenticated status;
+- the GitHub source's category-level controls;
 - native Omarchy notification popups;
 - a specific, evidence-based automatic digest title;
 - no Signal canary and no contentless/count-only digest entry;
@@ -36,7 +37,9 @@ The finished video must visibly show:
 ## Quality bar
 
 - No visible terminal, secrets, raw authentication data, or private notification content.
-- No long loading stretches in the final concatenated recording.
+- No long loading stretches in the final concatenated recording; cut every model wait.
+- Favor two-to-six-second shots and hard cuts over cursor travel or leisurely holds.
+- Verify the output with `ffprobe`; 60 seconds or longer is a failed take.
 - Keep panel transitions settled before each scene and leave enough time to read the payoff.
 - Verify labels/icons are centered, both digest tabs fit their columns, and text stays within the panel.
 - Retain the full output under `demo/recordings/`; do not overwrite or delete earlier takes.

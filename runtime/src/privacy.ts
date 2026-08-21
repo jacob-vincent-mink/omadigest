@@ -126,7 +126,8 @@ export function normalizeApplication(value: string): string {
 }
 
 function hiddenItem(item: AttentionItem): AttentionItem {
-  return { ...item, title: "", body: "", contentAvailable: false };
+  const { intent: _intent, ...safe } = item;
+  return { ...safe, title: "", body: "", contentAvailable: false };
 }
 
 export function isActionableEvidence(item: AttentionItem): boolean {

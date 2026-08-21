@@ -28,6 +28,7 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Privacy before persistence** — protected apps such as Signal start at **Ignore**; unknown apps start at **Count only**, with content erased.
 - **Citations by construction** — every factual digest entry must cite a supplied notification or connector source ID.
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
+- **Attention intelligence** — conservative subject grouping, broker-owned intent routing, signal-aware DND triggers, and safe pattern-based template suggestions make the defaults improve without granting notification text authority.
 - **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
 - **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
@@ -158,6 +159,7 @@ Bundled service integrations cover GitHub, Google Calendar, X, Linear, Slack, To
 | [Configuration](docs/configuration.md) | File-backed control plane and hot reload |
 | [Templates](docs/templates.md) | Skill format, routing, drafting, and acceptance |
 | [Integrations](docs/integrations.md) | Connector contract, permissions, setup, and removal |
+| [Attention intelligence](docs/intelligence.md) | Intent classification, grouping, automatic triggers, and safe template suggestions |
 | [Voice](docs/voice.md) | Voxtype input and provider-based read mode |
 | [Architecture](docs/architecture.md) | QML/broker boundary, protocols, and data flow |
 | [Security](docs/security.md) | Threat boundaries, privacy modes, credentials, and sandbox limits |

@@ -58,4 +58,12 @@ describe("selectTemplate", () => {
     ], base);
     expect(selected.templateId).toBe("general");
   });
+
+  it("routes on broker-derived intent and urgency", () => {
+    const selected = selectTemplate([
+      template("general", 10, {}),
+      template("incident", 90, { intents: ["failure"], minimumIntentShare: 0.4, urgencies: ["critical"] })
+    ], { ...base, intentCounts: { failure: 2 }, urgencyCounts: { low: 0, normal: 4, critical: 1 } });
+    expect(selected.templateId).toBe("incident");
+  });
 });

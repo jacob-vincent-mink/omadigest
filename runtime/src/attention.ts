@@ -11,6 +11,7 @@ export const attentionItemSchema = z.object({
   title: z.string().max(2_000),
   body: z.string().max(8_000),
   category: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/).optional(),
+  intent: z.enum(["failure", "review", "deadline", "meeting", "assignment", "mention", "request", "completion", "system", "update"]).optional(),
   contentAvailable: z.boolean().optional(),
   urgency: z.enum(["low", "normal", "critical"]),
   occurredAt: z.string().datetime()

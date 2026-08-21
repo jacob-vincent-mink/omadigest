@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isSpecificDigestTitle } from "../src/digest-validation.js";
+import { isSpecificDigestTitle, validateDigestEvidence } from "../src/digest-validation.js";
+import type { DigestEntry, EvidenceGroup } from "../src/types.js";
 
 describe("digest title validation", () => {
   it("rejects generic and template-only titles", () => {
@@ -12,5 +13,24 @@ describe("digest title validation", () => {
   it("accepts evidence-specific titles", () => {
     expect(isSpecificDigestTitle("PR #482 Report", "GitHub PR Report")).toBe(true);
     expect(isSpecificDigestTitle("Release Readiness: CI and Review Blockers", "Focus Re-entry")).toBe(true);
+  });
+});
+
+describe("digest evidence validation", () => {
+  const entry = (sourceIds: string[]): DigestEntry => ({
+    headline: "Headline", explanation: "Explanation", importance: "normal", confidence: 1, sourceIds
+  });
+  const groups = [{
+    id: "group-1", intent: "review", subject: "pr-482", reason: "shared-reference",
+    sourceIds: ["one", "two"], items: []
+  }] satisfies EvidenceGroup[];
+
+  it("rejects split groups and reused evidence", () => {
+    expect(validateDigestEvidence([entry(["one"]), entry(["two"])], groups)).toContain("summarized together");
+    expect(validateDigestEvidence([entry(["one"]), entry(["one"])], groups)).toContain("only one digest entry");
+  });
+
+  it("accepts one merged entry", () => {
+    expect(validateDigestEvidence([entry(["one", "two"])], groups)).toBeUndefined();
   });
 });

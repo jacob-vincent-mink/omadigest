@@ -322,11 +322,22 @@ Panel {
     root.scrollToTop()
   }
 
+  function draftTemplateSuggestion(suggestion) {
+    if (!suggestion) return
+    root.settingsPage = "templates"
+    root.selectedTemplate = null
+    root.page = "settings"
+    templateDraftEditor.setRequest(String(suggestion.prompt || ""))
+    root.scrollToBottom()
+    OmaDigest.OmaDigestStore.startDraft("template", String(suggestion.prompt || ""))
+  }
+
   function generationContext(trigger, focusMinutes) {
     return {
       trigger: trigger || "manual",
       itemCount: root.attentionAvailableCount,
       focusMinutes: Math.max(0, Number(focusMinutes) || 0),
+      automaticMinimumItems: Math.max(1, Number(root.setting("minimumItems", 3)) || 3),
       // The broker derives application counts only after enforcing privacy policy.
       appCounts: {},
       availableConnectors: root.availableConnectors(),
@@ -350,7 +361,7 @@ Panel {
   function completeAutomaticGeneration() {
     var pending = root.pendingAutomaticGeneration
     root.pendingAutomaticGeneration = null
-    if (!pending || root.attentionAvailableCount < Number(root.setting("minimumItems", 3))) return
+    if (!pending || root.attentionAvailableCount <= 0) return
     root.generateDigest(pending.trigger, pending.focusMinutes)
   }
 
@@ -482,6 +493,20 @@ Panel {
       root.open()
       root.scrollToTop()
       return "ok"
+    }
+
+    function showSource(integrationId: string): string {
+      var wanted = String(integrationId)
+      var available = root.omarchySources().concat(root.connectedServiceSources())
+      for (var index = 0; index < available.length; index++) {
+        if (String(available[index].id || "") !== wanted) continue
+        root.settingsPage = "integrations"
+        root.page = "settings"
+        root.openSource(available[index])
+        root.open()
+        return "ok"
+      }
+      return "missing"
     }
 
     function previewDataDeletion(target: string): string {
@@ -659,6 +684,7 @@ Panel {
         selectedTemplateId: root.selectedTemplate ? String(root.selectedTemplate.id || "") : "",
         templateEditMode: root.templateEditMode,
         templateEditState: OmaDigest.OmaDigestStore.templateEditState,
+        templateSuggestions: OmaDigest.OmaDigestStore.templateSuggestions,
         dataDeleteState: OmaDigest.OmaDigestStore.dataDeleteState,
         errorCode: OmaDigest.OmaDigestStore.errorCode,
         errorMessage: OmaDigest.OmaDigestStore.errorMessage,
@@ -1371,6 +1397,84 @@ Panel {
               spacing: Style.space(10)
 
               Repeater {
+                model: (OmaDigest.OmaDigestStore.templateSuggestions || []).slice(0, 1)
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: suggestionContent.implicitHeight + Style.space(20)
+                  radius: Style.cornerRadius
+                  color: Style.selectedFillFor(root.foreground, Color.accent)
+                  border.width: Style.spacing.hairline
+                  border.color: Color.accent
+
+                  Column {
+                    id: suggestionContent
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.margins: Style.space(10)
+                    spacing: Style.space(6)
+
+                    Text {
+                      width: parent.width
+                      text: "SUGGESTED FOR YOU · " + Number(modelData.itemCount || 0) + " RECENT"
+                      color: Color.accent
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                      font.letterSpacing: 1
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      width: parent.width
+                      text: String(modelData.title || "Suggested template")
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.subtitle
+                      font.bold: true
+                      wrapMode: Text.WordWrap
+                    }
+                    Text {
+                      width: parent.width
+                      text: String(modelData.description || "")
+                      color: Qt.darker(root.foreground, 1.3)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      wrapMode: Text.WordWrap
+                    }
+                    Row {
+                      width: parent.width
+                      height: Style.space(34)
+                      spacing: Style.space(8)
+                      Button {
+                        width: parent.width * 0.62
+                        height: parent.height
+                        text: "Draft template"
+                        foreground: root.foreground
+                        accent: Color.accent
+                        fontFamily: root.fontFamily
+                        fontSize: Style.font.bodySmall
+                        bordered: true
+                        focusable: true
+                        onClicked: root.draftTemplateSuggestion(modelData)
+                      }
+                      Button {
+                        width: parent.width - parent.spacing - parent.width * 0.62
+                        height: parent.height
+                        text: "Not now"
+                        foreground: root.foreground
+                        accent: Color.accent
+                        fontFamily: root.fontFamily
+                        fontSize: Style.font.bodySmall
+                        focusable: true
+                        onClicked: OmaDigest.OmaDigestStore.dismissTemplateSuggestion(String(modelData.id || ""))
+                      }
+                    }
+                  }
+                }
+              }
+
+              Repeater {
                 model: OmaDigest.OmaDigestStore.templates
                 Rectangle {
                   required property var modelData
@@ -1556,6 +1660,8 @@ Panel {
                       if ((match.triggers || []).length) pieces.push("triggers: " + match.triggers.join(", "))
                       if (match.minimumItems !== undefined) pieces.push("at least " + match.minimumItems + " items")
                       if (match.minimumFocusMinutes !== undefined) pieces.push("after " + match.minimumFocusMinutes + "+ focus minutes")
+                      if ((match.intents || []).length) pieces.push("intents: " + match.intents.join(", "))
+                      if ((match.urgencies || []).length) pieces.push("urgency: " + match.urgencies.join(", "))
                       return "MATCHING\n" + (pieces.length ? pieces.join("  ·  ") : "Manual or fallback")
                     }
                     color: root.foreground

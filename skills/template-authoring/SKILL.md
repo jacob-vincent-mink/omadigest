@@ -11,8 +11,8 @@ Create a human-readable briefing skill and a deterministic compiled policy. Do n
 
 1. Understand the briefing's purpose, trigger, desired sections, and useful context sources.
 2. Ask one concise question only when a missing choice would materially change private context access or activation behavior.
-3. Prefer metadata-based matching: trigger, item count, focus duration, source application, connector availability, and schedule.
-4. Never route from notification body prose unless the user explicitly requests a local content rule.
+3. Prefer broker-derived metadata matching: trigger, item count, focus duration, source application, attention intent, urgency, connector availability, and schedule.
+4. Never route from notification body prose. Use the broker's deterministic intent taxonomy when content-aware routing is needed.
 5. Request only connectors needed for this briefing.
 6. Write `SKILL.md` instructions that require citations, separate facts from inference, and handle missing context honestly. Its frontmatter `name` must be the exact lowercase-hyphenated compiled template ID.
 7. Submit one complete draft through `emit_template_draft`.

@@ -21,8 +21,16 @@ export const compiledTemplateSchema = z.object({
     minimumFocusMinutes: z.number().int().min(0).max(1440).optional(),
     applications: z.array(z.string().min(1).max(100)).max(32).optional(),
     minimumApplicationShare: z.number().min(0).max(1).optional(),
+    intents: z.array(z.enum(["failure", "review", "deadline", "meeting", "assignment", "mention", "request", "completion", "system", "update"])).max(10).optional(),
+    minimumIntentShare: z.number().min(0).max(1).optional(),
+    urgencies: z.array(z.enum(["low", "normal", "critical"])).max(3).optional(),
     requiresConnectors: z.array(z.string().min(1).max(80)).max(16).optional()
-  }).strict(),
+  }).strict().superRefine((value, context) => {
+    if (value.minimumApplicationShare !== undefined && value.applications === undefined)
+      context.addIssue({ code: "custom", message: "minimumApplicationShare requires applications" });
+    if (value.minimumIntentShare !== undefined && value.intents === undefined)
+      context.addIssue({ code: "custom", message: "minimumIntentShare requires intents" });
+  }),
   context: z.object({
     connectors: z.array(z.string().min(1).max(80)).max(16),
     connectorCategories: connectorCategories.optional(),

@@ -51,4 +51,14 @@ describe("manual template editing", () => {
     parsed.context.connectorCategories = { "local.source": Array.from({ length: 33 }, (_, index) => `category-${index}`) };
     expect(() => compiledTemplateSchema.parse(parsed)).toThrow();
   });
+
+  it("accepts deterministic intent routing and rejects orphaned share thresholds", () => {
+    const parsed = JSON.parse(policy()) as Record<string, any>;
+    parsed.match.intents = ["failure", "review"];
+    parsed.match.minimumIntentShare = 0.5;
+    parsed.match.urgencies = ["critical"];
+    expect(compiledTemplateSchema.parse(parsed).match.intents).toEqual(["failure", "review"]);
+    delete parsed.match.intents;
+    expect(() => compiledTemplateSchema.parse(parsed)).toThrow(/minimumIntentShare requires intents/u);
+  });
 });

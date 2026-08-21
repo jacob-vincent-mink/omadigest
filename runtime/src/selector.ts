@@ -43,6 +43,20 @@ function matchReasons(template: DigestTemplate, context: GenerationContext): str
     if (share < (match.minimumApplicationShare ?? 0)) return undefined;
     reasons.push(`${matchingCount} items came from ${match.applications.join(", ")}`);
   }
+  if (match.intents !== undefined) {
+    const intentCounts = context.intentCounts ?? {};
+    const matchingCount = match.intents.reduce((total, intent) => total + Math.max(0, intentCounts[intent] ?? 0), 0);
+    if (matchingCount === 0) return undefined;
+    const share = context.itemCount === 0 ? 0 : matchingCount / context.itemCount;
+    if (share < (match.minimumIntentShare ?? 0)) return undefined;
+    reasons.push(`${matchingCount} items matched ${match.intents.join(", ")}`);
+  }
+  if (match.urgencies !== undefined) {
+    const urgencyCounts = context.urgencyCounts ?? { low: 0, normal: 0, critical: 0 };
+    const matchingCount = match.urgencies.reduce((total, urgency) => total + Math.max(0, urgencyCounts[urgency] ?? 0), 0);
+    if (matchingCount === 0) return undefined;
+    reasons.push(`${matchingCount} items matched ${match.urgencies.join(", ")} urgency`);
+  }
   if (match.requiresConnectors !== undefined) {
     const available = new Set(context.availableConnectors.map(normalize));
     if (!match.requiresConnectors.every((connector) => available.has(normalize(connector)))) return undefined;

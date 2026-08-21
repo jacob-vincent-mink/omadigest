@@ -21,6 +21,7 @@ Scope {
   property string state: "starting"
   property string status: "Starting OmaDigest…"
   property var templates: []
+  property var templateSuggestions: []
   property var integrations: []
   property var integrationStatus: ({})
   property var privacy: ({ defaultMode: "count-only", rules: [] })
@@ -208,6 +209,9 @@ Scope {
   function markDigestRead(digestId) { send({ type: "digest_mark_read", id: "history-" + nextId++, digestId: String(digestId) }) }
   function deleteDigest(digestId) { send({ type: "digest_delete", id: "history-" + nextId++, digestId: String(digestId) }) }
   function clearDigests() { send({ type: "digest_clear", id: "history-" + nextId++ }) }
+  function dismissTemplateSuggestion(suggestionId) {
+    send({ type: "template_suggestion_dismiss", id: "suggestion-" + nextId++, suggestionId: String(suggestionId) })
+  }
   function deleteData(target) {
     clearError()
     dataDeleteState = "working"
@@ -326,6 +330,7 @@ Scope {
       state = "ready"
       status = "Ready to build a briefing"
       templates = event.templates || []
+      templateSuggestions = event.templateSuggestions || []
       integrations = event.integrations || []
       privacy = event.privacy || ({ defaultMode: "count-only", rules: [] })
       authMethods = event.authMethods || []
@@ -337,6 +342,10 @@ Scope {
     }
     if (event.type === "templates") {
       templates = event.templates || []
+      return
+    }
+    if (event.type === "template_suggestions") {
+      templateSuggestions = (event.suggestions || []).slice(0, 3)
       return
     }
     if (event.type === "draft_state") {
@@ -429,6 +438,11 @@ Scope {
     if (event.type === "digest_state") {
       digestState = "working"
       status = "Building your digest…"
+      return
+    }
+    if (event.type === "digest_skipped") {
+      digestState = "idle"
+      status = String(event.reason || "No digest was needed")
       return
     }
     if (event.type === "digest") {
