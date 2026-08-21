@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -12,6 +12,7 @@ export const speechConfigSchema = z.object({
   speed: z.number().min(0.25).max(4).default(1)
 }).strict();
 export type SpeechConfig = z.infer<typeof speechConfigSchema>;
+export const MAX_TTS_AUDIO_BYTES = 50 * 1024 * 1024;
 
 export class SpeechService {
   readonly #configPath: string;
@@ -60,9 +61,7 @@ export class SpeechService {
     await mkdir(this.#runtimeDir, { recursive: true, mode: 0o700 });
     const audioPath = join(this.#runtimeDir, `speech-${randomUUID()}.mp3`);
     const response = await synthesize(config, apiKey, normalized);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > 50 * 1024 * 1024) throw new Error("The TTS provider returned invalid audio");
-    await writeFile(audioPath, bytes, { mode: 0o600 });
+    await writeBoundedAudioResponse(response, audioPath);
     this.#player = spawn("mpv", ["--no-video", "--really-quiet", "--keep-open=no", audioPath], {
       stdio: "ignore",
       windowsHide: true
@@ -98,6 +97,55 @@ export class SpeechService {
   private async config(): Promise<SpeechConfig | undefined> {
     try { return speechConfigSchema.parse(JSON.parse(await readFile(this.#configPath, "utf8"))); }
     catch { return undefined; }
+  }
+}
+
+export async function writeBoundedAudioResponse(
+  response: Response,
+  path: string,
+  maximumBytes = MAX_TTS_AUDIO_BYTES
+): Promise<number> {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) throw new Error("A positive TTS response limit is required");
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== undefined && contentType !== "" && !contentType.startsWith("audio/") && contentType !== "application/octet-stream")
+    throw new Error("The TTS provider returned an unsupported media type");
+  const declaredValue = response.headers.get("content-length")?.trim();
+  if (declaredValue !== undefined && declaredValue !== "") {
+    if (!/^\d+$/u.test(declaredValue)) throw new Error("The TTS provider returned an invalid content length");
+    if (Number(declaredValue) > maximumBytes) throw new Error("The TTS provider returned too much audio");
+  }
+  if (response.body === null) throw new Error("The TTS provider returned no audio");
+
+  const reader = response.body.getReader();
+  const file = await open(path, "wx", 0o600);
+  let total = 0;
+  let completed = false;
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      const chunk = result.value;
+      if (total + chunk.byteLength > maximumBytes) {
+        await reader.cancel("OmaDigest TTS response exceeded its byte limit");
+        throw new Error("The TTS provider returned too much audio");
+      }
+      let offset = 0;
+      while (offset < chunk.byteLength) {
+        const written = await file.write(chunk, offset, chunk.byteLength - offset, total + offset);
+        if (written.bytesWritten < 1) throw new Error("The TTS audio file could not be written");
+        offset += written.bytesWritten;
+      }
+      total += chunk.byteLength;
+    }
+    if (total === 0) throw new Error("The TTS provider returned empty audio");
+    completed = true;
+    return total;
+  } catch (error) {
+    try { await reader.cancel(); } catch { /* The stream is already closed. */ }
+    throw error;
+  } finally {
+    try { await file.close(); }
+    finally { if (!completed) await rm(path, { force: true }); }
   }
 }
 

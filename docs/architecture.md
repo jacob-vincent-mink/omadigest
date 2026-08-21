@@ -69,7 +69,7 @@ Agent drafts remain in broker memory. The UI displays their complete structured 
 
 Voxtype owns microphone capture and transcription. OmaDigest requests a private output file and turns off auto-submit. The broker appends only the final bounded transcript to the editor.
 
-Read mode is a separate provider boundary. It supports OpenAI-compatible speech and ElevenLabs adapters, stores keys in Secret Service, and plays private temporary audio through `mpv`.
+Read mode is a separate provider boundary. It supports OpenAI-compatible speech and ElevenLabs adapters, stores keys in Secret Service, streams provider audio into an exclusive private file under an incremental 50-MiB cap, and plays the result through `mpv`.
 
 ## Runtime protocol
 
@@ -88,6 +88,11 @@ Protocol 2 currently includes:
 - TTS status/configure/speak/pause/stop.
 
 Unknown or malformed commands fail closed with a bounded error event.
+The broker caps each NDJSON line at 2 MiB before decoding or parsing, discards
+an oversized line without retaining its remainder, and resumes at the next
+newline. Broad-agent handoff payloads never enter process arguments: argv
+contains only a fixed claim instruction and opaque capability, while the
+bounded payload crosses a mode-`0600` Unix socket once before expiring.
 
 Quickshell IPC exposes navigation and content-free status in normal operation.
 Costful or mutating demo methods are disabled unless the shell was explicitly

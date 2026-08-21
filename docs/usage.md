@@ -71,7 +71,7 @@ The bundled GitHub connector uses the active authenticated `gh` session and impo
 
 ## Agent actions
 
-**Send to agent** passes one digest entry, its cited policy-permitted evidence, source timestamps, and explicit safety framing to the default Omarchy agent. Notification and connector strings are treated as untrusted observations, not instructions.
+**Send to agent** passes the selected digest headline and explanation plus bounded source application/timestamp metadata and explicit safety framing to the default Omarchy agent. Original notification titles and bodies are omitted. The payload is claimed once from the broker rather than placed in process arguments, and all digest strings remain untrusted observations rather than instructions.
 
 Crash entries ask the default agent to use the `diagnose-crash` workflow and correlate the application and timestamp with systemd-coredump.
 

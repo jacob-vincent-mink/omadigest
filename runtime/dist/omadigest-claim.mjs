@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+import { createRequire as __omadigestCreateRequire } from 'node:module';
+var require = __omadigestCreateRequire(import.meta.url);
+import{createConnection as d,createServer as m}from"node:net";import{dirname as y,join as i,resolve as v}from"node:path";var k=5*6e4;var E=2*1024,S=160*1024,l=1024*1024,u=5e3;function h(e=process.env){let t=e.XDG_RUNTIME_DIR?.startsWith("/")?i(e.XDG_RUNTIME_DIR,"omadigest"):i("/tmp",`omadigest-${process.getuid?.()??"user"}`);return i(t,"handoff.sock")}async function a(e,t=process.env){if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(e))throw new Error("The OmaDigest handoff capability is invalid");let r=d(h(t));r.setTimeout(u,()=>r.destroy(new Error("The OmaDigest handoff timed out")));let s=Buffer.alloc(0);return await new Promise((f,o)=>{r.once("connect",()=>r.end(`${JSON.stringify({version:1,token:e})}
+`)),r.on("data",n=>{if(s.length+n.length>l){r.destroy(new Error("The OmaDigest handoff response was too large"));return}s=Buffer.concat([s,n])}),r.once("error",o),r.once("end",()=>{try{let n=JSON.parse(s.toString("utf8"));if(!g(n))throw new Error("The OmaDigest handoff response was invalid");if(!n.ok)throw new Error("The OmaDigest handoff is unavailable or expired");f(n.payload)}catch(n){o(n)}})})}function g(e){if(typeof e!="object"||e===null)return!1;let t=e;return t.ok===!0&&typeof t.payload=="string"||t.ok===!1&&typeof t.error=="string"}var c=process.argv[2];if(c===void 0||process.argv.length!==3)process.stderr.write(`Usage: omadigest-claim <capability>
+`),process.exitCode=2;else try{process.stdout.write(`${await a(c)}
+`)}catch(e){let t=e instanceof Error?e.message:"The OmaDigest handoff failed";process.stderr.write(`${t.replace(/[\r\n\u0000-\u001f]+/gu," ").slice(0,300)}
+`),process.exitCode=1}
+//# sourceMappingURL=omadigest-claim.mjs.map

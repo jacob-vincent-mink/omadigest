@@ -54,6 +54,21 @@ await build({
 });
 await chmod("runtime/dist/omadigest-author.mjs", 0o755);
 
+await build({
+  entryPoints: ["runtime/src/handoff-claim-cli.ts"],
+  outfile: "runtime/dist/omadigest-claim.mjs",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  minify: true,
+  sourcemap: true,
+  banner: {
+    js: "#!/usr/bin/env node\nimport { createRequire as __omadigestCreateRequire } from 'node:module';\nvar require = __omadigestCreateRequire(import.meta.url);"
+  }
+});
+await chmod("runtime/dist/omadigest-claim.mjs", 0o755);
+
 const lock = JSON.parse(await readFile("package-lock.json", "utf8"));
 const notices = Object.entries(lock.packages || {})
   .filter(([path, value]) => path.includes("node_modules/") && value && value.version)

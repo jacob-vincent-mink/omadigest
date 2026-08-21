@@ -2,7 +2,7 @@
 
 **Review date:** 2026-08-21
 
-**Reviewed implementation:** v0.1.3 release candidate
+**Reviewed implementation:** v0.1.4 release candidate
 
 **Method:** architecture decomposition, STRIDE, white-box source review, and
 isolated black-box boundary tests
@@ -240,12 +240,12 @@ flowchart TD
 | Boundary | Crossing | Required trust decision | Current enforcement and gap |
 |---|---|---|---|
 | TB0 — desktop session | Apps and same-session processes into OmaDigest | Notification evidence must not acquire UI, model, or action authority; local IPC must not imply unrestricted user intent. | App-name rules filter content but do not grant tool/action authority. Unknown names default to count-only; production IPC exposes only navigation/content-free status and mutations require explicit demo mode (TM-05 fixed; TM-06 accepted residual). |
-| TB1 — QML to broker | NDJSON commands, events, and snapshots | QML may request typed product operations, but must not perform filesystem, network, connector, or model work itself. | Broker command schemas are strict and notification history is broker-read under file/item/byte bounds. Raw protocol lines still need a byte cap (TM-04 fixed; TM-09 open). |
-| TB2 — broker to model | Bounded notification/connector evidence and structured tool results | Evidence is data, never instructions; model output cannot select tools or cite material outside the supplied set. | Scoped emit-only Pi tools, evidence budgets, deterministic routing, and citation checks enforce the main boundary. Out-of-scope prompt authority is broker-owned; process-argument transport remains open (TM-08 fixed; TM-16 open). |
+| TB1 — QML to broker | NDJSON commands, events, and snapshots | QML may request typed product operations, but must not perform filesystem, network, connector, or model work itself. | Broker command schemas are strict, notification history is broker-read under file/item/byte bounds, and protocol lines are discarded above a 2-MiB pre-parse cap (TM-04/TM-09 fixed). |
+| TB2 — broker to model | Bounded notification/connector evidence and structured tool results | Evidence is data, never instructions; model output cannot select tools or cite material outside the supplied set. | Scoped emit-only Pi tools, evidence budgets, deterministic routing, and citation checks enforce the main boundary. Out-of-scope prompt authority is broker-owned and broad-agent payloads use one-use broker claims (TM-08/TM-16 fixed). |
 | TB3 — broker to connector | Manifest, config, secrets, subprocess authority, network, and response envelope | Installed connector code should receive only its declared, user-approved capability and return bounded opaque evidence. | Connectors have no network/child permission; HTTPS is exact-host broker mediation and commands are rejected. Final responses require matching IDs/versions and clean exit (TM-02/TM-03/TM-19 fixed). |
 | TB4 — broker to persistence | Notifications, digests, templates, policies, setup values, and credentials | Sensitive content must remain private, bounded, schema-valid, and deletable under tightened policy. | Private permissions, retention, atomic writes, projected integration config, deduplicated append, and segment/total budgets exist. Nested digest reload and orphan-secret cleanup remain incomplete (TM-07/TM-14 fixed; TM-11/TM-15 open). |
-| TB5 — broker to remote services | Model evidence, connector requests, TTS text, and release checks | Each service receives only the minimum intended data under bounded time and response size. | Model/release inputs are bounded, release routing is fixed, and connector HTTPS is mediated. TTS still buffers before enforcing its cap (TM-02 fixed; TM-13/TM-21 open). |
-| TB6 — explicit broad handoff | User-approved prompt to the default agent or Herdr | The user must see and approve the exact authority-expanding request. | The broker derives out-of-scope prompts from the original request, shows the exact text, and consumes a one-use expiring confirmation token. Process-argument transport remains open (TM-08 fixed; TM-16 open). |
+| TB5 — broker to remote services | Model evidence, connector requests, TTS text, and release checks | Each service receives only the minimum intended data under bounded time and response size. | Model/release inputs are bounded, release routing is fixed, connector HTTPS is mediated, and TTS audio streams to a private file under an incremental 50-MiB cap (TM-02/TM-13 fixed; TM-21 residual). |
+| TB6 — explicit broad handoff | User-approved prompt to the default agent or Herdr | The user must see and approve the exact authority-expanding request. | The broker derives and previews out-of-scope prompts, consumes a one-use confirmation, and transports all handoff payloads through a private one-use Unix-socket claim. Process arguments carry only a fixed instruction and opaque five-minute capability (TM-08/TM-16 fixed). |
 
 ## White-box source review
 
@@ -262,7 +262,7 @@ byte, time, and retention limits.
 | Model and template authority | Digest/template sessions expose only bounded emit tools and deterministic routing remains outside the model. Out-of-scope prompt text is broker-derived, fully previewed, and confirmed with a one-use token. |
 | Filesystem and retention | Package validation, private permissions, retention, atomic installation, config byte/projection checks, and attention disk budgets are substantial controls. Nested persisted-digest validation and some symlink paths still need hardening. |
 | Connector sandbox and credentials | Time, response, package, and protocol bounds fail closed. Direct network/child authority was removed; broker HTTPS and fixed read-only GitHub calls now enforce the intended capability boundary. |
-| Auxiliary network/process features | Release checking is narrowly fixed and bounded. Production IPC mutations are demo-gated and argument-bounded. TTS streaming, OAuth host restriction, prompt transport, and content-free auditing remain backlog items. |
+| Auxiliary network/process features | Release checking is narrowly fixed and bounded. Production IPC mutations are demo-gated and argument-bounded. TTS responses stream under an incremental cap, and broad-agent payloads use private one-use claims. OAuth host restriction and content-free auditing remain backlog items. |
 
 ## STRIDE assessment
 
@@ -274,8 +274,8 @@ The white-box review traced every external string and persisted object through
 validation, storage, model, process, and UI sinks; inventoried filesystem,
 network, subprocess, credential, and IPC authority; and compared actual bounds
 with the documented contracts. No critical issue was found. The release-blocking
-TM-02 through TM-05, TM-07, and TM-08 findings are fixed in the v0.1.3 release
-candidate. TM-06 is retained as a P2 product limitation; the remaining items
+TM-02 through TM-05, TM-07 through TM-09, TM-13, and TM-16 findings are fixed
+through the v0.1.4 release candidate. TM-06 is retained as a P2 product limitation; the remaining items
 are P2 hardening or explicitly documented residual risks.
 
 | ID | STRIDE | Status | Priority | Scenario and evidence | Recommended treatment |
@@ -288,14 +288,14 @@ are P2 hardening or explicitly documented residual risks.
 | TM-06 | S, I | Accepted residual | P2 | Native app labels are sender-provided, so a local notifier can match another app's content rule. This changes handling only for notifications the sender itself creates; it does not reveal another app's evidence or grant tool authority. Unknown names default to count-only, protected names to ignore, and all resulting evidence remains untrusted data. | Keep per-app filtering as a user control, describe it as name matching rather than authentication, and prefer validated integration IDs when a source needs a stronger identity boundary. |
 | TM-07 | T, D, I | Fixed in v0.1.3 | P1 | Identical snapshots are not appended; changed IDs replace in memory, segments compact at 2 MiB, total event storage is capped at 8 MiB/seven files, and oversized/unreadable segments are removed during load/policy rewrite. |
 | TM-08 | T, E | Fixed in v0.1.3 | P1 | `out_of_scope` no longer accepts a prompt. The broker derives the exact prompt from the original request, displays it in QML, and launches only after consuming a one-use five-minute confirmation token. |
-| TM-09 | D | Open | P2 | Broker stdin is parsed only after a complete newline is buffered. A multi-megabyte malformed line was rejected and the process recovered, but still consumed memory first. | Add a byte-limited line reader and terminate/reset the broker child on a protocol-line violation. |
+| TM-09 | D | Fixed in v0.1.4 | P2 | A byte-counted NDJSON reader caps each command at 2 MiB before decoding or parsing, discards the remainder of an oversized line without retaining it, emits a content-free error, and recovers at the next newline. |
 | TM-10 | T, D | Open | P2 | Model calls occupy the broker's sequential command loop for up to several minutes, delaying cancellation, shutdown, and unrelated actions. | Use a bounded cancellable job manager and permit status/cancel commands while one generation or draft is active. |
 | TM-11 | T, D | Open | P2 | Persisted digest reload validates only top-level fields and entry-array presence, not the complete nested bounded digest schema. | Reuse one strict digest schema for model output, persistence, broker events, and QML snapshots; reject or quarantine malformed records. |
 | TM-12 | T, E | Open | P2 | Template loading follows `SKILL.md` and compiled-file symlinks; destructive config operations rely mainly on lexical containment. | Use `lstat`/regular-file checks for every package file and verify non-symlink roots before destructive operations. |
-| TM-13 | D, I | Open | P2 | TTS calls `response.arrayBuffer()` before enforcing the 50-MiB audio limit, allowing a configured or compromised endpoint to pressure memory. | Reject excessive `Content-Length` and stream into a private file with an incremental byte cap and abort. |
+| TM-13 | D, I | Fixed in v0.1.4 | P2 | TTS rejects excessive declared lengths and unsupported media types, streams into an exclusive private file under an incremental 50-MiB cap, cancels oversized bodies, and removes partial output on failure. |
 | TM-14 | D, T | Fixed in v0.1.3 | P2 | Integration setup JSON is capped at 256 KiB before parsing and projected through declared non-secret keys, field types, string lengths, and URL validation. |
 | TM-15 | I | Open | P2 | Integration deletion clears secrets only for currently discoverable valid packages; corrupt or already removed packages may leave keyring items behind. | Maintain a bounded secret index at write time and clear by indexed integration/field IDs independently of package discovery. |
-| TM-16 | I, E | Open | P2 | Default-agent and Herdr handoffs intentionally expand authority; evidence-bearing prompts travel in process arguments and may be visible to same-user process inspection. | Keep the explicit gesture, add a final preview, and pass content over private stdin or a mode-`0600` temporary file. |
+| TM-16 | I, E | Fixed in v0.1.4 | P2 | Default-agent and Herdr argv now contain only a fixed claim instruction and opaque five-minute capability. Summarized digest handoffs omit original notification titles/bodies, and all handoff payloads cross a mode-`0600` Unix socket under an in-memory, one-use claim capped at 160 KiB. |
 | TM-17 | S, I | Open | P2 | OAuth/browser launch accepts any credential-free HTTP or HTTPS URL supplied by a compiled provider flow. | Add provider-specific HTTPS host allowlists and explicit loopback HTTP exceptions only where required. |
 | TM-18 | R | Open | P2 | Policy changes, source changes, draft acceptance, deletion, credential changes, and handoffs lack a bounded durable audit record. | Add a content-free rotating audit log containing timestamp, action type, object ID, outcome, and stable error code. Never log evidence or credentials. |
 | TM-19 | S, T | Fixed in v0.1.3 | P2 | The broker requires one final response with the matching request ID and protocol version, waits for a clean connector exit, and rejects duplicate or trailing final responses. |
@@ -322,7 +322,7 @@ not read live OmaDigest data or secrets and made no non-local network requests.
 
 | Boundary | Result | Observation |
 |---|---:|---|
-| Malformed multi-megabyte broker command followed by a valid command | Pass with TM-09 caveat | Invalid input was rejected and the broker recovered for the next command. |
+| Malformed multi-megabyte broker command followed by a valid command | Pass after TM-09 | Input was discarded at the 2-MiB pre-parse cap without retaining the remainder, and the broker recovered for the next command. |
 | Markup-shaped connector status/evidence | Pass after TM-01 | Broker preserved it as bounded opaque data; QML now renders it as plain text. |
 | Invalid JSON, missing, oversized, or slow connector response | Pass | Calls failed closed; the 64-KiB response and 20-second execution bounds were enforced. |
 | Traversal, ID mismatch, symlink, and oversized manifest packages | Pass | Packages remained undiscoverable or failed validation. |
@@ -339,16 +339,13 @@ installation rollback, connector categories, and privacy-policy tightening.
 
 ## Prioritized remediation
 
-The release-blocking connector, history, IPC, handoff, and attention-retention
-items were addressed in v0.1.3. The next hardening cycle is:
+The connector, history, IPC, handoff, attention-retention, protocol-line, and
+TTS response findings were addressed through v0.1.4. The next hardening cycle is:
 
-1. Add a byte-limited broker protocol-line reader.
-2. Make model jobs cancellable without blocking status/shutdown.
-3. Apply strict schemas to persisted digests.
-4. Complete symlink/no-follow checks for templates and destructive roots.
-5. Stream TTS responses under an incremental cap.
-6. Keep broad-agent handoff prompt data out of argv.
-7. Add a bounded, content-free security audit log.
+1. Make model jobs cancellable without blocking status/shutdown.
+2. Apply strict schemas to persisted digests.
+3. Complete symlink/no-follow checks for templates and destructive roots.
+4. Add a bounded, content-free security audit log.
 
 ## Residual risk
 
