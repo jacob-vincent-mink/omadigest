@@ -6,18 +6,7 @@ import { pathToFileURL } from "node:url";
 const CONNECTOR_ID = "io.github.jacob-vincent-mink.linear";
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_ITEMS = 50;
-const QUERY = `query OmaDigest($first: Int!) {
-  viewer {
-    id name
-    assignedIssues(first: $first, orderBy: updatedAt, filter: { state: { type: { nin: ["completed", "canceled"] } } }) {
-      nodes {
-        id identifier title url updatedAt dueDate priority state { name type }
-        comments(first: 10) { nodes { id body createdAt updatedAt user { id name } } }
-        history(first: 10) { nodes { id createdAt fromState { name } toState { name } } }
-      }
-    }
-  }
-}`;
+const DECLARED_CATEGORIES = new Set(["assigned-issues", "mentions-comments", "state-changes", "due-work"]);
 
 function emit(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
 
@@ -37,14 +26,27 @@ export async function handle(request, fetchImpl = fetch) {
     return true;
   }
   if (request.type !== "sync") throw new ConnectorError("unsupported_operation", "This connector supports probe, setup, sync, and open.");
-  const limit = boundedLimit(request.limit);
-  const data = await graphql(QUERY, { first: Math.min(50, limit) }, key, fetchImpl);
-  const items = parseLinearData(data, request.since, request.until, limit);
+  const enabled = requestedCategories(request);
+  const items = await syncLinear(request, key, enabled, fetchImpl);
   emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
   return true;
 }
 
-export function parseLinearData(data, sinceValue, untilValue, limit = MAX_ITEMS, nowValue = new Date()) {
+export async function syncLinear(request, key, enabled, fetchImpl) {
+  if (enabled.size === 0) return [];
+  const limit = boundedLimit(request.limit);
+  const data = await graphql(linearQuery(enabled), { first: Math.min(50, limit) }, key, fetchImpl);
+  return parseLinearData(data, request.since, request.until, limit, new Date(), enabled);
+}
+
+export function linearQuery(enabled) {
+  const due = enabled.has("due-work") ? " dueDate" : "";
+  const comments = enabled.has("mentions-comments") ? " comments(first: 10) { nodes { id body createdAt updatedAt user { id name } } }" : "";
+  const history = enabled.has("state-changes") ? " history(first: 10) { nodes { id createdAt fromState { name } toState { name } } }" : "";
+  return `query OmaDigest($first: Int!) { viewer { id name assignedIssues(first: $first, orderBy: updatedAt, filter: { state: { type: { nin: [\"completed\", \"canceled\"] } } }) { nodes { id identifier title url updatedAt state { name type }${due}${comments}${history} } } } }`;
+}
+
+export function parseLinearData(data, sinceValue, untilValue, limit = MAX_ITEMS, nowValue = new Date(), enabled = DECLARED_CATEGORIES) {
   const viewer = data?.viewer;
   const viewerId = bounded(viewer?.id, 100);
   const viewerName = bounded(viewer?.name, 100).toLowerCase();
@@ -58,21 +60,21 @@ export function parseLinearData(data, sinceValue, untilValue, limit = MAX_ITEMS,
     const updatedAt = timestamp(issue?.updatedAt); const url = safeLinearUrl(issue?.url);
     if (!id || !identifier || !title || !updatedAt) continue;
     const state = bounded(issue?.state?.name, 120) || "Unknown state";
-    if (inside(updatedAt, since, until)) items.push(item(`linear:issue:${id}`, "assigned-issues", updatedAt, `${identifier}: ${title}`, `Assigned to you · ${state}`, url));
+    if (enabled.has("assigned-issues") && inside(updatedAt, since, until)) items.push(item(`linear:issue:${id}`, "assigned-issues", updatedAt, `${identifier}: ${title}`, `Assigned to you · ${state}`, url));
 
     const due = dueTimestamp(issue?.dueDate);
-    if (due && due.getTime() <= dueSoon.getTime()) {
+    if (enabled.has("due-work") && due && due.getTime() <= dueSoon.getTime()) {
       const label = due.getTime() < startOfUtcDay(now).getTime() ? "Overdue" : due.toISOString().slice(0, 10) === now.toISOString().slice(0, 10) ? "Due today" : `Due ${due.toISOString().slice(0, 10)}`;
       items.push(item(`linear:due:${id}:${due.toISOString().slice(0, 10)}`, "due-work", updatedAt, `${identifier}: ${title}`, `${label} · ${state}`, url));
     }
-    for (const comment of (Array.isArray(issue?.comments?.nodes) ? issue.comments.nodes : []).slice(0, 10)) {
+    for (const comment of (enabled.has("mentions-comments") && Array.isArray(issue?.comments?.nodes) ? issue.comments.nodes : []).slice(0, 10)) {
       const commentId = bounded(comment?.id, 120); const occurredAt = timestamp(comment?.createdAt || comment?.updatedAt); const body = bounded(comment?.body, 4_000);
       if (!commentId || !occurredAt || !body || !inside(occurredAt, since, until) || bounded(comment?.user?.id, 100) === viewerId) continue;
       const author = bounded(comment?.user?.name, 100) || "Linear user";
       const mention = viewerName && body.toLowerCase().includes(`@${viewerName}`);
       items.push(item(`linear:comment:${commentId}`, "mentions-comments", occurredAt, `${mention ? "Mention" : "Comment"} on ${identifier}: ${title}`, `${author}: ${body}`, url));
     }
-    for (const change of (Array.isArray(issue?.history?.nodes) ? issue.history.nodes : []).slice(0, 10)) {
+    for (const change of (enabled.has("state-changes") && Array.isArray(issue?.history?.nodes) ? issue.history.nodes : []).slice(0, 10)) {
       const changeId = bounded(change?.id, 120); const occurredAt = timestamp(change?.createdAt);
       const from = bounded(change?.fromState?.name, 120); const to = bounded(change?.toState?.name, 120);
       if (!changeId || !occurredAt || !from || !to || from === to || !inside(occurredAt, since, until)) continue;
@@ -106,6 +108,7 @@ async function readJson(response) {
 function apiKey(config) { const value = typeof config?.api_key === "string" ? config.api_key.trim() : ""; if (!value) throw new ConnectorError("authentication_required", "Add a Linear personal API key in settings."); if (value.length > 4_096) throw new ConnectorError("invalid_setup", "The Linear API key is too long."); return value; }
 function safeLinearUrl(raw) { try { const url = new URL(String(raw || "")); if (url.protocol !== "https:" || url.hostname !== "linear.app" || url.username || url.password) return undefined; url.search = ""; url.hash = ""; return url.href.slice(0, 2_048); } catch { return undefined; } }
 function validateRequest(value) { if (value?.version !== 1 || typeof value.id !== "string" || value.id.length > 240) throw new ConnectorError("invalid_request", "Invalid connector request."); }
+export function requestedCategories(request) { if (request.categories === undefined) return new Set(DECLARED_CATEGORIES); if (!Array.isArray(request.categories)) throw new ConnectorError("invalid_request", "Sync categories must be an array."); return new Set(request.categories.slice(0, 32).filter((value) => typeof value === "string" && DECLARED_CATEGORIES.has(value))); }
 function bounded(value, length) { return String(value || "").replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, length); }
 function boundedLimit(value) { return Math.max(1, Math.min(MAX_ITEMS, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : MAX_ITEMS)); }
 function fitItems(items, limit) { const output = []; let bytes = 2; for (const item of items.slice(0, limit)) { const size = Buffer.byteLength(JSON.stringify(item)) + 1; if (bytes + size > 60 * 1024) break; output.push(item); bytes += size; } return output; }

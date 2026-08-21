@@ -10,6 +10,7 @@ const CONNECTOR_ID = "io.github.jacob-vincent-mink.rss";
 const MAX_FEED_BYTES = 2 * 1024 * 1024;
 const MAX_ITEMS = 50;
 const MAX_PARSED_ENTRIES = 500;
+const DECLARED_CATEGORIES = new Set(["new-entries", "priority-keywords"]);
 
 function emit(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
 
@@ -18,15 +19,21 @@ export async function handle(request, dependencies = {}) {
   if (request.type === "shutdown") return false;
   if (request.type !== "probe" && request.type !== "setup" && request.type !== "sync") throw new ConnectorError("unsupported_operation", "This connector supports probe, setup, and sync.");
   const config = parseConfig(request.config);
-  const raw = await fetchFeed(config.url, dependencies.fetchImpl || fetch, dependencies.lookupImpl || lookup);
-  const entries = parseFeed(raw, config.url);
   if (request.type === "probe" || request.type === "setup") {
+    const raw = await fetchFeed(config.url, dependencies.fetchImpl || fetch, dependencies.lookupImpl || lookup);
+    const entries = parseFeed(raw, config.url);
     emit({ version: 1, type: "status", id: request.id, state: "ready", message: `Feed connected${entries.length ? ` · ${entries.length} bounded entries detected` : ""}` });
     return true;
   }
-  const items = normalizeEntries(entries, config.keywords, request.since, request.until, request.limit);
+  const items = await syncFeed(request, config, requestedCategories(request), dependencies);
   emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
   return true;
+}
+
+export async function syncFeed(request, config, enabled, dependencies = {}) {
+  if (enabled.size === 0) return [];
+  const raw = await fetchFeed(config.url, dependencies.fetchImpl || fetch, dependencies.lookupImpl || lookup);
+  return normalizeEntries(parseFeed(raw, config.url), config.keywords, request.since, request.until, request.limit, enabled);
 }
 
 export function parseFeed(raw, baseUrl) {
@@ -47,17 +54,17 @@ export function parseFeed(raw, baseUrl) {
   });
 }
 
-export function normalizeEntries(entries, keywords, sinceValue, untilValue, limit = MAX_ITEMS) {
+export function normalizeEntries(entries, keywords, sinceValue, untilValue, limit = MAX_ITEMS, enabled = DECLARED_CATEGORIES) {
   const since = boundaryMs(sinceValue, -Infinity); const until = boundaryMs(untilValue, Infinity); const result = [];
   for (const entry of entries.slice(0, MAX_PARSED_ENTRIES)) {
     const time = Date.parse(entry.occurredAt); if (time < since || time > until) continue;
     const digest = createHash("sha256").update(entry.sourceId).digest("hex").slice(0, 32);
     const derived = `rss:entry:${digest}`;
     const common = { connector: CONNECTOR_ID, kind: "feed-entry", occurredAt: entry.occurredAt, title: bounded(entry.title, 2_000), body: bounded(entry.summary, 8_000), ...(entry.link ? { url: entry.link } : {}), sensitivity: "public", derivedFrom: [derived] };
-    result.push({ id: derived, category: "new-entries", ...common });
+    if (enabled.has("new-entries")) result.push({ id: derived, category: "new-entries", ...common });
     const haystack = `${entry.title}\n${entry.summary}`.toLocaleLowerCase("en-US");
     const matches = keywords.filter((keyword) => haystack.includes(keyword.toLocaleLowerCase("en-US")));
-    if (matches.length) result.push({ id: `rss:priority:${digest}`, category: "priority-keywords", ...common, body: bounded(`Matched: ${matches.join(", ")} · ${entry.summary}`, 8_000) });
+    if (enabled.has("priority-keywords") && matches.length) result.push({ id: `rss:priority:${digest}`, category: "priority-keywords", ...common, body: bounded(`Matched: ${matches.join(", ")} · ${entry.summary}`, 8_000) });
   }
   return fitItems(result.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || a.id.localeCompare(b.id)), boundedLimit(limit));
 }
@@ -106,6 +113,7 @@ function obviouslyPrivateHost(host) { const value = String(host || "").toLowerCa
 function privateAddress(address) { const value = String(address || "").toLowerCase(); if (value === "::1" || value === "::" || value.startsWith("fe80:") || value.startsWith("fc") || value.startsWith("fd")) return true; const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(value); if (!match) return value.startsWith("::ffff:") ? privateAddress(value.slice(7)) : false; const [a, b] = [Number(match[1]), Number(match[2])]; return a === 0 || a === 10 || a === 127 || a >= 224 || a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168 || a === 100 && b >= 64 && b <= 127; }
 function parseDate(value) { const date = new Date(String(value || "")); return Number.isNaN(date.getTime()) ? undefined : date.toISOString(); }
 function validateRequest(value) { if (value?.version !== 1 || typeof value.id !== "string" || value.id.length > 240) throw new ConnectorError("invalid_request", "Invalid connector request."); }
+export function requestedCategories(request) { if (request.categories === undefined) return new Set(DECLARED_CATEGORIES); if (!Array.isArray(request.categories)) throw new ConnectorError("invalid_request", "Sync categories must be an array."); return new Set(request.categories.slice(0, 32).filter((value) => typeof value === "string" && DECLARED_CATEGORIES.has(value))); }
 function bounded(value, length) { return String(value || "").replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, length); }
 function boundedLimit(value) { return Math.max(1, Math.min(MAX_ITEMS, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : MAX_ITEMS)); }
 function fitItems(items, limit) { const output = []; let bytes = 2; for (const item of items.slice(0, limit)) { const size = Buffer.byteLength(JSON.stringify(item)) + 1; if (bytes + size > 60 * 1024) break; output.push(item); bytes += size; } return output; }

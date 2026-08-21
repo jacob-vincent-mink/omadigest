@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeEntries, parseFeed, safeFeedUrl } from "./connector.mjs";
+import { normalizeEntries, parseFeed, requestedCategories, safeFeedUrl, syncFeed } from "./connector.mjs";
 
 const feed = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
   <entry><id>tag:example.com,2026:one</id><title>Urgent &amp; safe</title><updated>2026-08-20T10:00:00Z</updated><link rel="alternate" href="https://example.com/post/1#track"/><summary><![CDATA[Service <b>incident</b> details]]></summary></entry>
@@ -20,8 +20,18 @@ test("rejects DTDs, private URLs, credentials, and plaintext", () => {
   for (const url of ["http://example.com/feed", "https://user:pass@example.com/feed", "https://127.0.0.1/feed", "https://host.local/feed"]) assert.throws(() => safeFeedUrl(url));
 });
 
+test("disabled categories are not emitted and an empty request skips fetching", async () => {
+  const entries = parseFeed(feed, new URL("https://example.com/feed.xml"));
+  const priority = normalizeEntries(entries, ["incident"], "2026-08-20", "2026-08-21", 50, requestedCategories({ categories: ["priority-keywords", "unknown"] }));
+  assert.deepEqual(priority.map((item) => item.category), ["priority-keywords"]);
+  let calls = 0;
+  const items = await syncFeed({}, { url: new URL("https://example.com/feed.xml"), keywords: [] }, requestedCategories({ categories: [] }), { fetchImpl: async () => { calls += 1; throw new Error("unexpected fetch"); } });
+  assert.deepEqual(items, []);
+  assert.equal(calls, 0);
+});
+
 test("parses RSS items and bounds category schema", async () => {
   const rss = `<rss><channel><item><guid>x</guid><title>Release</title><pubDate>Thu, 20 Aug 2026 12:00:00 GMT</pubDate><link>https://example.com/x</link></item></channel></rss>`;
   assert.equal(parseFeed(rss, new URL("https://example.com/feed"))[0].sourceId, "x");
-  const { readFile } = await import("node:fs/promises"); const manifest = JSON.parse(await readFile(new URL("./manifest.json", import.meta.url), "utf8")); assert.equal(manifest.categories.length, 2);
+  const { readFile } = await import("node:fs/promises"); const manifest = JSON.parse(await readFile(new URL("./manifest.json", import.meta.url), "utf8")); assert.equal(manifest.categories.length, 2); assert.deepEqual(manifest.permissions.networkSetupFields, ["feed_url"]); assert.deepEqual(manifest.permissions.networkHosts, []);
 });

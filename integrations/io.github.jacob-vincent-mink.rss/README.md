@@ -6,6 +6,4 @@ The connector rejects URL credentials, non-HTTPS URLs, explicit ports, local/pri
 
 Optional comma-separated priority keywords are normalized to at most 10 values of 40 characters. Matching is deterministic and case-insensitive; matching entries can appear in both `new-entries` and `priority-keywords`.
 
-## Dynamic-host contract limitation
-
-The current connector ABI unlocks network access when `permissions.networkHosts` is non-empty but cannot express a host derived from a URL setup field. The reserved `user-configured-feed.invalid` entry is an explicit disclosure placeholder, not a contacted host. This package must not pass full authoring/release validation until the shared source contract represents and reviews the configured feed host. Package-local parsing and safety tests remain valid in the meantime.
+The manifest declares `permissions.networkSetupFields: ["feed_url"]` and no fixed network hosts. The broker validates that URL setup field and grants access only to its reviewed host under the shared source contract.

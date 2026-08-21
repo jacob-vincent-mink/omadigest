@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 const CONNECTOR_ID = "io.github.jacob-vincent-mink.slack";
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_ITEMS = 50;
+const DECLARED_CATEGORIES = new Set(["direct-messages", "mentions", "thread-replies"]);
 
 function emit(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
 
@@ -21,21 +22,28 @@ export async function handle(request, fetchImpl = fetch) {
     return true;
   }
   if (request.type !== "sync") throw new ConnectorError("unsupported_operation", "This connector supports probe, setup, sync, and open.");
-
-  const auth = await slackApi("auth.test", {}, config.token, fetchImpl);
-  const userId = bounded(auth.user_id, 40); if (!userId) throw new ConnectorError("source_invalid", "Slack did not return an authenticated user ID.");
-  const listed = await slackApi("conversations.list", { types: "public_channel,private_channel,mpim,im", exclude_archived: "true", limit: "100" }, config.token, fetchImpl);
-  const channels = (Array.isArray(listed.channels) ? listed.channels : []).filter((channel) => channel?.is_member || channel?.is_im || channel?.is_mpim).slice(0, config.maxConversations);
-  const oldest = slackBoundary(request.since); const latest = slackBoundary(request.until);
-  const histories = await Promise.all(channels.map(async (channel) => ({ channel, data: await slackApi("conversations.history", { channel: bounded(channel.id, 40), limit: "25", ...(oldest ? { oldest } : {}), ...(latest ? { latest } : {}) }, config.token, fetchImpl) })));
-  const parents = histories.flatMap(({ channel, data }) => (Array.isArray(data.messages) ? data.messages : []).filter((message) => Number(message?.reply_count) > 0 && message?.ts).map((message) => ({ channel, message }))).slice(0, 4);
-  const replySets = await Promise.all(parents.map(async ({ channel, message }) => ({ channel, parentTs: message.ts, data: await slackApi("conversations.replies", { channel: bounded(channel.id, 40), ts: bounded(message.ts, 40), limit: "25", ...(oldest ? { oldest } : {}), ...(latest ? { latest } : {}) }, config.token, fetchImpl) })));
-  const items = parseSlackData({ userId, histories, replySets }, request.since, request.until, request.limit);
+  const enabled = requestedCategories(request);
+  const items = await syncSlack(request, config, enabled, fetchImpl);
   emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
   return true;
 }
 
-export function parseSlackData({ userId, histories, replySets }, sinceValue, untilValue, limit = MAX_ITEMS) {
+export async function syncSlack(request, config, enabled, fetchImpl) {
+  if (enabled.size === 0) return [];
+  const auth = await slackApi("auth.test", {}, config.token, fetchImpl);
+  const userId = bounded(auth.user_id, 40); if (!userId) throw new ConnectorError("source_invalid", "Slack did not return an authenticated user ID.");
+  const types = enabled.size === 1 && enabled.has("direct-messages") ? "mpim,im" : "public_channel,private_channel,mpim,im";
+  const listed = await slackApi("conversations.list", { types, exclude_archived: "true", limit: "100" }, config.token, fetchImpl);
+  const channels = (Array.isArray(listed.channels) ? listed.channels : []).filter((channel) => channel?.is_member || channel?.is_im || channel?.is_mpim).slice(0, config.maxConversations);
+  const oldest = slackBoundary(request.since); const latest = slackBoundary(request.until);
+  const histories = await Promise.all(channels.map(async (channel) => ({ channel, data: await slackApi("conversations.history", { channel: bounded(channel.id, 40), limit: "25", ...(oldest ? { oldest } : {}), ...(latest ? { latest } : {}) }, config.token, fetchImpl) })));
+  const needReplies = enabled.has("thread-replies") || enabled.has("mentions");
+  const parents = needReplies ? histories.flatMap(({ channel, data }) => (Array.isArray(data.messages) ? data.messages : []).filter((message) => Number(message?.reply_count) > 0 && message?.ts).map((message) => ({ channel, message }))).slice(0, 4) : [];
+  const replySets = await Promise.all(parents.map(async ({ channel, message }) => ({ channel, parentTs: message.ts, data: await slackApi("conversations.replies", { channel: bounded(channel.id, 40), ts: bounded(message.ts, 40), limit: "25", ...(oldest ? { oldest } : {}), ...(latest ? { latest } : {}) }, config.token, fetchImpl) })));
+  return parseSlackData({ userId, histories, replySets }, request.since, request.until, request.limit, enabled);
+}
+
+export function parseSlackData({ userId, histories, replySets }, sinceValue, untilValue, limit = MAX_ITEMS, enabled = DECLARED_CATEGORIES) {
   const since = boundaryMs(sinceValue, -Infinity); const until = boundaryMs(untilValue, Infinity); const items = [];
   const seen = new Set();
   const add = (category, channel, message) => {
@@ -47,14 +55,14 @@ export function parseSlackData({ userId, histories, replySets }, sinceValue, unt
   };
   for (const { channel, data } of Array.isArray(histories) ? histories.slice(0, 8) : []) {
     for (const message of (Array.isArray(data?.messages) ? data.messages : []).slice(0, 25)) {
-      if (channel?.is_im || channel?.is_mpim) add("direct-messages", channel, message);
-      if (String(message?.text || "").includes(`<@${userId}>`)) add("mentions", channel, message);
+      if (enabled.has("direct-messages") && (channel?.is_im || channel?.is_mpim)) add("direct-messages", channel, message);
+      if (enabled.has("mentions") && String(message?.text || "").includes(`<@${userId}>`)) add("mentions", channel, message);
     }
   }
   for (const { channel, parentTs, data } of Array.isArray(replySets) ? replySets.slice(0, 4) : []) {
     for (const message of (Array.isArray(data?.messages) ? data.messages : []).slice(0, 25)) {
-      if (message?.ts !== parentTs) add("thread-replies", channel, message);
-      if (String(message?.text || "").includes(`<@${userId}>`)) add("mentions", channel, message);
+      if (enabled.has("thread-replies") && message?.ts !== parentTs) add("thread-replies", channel, message);
+      if (enabled.has("mentions") && String(message?.text || "").includes(`<@${userId}>`)) add("mentions", channel, message);
     }
   }
   return fitItems(items.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || a.id.localeCompare(b.id)), boundedLimit(limit));
@@ -81,6 +89,7 @@ function parseConfig(config) { const token = typeof config?.token === "string" ?
 function slackTimestamp(value) { if (!/^\d{10,13}(?:\.\d{1,6})?$/u.test(String(value || ""))) return undefined; const milliseconds = Number(value) * 1000; return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : undefined; }
 function slackBoundary(value) { const parsed = Date.parse(String(value || "")); return Number.isNaN(parsed) ? undefined : String(parsed / 1000); }
 function validateRequest(value) { if (value?.version !== 1 || typeof value.id !== "string" || value.id.length > 240) throw new ConnectorError("invalid_request", "Invalid connector request."); }
+export function requestedCategories(request) { if (request.categories === undefined) return new Set(DECLARED_CATEGORIES); if (!Array.isArray(request.categories)) throw new ConnectorError("invalid_request", "Sync categories must be an array."); return new Set(request.categories.slice(0, 32).filter((value) => typeof value === "string" && DECLARED_CATEGORIES.has(value))); }
 function bounded(value, length) { return String(value || "").replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, length); }
 function boundedLimit(value) { return Math.max(1, Math.min(MAX_ITEMS, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : MAX_ITEMS)); }
 function fitItems(items, limit) { const output = []; let bytes = 2; for (const item of items.slice(0, limit)) { const size = Buffer.byteLength(JSON.stringify(item)) + 1; if (bytes + size > 60 * 1024) break; output.push(item); bytes += size; } return output; }

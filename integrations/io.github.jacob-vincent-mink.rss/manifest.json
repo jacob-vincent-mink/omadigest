@@ -20,7 +20,8 @@
     "actionLabel": "Check feed"
   },
   "permissions": {
-    "networkHosts": ["user-configured-feed.invalid"],
+    "networkHosts": [],
+    "networkSetupFields": ["feed_url"],
     "commands": [],
     "readPaths": [],
     "writePaths": []

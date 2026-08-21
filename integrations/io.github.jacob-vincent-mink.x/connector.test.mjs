@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePosts } from "./connector.mjs";
+import { parsePosts, requestedCategories, syncX } from "./connector.mjs";
 
 test("classifies bounded mentions and selected account activity", () => {
   const items = parsePosts({
@@ -22,6 +22,22 @@ test("drops malformed and out-of-window posts", () => {
     { id: "old", author_id: "a", created_at: "2020-01-01T00:00:00Z", text: "@owner old" },
     { id: "bad", author_id: "a", created_at: "bad", text: "@owner bad" }
   ], includes: { users: [{ id: "a", username: "safe_name" }] } }, "owner", [], "2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z"), []);
+});
+
+test("disabled categories are neither queried nor emitted", async () => {
+  const payload = { data: [
+    { id: "21", author_id: "a", created_at: "2026-08-20T12:00:00Z", text: "hello @owner" },
+    { id: "22", author_id: "b", created_at: "2026-08-20T13:00:00Z", text: "news" }
+  ], includes: { users: [{ id: "a", username: "person" }, { id: "b", username: "news" }] } };
+  const calls = [];
+  const fetchImpl = async (url) => { calls.push(String(url)); return new Response(JSON.stringify(payload)); };
+  const config = { token: "test", username: "owner", accounts: ["news"] };
+  const mentions = await syncX({ limit: 50 }, config, requestedCategories({ categories: ["mentions", "unknown"] }), fetchImpl);
+  assert.deepEqual(mentions.map((item) => item.category), ["mentions"]);
+  assert.doesNotMatch(new URL(calls[0]).searchParams.get("query"), /from:news/u);
+  calls.length = 0;
+  assert.deepEqual(await syncX({ limit: 50 }, config, requestedCategories({ categories: [] }), fetchImpl), []);
+  assert.equal(calls.length, 0);
 });
 
 test("manifest declares bounded categories", async () => {

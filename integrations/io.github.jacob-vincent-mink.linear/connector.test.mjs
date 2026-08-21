@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseLinearData } from "./connector.mjs";
+import { linearQuery, parseLinearData, requestedCategories, syncLinear } from "./connector.mjs";
 
 const payload = { viewer: { id: "me", name: "Jacob", assignedIssues: { nodes: [{
   id: "issue-1", identifier: "ENG-42", title: "Bound the connector", url: "https://linear.app/acme/issue/ENG-42/x?secret=no",
@@ -21,6 +21,19 @@ test("emits assigned, comment, state, and overdue categories with stable ids", (
 
 test("drops malformed issues and out-of-window activity", () => {
   assert.deepEqual(parseLinearData({ viewer: { assignedIssues: { nodes: [{ id: "x", title: "missing fields" }] } } }, "2026-01-01", "2026-01-02"), []);
+});
+
+test("disabled categories are not selected, emitted, or fetched", async () => {
+  const enabled = requestedCategories({ categories: ["assigned-issues", "unknown"] });
+  const items = parseLinearData(payload, "2026-08-20T00:00:00Z", "2026-08-21T00:00:00Z", 50, new Date("2026-08-20T12:00:00Z"), enabled);
+  assert.deepEqual(items.map((item) => item.category), ["assigned-issues"]);
+  const query = linearQuery(enabled);
+  assert.doesNotMatch(query, /comments\(/u);
+  assert.doesNotMatch(query, /history\(/u);
+  assert.doesNotMatch(query, /dueDate/u);
+  let calls = 0;
+  assert.deepEqual(await syncLinear({}, "test", requestedCategories({ categories: [] }), async () => { calls += 1; throw new Error("unexpected fetch"); }), []);
+  assert.equal(calls, 0);
 });
 
 test("manifest declares four bounded categories", async () => {

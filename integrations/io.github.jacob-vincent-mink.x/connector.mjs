@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 const CONNECTOR_ID = "io.github.jacob-vincent-mink.x";
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_ITEMS = 50;
+const DECLARED_CATEGORIES = new Set(["mentions", "account-activity"]);
 
 function emit(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
 
@@ -25,10 +26,19 @@ export async function handle(request, fetchImpl = fetch) {
     return true;
   }
   if (request.type !== "sync") throw new ConnectorError("unsupported_operation", "This connector supports probe, setup, sync, and open.");
+  const enabled = requestedCategories(request);
+  const items = await syncX(request, config, enabled, fetchImpl);
+  emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
+  return true;
+}
 
+export async function syncX(request, config, enabled, fetchImpl) {
+  if (enabled.size === 0) return [];
   const limit = boundedLimit(request.limit);
-  const queryParts = [`@${config.username}`];
-  if (config.accounts.length) queryParts.push(`(${config.accounts.map((name) => `from:${name}`).join(" OR ")})`);
+  const queryParts = [];
+  if (enabled.has("mentions")) queryParts.push(`@${config.username}`);
+  if (enabled.has("account-activity") && config.accounts.length) queryParts.push(`(${config.accounts.map((name) => `from:${name}`).join(" OR ")})`);
+  if (queryParts.length === 0) return [];
   const url = new URL("https://api.x.com/2/tweets/search/recent");
   url.searchParams.set("query", `(${queryParts.join(" OR ")}) -is:retweet`);
   url.searchParams.set("max_results", String(Math.max(10, limit)));
@@ -40,12 +50,10 @@ export async function handle(request, fetchImpl = fetch) {
   if (since) url.searchParams.set("start_time", since);
   if (until) url.searchParams.set("end_time", until);
   const result = await apiJson(url, config.token, fetchImpl);
-  const items = parsePosts(result, config.username, config.accounts, request.since, request.until, limit);
-  emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
-  return true;
+  return parsePosts(result, config.username, config.accounts, request.since, request.until, limit, enabled);
 }
 
-export function parsePosts(payload, username, selectedAccounts, sinceValue, untilValue, limit = MAX_ITEMS) {
+export function parsePosts(payload, username, selectedAccounts, sinceValue, untilValue, limit = MAX_ITEMS, enabled = DECLARED_CATEGORIES) {
   const authors = new Map((Array.isArray(payload?.includes?.users) ? payload.includes.users : []).flatMap((user) => {
     const id = bounded(user?.id, 80); const name = cleanUsername(user?.username);
     return id && name ? [[id, name]] : [];
@@ -63,8 +71,8 @@ export function parsePosts(payload, username, selectedAccounts, sinceValue, unti
     const time = Date.parse(occurredAt);
     if (time < since || time > until) return [];
     const lowerText = text.toLowerCase();
-    const category = selected.has(author.toLowerCase()) && author.toLowerCase() !== own ? "account-activity"
-      : lowerText.includes(`@${own}`) ? "mentions" : undefined;
+    const category = enabled.has("account-activity") && selected.has(author.toLowerCase()) && author.toLowerCase() !== own ? "account-activity"
+      : enabled.has("mentions") && lowerText.includes(`@${own}`) ? "mentions" : undefined;
     if (!category) return [];
     return [{
       id: `x:post:${id}`, connector: CONNECTOR_ID, category, kind: "x-post", occurredAt,
@@ -104,6 +112,7 @@ function parseConfig(config) {
   return { token, username, accounts: [...new Set(accounts)] };
 }
 function validateRequest(value) { if (value?.version !== 1 || typeof value.id !== "string" || value.id.length > 240) throw new ConnectorError("invalid_request", "Invalid connector request."); }
+export function requestedCategories(request) { if (request.categories === undefined) return new Set(DECLARED_CATEGORIES); if (!Array.isArray(request.categories)) throw new ConnectorError("invalid_request", "Sync categories must be an array."); return new Set(request.categories.slice(0, 32).filter((value) => typeof value === "string" && DECLARED_CATEGORIES.has(value))); }
 function cleanUsername(value) { const text = String(value || "").trim().replace(/^@/u, ""); return /^[A-Za-z0-9_]{1,15}$/u.test(text) ? text : ""; }
 function bounded(value, length) { return String(value || "").replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, length); }
 function boundedLimit(value) { return Math.max(1, Math.min(MAX_ITEMS, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : MAX_ITEMS)); }
