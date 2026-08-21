@@ -13,16 +13,17 @@ prepared=false
 recording=false
 clips=()
 scene_labels=(
-  $'OMADIGEST\tYour brain on Omarchy'
-  $'FOCUS ENDS\tOmaDigest decides whether to run'
-  $'DIGEST\tOpening it marks it read'
-  $'SOURCES\tStatus, categories, and on/off controls'
-  $'TEMPLATES\tSuggested from repeated GitHub reviews'
-  $'NEW TEMPLATE\tThe request stays visible'
-  $'DRAFTING\tThe agent reports its plan'
-  $'REVIEW\tValidate before installing'
-  $'ROUTING\tPR #482 uses GitHub Triage'
-  $'PR #482 REPORT\tStatus, sources, and next action'
+  $'BACKGROUND\tLet OmaDigest summarize your notifications in the background.'
+  $'FOCUS\tFinish a focus session with your catch-up already underway.'
+  $'READ STATE\tOpen a digest to mark it read automatically.'
+  $'SOURCES\tChoose which sources—and which categories—can appear.'
+  $'NEW INTEGRATIONS\tBuild new integrations with your default agent in Omarchy.'
+  $'SUGGESTIONS\tTurn repeated notification patterns into suggested templates.'
+  $'TEMPLATE AGENT\tBuild a new digest template with the OmaDigest agent.'
+  $'PROGRESS\tFollow the agent’s plan and progress without opening a chat.'
+  $'REVIEW\tReview the template and routing policy before installing it.'
+  $'ROUTING\tRoute new GitHub activity to the right template automatically.'
+  $'PR REPORT\tGet a focused PR report with sources and next actions.'
 )
 clip_pid=""
 clip_path=""
@@ -151,8 +152,8 @@ omarchy-shell shell hide "$plugin_id" >/dev/null
 omarchy-shell notifications dismissAll >/dev/null
 sleep 0.25
 
-# 00:00 — Hook: real Omarchy notifications arrive in quick succession.
-log "Scene 1/10: real notification burst"
+# Hook: real Omarchy notifications arrive in quick succession.
+log "Scene 1/11: real notification burst"
 start_clip
 "$repo_root/demo/notification-burst.sh" --visible >/dev/null
 sleep 0.7
@@ -163,10 +164,10 @@ omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
 # is active so the cut stays fast and protected content never appears.
 omarchy-shell omadigest beginFocus >/dev/null
 omarchy-shell notifications setDnd on >/dev/null
-"$repo_root/demo/notification-burst.sh" --focus >/dev/null
+OMADIGEST_DEMO_INCLUDE_CRASH=0 "$repo_root/demo/notification-burst.sh" --focus >/dev/null
 
-# 00:03 — Re-entry starts a real automatic digest; the model wait is cut.
-log "Scene 2/10: focus re-entry"
+# Re-entry starts a real automatic digest; the model wait is cut.
+log "Scene 2/11: focus re-entry"
 start_clip
 omarchy-shell notifications setDnd off >/dev/null
 notify-send --app-name="Omarchy" --urgency=low --expire-time=4500 \
@@ -176,44 +177,53 @@ sleep 0.8
 stop_clip
 wait_for '.digestState == "ready" and .unreadCount > 0 and (.digestTitle | length) > 0 and .digestTitle != "Today’s digest" and .digestTitle != "Today\u0027s digest"' 'the automatic digest'
 
-# 00:05 — Open the digest, then show that reading moved it to Read.
-log "Scene 3/10: digest and automatic read state"
+# Open the digest, then show that reading moved it to Read.
+log "Scene 3/11: digest and automatic read state"
 start_clip
 omarchy-shell omadigest showDigests unread >/dev/null
 sleep 1.2
 omarchy-shell omadigest openNewest unread >/dev/null
 wait_for '.unreadCount == 0 and .readCount > 0' 'the automatic read-state update' 15
-sleep 3.4
+sleep 2.8
 omarchy-shell omadigest showDigests read >/dev/null
-sleep 1.2
+sleep 0.9
 stop_clip
 
-# 00:11 — Scan the source catalog, then open GitHub categories.
-log "Scene 4/10: source catalog and GitHub controls"
+# Scan the source catalog, then open GitHub categories.
+log "Scene 4/11: source catalog and GitHub controls"
 start_clip
 omarchy-shell omadigest showSettings integrations >/dev/null
-sleep 2.7
+sleep 2.2
 [[ "$(omarchy-shell omadigest showSource "$github_integration")" == "ok" ]]
 wait_for '.sourcesView == "detail" and .selectedSourceId == "io.github.jacob-vincent-mink.github"' 'the GitHub source detail' 10
-sleep 3.4
+sleep 2.5
 stop_clip
 
-# 00:18 — Show learned pattern suggestion, then both packaged-template editors.
+# Show how a plain-language source request hands off to the user's default agent.
+log "Scene 5/11: integration authoring handoff"
+start_clip
+omarchy-shell omadigest prepareDraft integration \
+  "Connect GitLab merge requests, review requests, CI failures, and mentions with configurable categories." >/dev/null
+wait_for '.sourcesView == "authoring" and .preparedDraftKind == "integration"' 'the integration authoring surface' 10
+sleep 3.0
+stop_clip
+
+# Show a learned pattern suggestion, then both packaged-template editors.
 wait_for '(.templateSuggestions | length) > 0' 'a template suggestion' 15
-log "Scene 5/10: template suggestion and editing modes"
+log "Scene 6/11: template suggestion and editing modes"
 start_clip
 omarchy-shell omadigest showSettings templates >/dev/null
-sleep 1.8
-omarchy-shell omadigest showTemplate focus-reentry >/dev/null
-sleep 1.0
-omarchy-shell omadigest editTemplate focus-reentry manual >/dev/null
 sleep 1.5
+omarchy-shell omadigest showTemplate focus-reentry >/dev/null
+sleep 0.8
+omarchy-shell omadigest editTemplate focus-reentry manual >/dev/null
+sleep 1.2
 omarchy-shell omadigest editTemplate focus-reentry agent >/dev/null
-sleep 2.0
+sleep 1.5
 stop_clip
 
-# 00:23 — Submit a real template request, cutting only the model wait.
-log "Scene 6/10: submit a GitHub triage template"
+# Submit a real template request, cutting only the model wait.
+log "Scene 7/11: submit a GitHub triage template"
 template_request="$(<"$repo_root/demo/github-template-prompt.txt")"
 omarchy-shell omadigest prepareDraft template "$template_request" >/dev/null
 start_clip
@@ -224,19 +234,19 @@ sleep 1.1
 stop_clip
 wait_for '.draftState == "working" and (.draftPlan | length) > 0' 'the template work plan' 90
 
-# 00:26 — Resume on the model-authored plan instead of a static spinner.
-log "Scene 7/10: model-authored work plan"
+# Resume on the model-authored plan instead of a static spinner.
+log "Scene 8/11: model-authored work plan"
 start_clip
 omarchy-shell omadigest showDraft template >/dev/null
 sleep 3.4
 stop_clip
 wait_for '.draftState == "ready" and .draftKind == "template"' 'the template draft'
 
-# 00:30 — Review, accept, and inspect the result.
-log "Scene 8/10: review and install the template"
+# Review, accept, and inspect the result.
+log "Scene 9/11: review and install the template"
 start_clip
 omarchy-shell omadigest showDraft template >/dev/null
-sleep 3.0
+sleep 2.5
 omarchy-shell omadigest acceptDraft >/dev/null
 wait_for '.draftState == "saved"' 'the installed template' 30
 installed_template="$config_root/templates/$github_template/template.compiled.json"
@@ -250,17 +260,17 @@ jq -e --arg connector "$github_integration" '
   and ((.match | keys - ["applications", "requiresConnectors", "triggers"]) | length == 0)
 ' "$installed_template" >/dev/null \
   || { echo "The drafted GitHub template did not preserve the requested routing policy." >&2; exit 1; }
-sleep 0.8
+sleep 0.6
 omarchy-shell omadigest showTemplate "$github_template" >/dev/null
-sleep 2.4
+sleep 2.1
 stop_clip
 
 # Prove the accepted routing policy before the final model call.
 omarchy-shell omadigest previewRoute GitHub >/dev/null
 wait_for '.routeTemplateId == "github-triage"' 'GitHub Triage to win deterministic routing' 15
 
-# 00:37 — One more real notification routes through the newly installed template.
-log "Scene 9/10: route PR #482 through the new template"
+# One more real notification routes through the newly installed template.
+log "Scene 10/11: route PR #482 through the new template"
 omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
 start_clip
 notify-send --app-name="GitHub" --urgency=normal --expire-time=4500 \
@@ -279,11 +289,11 @@ final_state="$(state)"
 jq -e '.digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "i")) and .readCount > 0' >/dev/null <<<"$final_state" \
   || { echo "The final digest did not expose the expected PR-specific title/template." >&2; exit 1; }
 
-# 00:41 — Payoff: a specifically named report with citations and agent action.
-log "Scene 10/10: PR-specific report"
+# Payoff: a specifically named report with citations and agent action.
+log "Scene 11/11: PR-specific report"
 start_clip
 omarchy-shell omadigest openCurrent >/dev/null
-sleep 5.0
+sleep 4.4
 stop_clip
 
 mkdir -p "$output_dir"

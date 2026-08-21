@@ -14,6 +14,8 @@ cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/omadigest-demo"
 music="$cache_root/study-and-relax-${music_revision}.mp3"
 work_root="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/omadigest-polish.XXXXXX")"
 subtitles="$work_root/feature-cards.ass"
+theme_root="${OMADIGEST_DEMO_THEME_ROOT:-${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/current/theme}"
+theme_colors="$theme_root/colors.toml"
 trap 'find "$work_root" -depth -delete >/dev/null 2>&1 || true' EXIT
 
 command -v curl >/dev/null
@@ -36,7 +38,32 @@ raw_duration="$(ffprobe -v error -show_entries format=duration -of default=nw=1:
 finished_duration="$(awk -v duration="$raw_duration" -v rate="$speed" 'BEGIN { printf "%.3f", duration / rate }')"
 fade_out="$(awk -v duration="$finished_duration" 'BEGIN { value = duration - 1.5; printf "%.3f", (value > 0 ? value : 0) }')"
 
-cat > "$subtitles" <<'ASS'
+theme_color() {
+  local key="$1" fallback="$2" value=""
+  if [[ -f "$theme_colors" ]]; then
+    value="$(sed -nE "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*\"(#[0-9A-Fa-f]{6})\"[[:space:]]*$/\1/p" "$theme_colors" | sed -n '1p')"
+  fi
+  [[ "$value" =~ ^#[0-9A-Fa-f]{6}$ ]] && printf '%s' "$value" || printf '%s' "$fallback"
+}
+
+ass_color() {
+  local rgb="${1#\#}" alpha="${2:-00}"
+  rgb="${rgb^^}"
+  printf '&H%s%s%s%s&' "$alpha" "${rgb:4:2}" "${rgb:2:2}" "${rgb:0:2}"
+}
+
+foreground="$(theme_color foreground '#f7f4f8')"
+background="$(theme_color background '#17141c')"
+accent="$(theme_color accent '#986ecc')"
+foreground_ass="$(ass_color "$foreground")"
+accent_ass="$(ass_color "$accent")"
+panel_ass="$(ass_color "$background" 12)"
+shadow_ass="$(ass_color "$foreground" C8)"
+theme_font="$(omarchy font current 2>/dev/null | tr -d '\r\n' | cut -c1-80)"
+theme_font="${theme_font//,/ }"
+[[ -n "$theme_font" ]] || theme_font="JetBrainsMono Nerd Font"
+
+cat > "$subtitles" <<ASS
 [Script Info]
 ScriptType: v4.00+
 PlayResX: 3200
@@ -45,7 +72,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Feature,JetBrainsMono Nerd Font,56,&H00F7F4F8,&H000000FF,&H50000000,&HC8000000,-1,0,0,0,100,100,0,0,3,2,0,7,110,110,145,1
+Style: Feature,$theme_font,54,$foreground_ass,$foreground_ass,$panel_ass,$shadow_ass,-1,0,0,0,100,100,0,0,3,12,3,7,110,110,145,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -61,22 +88,30 @@ ass_time() {
   }'
 }
 
-scene_index=0
-while IFS=$'\t' read -r source_start label description; do
+mapfile -t scenes < "$timeline"
+for scene_index in "${!scenes[@]}"; do
+  IFS=$'\t' read -r source_start label description <<<"${scenes[$scene_index]}"
   [[ -n "$source_start" && -n "$description" ]] || continue
-  scene_index=$((scene_index + 1))
-  card_start="$(awk -v source="$source_start" -v rate="$speed" -v ordinal="$scene_index" \
-    'BEGIN { value = source / rate - (ordinal > 1 ? 0.28 : 0); printf "%.3f", (value > 0 ? value : 0) }')"
-  card_end="$(awk -v value="$card_start" 'BEGIN { printf "%.3f", value + 1.55 }')"
+  card_start="$(awk -v source="$source_start" -v rate="$speed" 'BEGIN { printf "%.3f", source / rate }')"
+  if (( scene_index + 1 < ${#scenes[@]} )); then
+    IFS=$'\t' read -r next_source _ <<<"${scenes[$((scene_index + 1))]}"
+    latest_end="$(awk -v source="$next_source" -v rate="$speed" 'BEGIN { printf "%.3f", source / rate - 0.18 }')"
+  else
+    latest_end="$(awk -v duration="$finished_duration" 'BEGIN { printf "%.3f", duration - 0.18 }')"
+  fi
+  card_end="$(awk -v start="$card_start" -v limit="$latest_end" 'BEGIN {
+    desired = start + 2.60
+    printf "%.3f", desired < limit ? desired : limit
+  }')"
   safe_label="${label//\\/\\\\}"
   safe_label="${safe_label//\{/\\\{}"
   safe_label="${safe_label//\}/\\\}}"
   safe_description="${description//\\/\\\\}"
   safe_description="${safe_description//\{/\\\{}"
   safe_description="${safe_description//\}/\\\}}"
-  printf 'Dialogue: 0,%s,%s,Feature,,0,0,0,,{\\fad(170,260)\\c&H00CC986E&\\fs30\\b1}%s{\\r\\fs56\\b1}\\N%s\n' \
-    "$(ass_time "$card_start")" "$(ass_time "$card_end")" "$safe_label" "$safe_description" >> "$subtitles"
-done < "$timeline"
+  printf 'Dialogue: 0,%s,%s,Feature,,0,0,0,,{\\fad(220,180)\\c%s\\fs28\\b1}▌ %s{\\r\\fs54\\b1}\\N%s\n' \
+    "$(ass_time "$card_start")" "$(ass_time "$card_end")" "$accent_ass" "$safe_label" "$safe_description" >> "$subtitles"
+done
 
 mkdir -p "$(dirname "$output")"
 ffmpeg -hide_banner -loglevel error -y \

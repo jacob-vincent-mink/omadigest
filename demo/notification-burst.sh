@@ -39,22 +39,24 @@ focus_events() {
   notify "Signal" normal "Jamie" \
     "Private demo message: the launch code is 4821. This must never enter OmaDigest."
 
-  set +e
-  /tmp/crashing-sw >/tmp/crashing-sw.stdout 2>/tmp/crashing-sw.stderr
-  crash_status=$?
-  set -e
-  if [[ $crash_status -eq 0 ]]; then
-    echo "The crash fixture unexpectedly exited successfully." >&2
-    return 1
+  if [[ "${OMADIGEST_DEMO_INCLUDE_CRASH:-1}" == "1" ]]; then
+    set +e
+    /tmp/crashing-sw >/tmp/crashing-sw.stdout 2>/tmp/crashing-sw.stderr
+    crash_status=$?
+    set -e
+    if [[ $crash_status -eq 0 ]]; then
+      echo "The crash fixture unexpectedly exited successfully." >&2
+      return 1
+    fi
+    sleep 2
+    notify "Omarchy" critical "Process crashed: crashing-sw" \
+      "The parser dumped core."
+    printf 'Private focus events complete; crashing-sw exited %d.\n' "$crash_status"
   fi
-  sleep 2
-  notify "Omarchy" critical "Process crashed: crashing-sw" \
-    "The parser dumped core."
   notify "GitHub" normal "Attribution check failed" \
     "Wayland overlay branch in trycua/cua."
   notify "Calendar" low "Release notes in 30 minutes" \
     "Confirm owners for open items."
-  printf 'Private focus events complete; crashing-sw exited %d.\n' "$crash_status"
 }
 
 finish_focus() {
