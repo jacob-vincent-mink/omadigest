@@ -21,7 +21,8 @@
       "io.github.jacob-vincent-mink.rss",
       "io.omarchy.crash-reports",
       "io.omarchy.updates",
-      "io.omarchy.system-telemetry"
+      "io.omarchy.system-telemetry",
+      "io.omarchy.herdr"
     ],
     "maximumItems": 50,
     "maximumBytes": 60000

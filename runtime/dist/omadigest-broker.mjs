@@ -280208,6 +280208,7 @@ var CRASH_COMMAND = "/usr/bin/coredumpctl";
 var UPDATE_COMMAND = "/usr/share/omarchy/bin/omarchy-update-available";
 var SYSTEMCTL_COMMAND = "/usr/bin/systemctl";
 var NMCLI_COMMAND = "/usr/bin/nmcli";
+var HERDR_COMMAND = "/usr/bin/herdr";
 var POWER_ROOT = "/sys/class/power_supply";
 var MAX_COMMAND_BYTES = 256 * 1024;
 var MAX_EVENTS = 256;
@@ -280247,6 +280248,16 @@ var NATIVE_SOURCE_CATALOG = [
       { id: "network", label: "Network", description: "Connectivity state transitions without network names.", defaultEnabled: false },
       { id: "failed-services", label: "Failed services", description: "Names of failed user services without journal bodies.", defaultEnabled: true }
     ]
+  },
+  {
+    id: "io.omarchy.herdr",
+    name: "Herdr Agents",
+    description: "Local completion, blocker, and active-agent signals from Herdr.",
+    categories: [
+      { id: "completed-agents", label: "Completed agents", description: "Agents that moved into the done state.", defaultEnabled: true },
+      { id: "blocked-agents", label: "Blocked agents", description: "Agents that moved into the blocked state.", defaultEnabled: true },
+      { id: "active-agents", label: "Active agents", description: "A bounded point-in-time count of working agents.", defaultEnabled: false }
+    ]
   }
 ];
 var NativeSourceStore = class {
@@ -280262,7 +280273,8 @@ var NativeSourceStore = class {
       const cutoff = now.getTime() - RETENTION_MS;
       const events = parsed.events.flatMap(parseStoredItem).filter((item) => new Date(item.occurredAt).getTime() >= cutoff).slice(-MAX_EVENTS);
       const snapshot = parseSnapshot(parsed.snapshot);
-      return { version: 1, ...snapshot ? { snapshot } : {}, events };
+      const agents = parseStoredAgents(parsed.agents);
+      return { version: 1, ...snapshot ? { snapshot } : {}, ...agents ? { agents } : {}, events };
     } catch {
       return { version: 1, events: [] };
     }
@@ -280272,6 +280284,7 @@ var NativeSourceStore = class {
     const bounded2 = {
       version: 1,
       ...state2.snapshot ? { snapshot: state2.snapshot } : {},
+      ...state2.agents ? { agents: state2.agents.slice(0, 64) } : {},
       events: state2.events.filter((item) => new Date(item.occurredAt).getTime() >= cutoff).slice(-MAX_EVENTS)
     };
     const serialized = `${JSON.stringify(bounded2, null, 2)}
@@ -280293,6 +280306,8 @@ function nativeSourceStatus(id) {
     return existsSync32(UPDATE_COMMAND) ? { ready: true, message: "Omarchy update checks are available" } : { ready: false, message: "The Omarchy update checker is unavailable" };
   if (id === "io.omarchy.system-telemetry")
     return existsSync32(POWER_ROOT) || existsSync32(SYSTEMCTL_COMMAND) ? { ready: true, message: "Local system telemetry is available" } : { ready: false, message: "Local system telemetry is unavailable" };
+  if (id === "io.omarchy.herdr")
+    return existsSync32(HERDR_COMMAND) ? { ready: true, message: "Herdr agent status is available" } : { ready: false, message: "Herdr is unavailable" };
   return { ready: false, message: "That Omarchy source is unavailable" };
 }
 async function sampleNativeTelemetry(previous, dependencies = systemDependencies) {
@@ -280307,6 +280322,12 @@ async function sampleNativeTelemetry(previous, dependencies = systemDependencies
     ...network === void 0 ? {} : { networkState: network }
   };
   return { snapshot, events: deriveTelemetryEvents(previous, snapshot) };
+}
+async function sampleHerdrAgents(previous, dependencies = systemDependencies) {
+  const response = await dependencies.run(HERDR_COMMAND, ["agent", "list"]);
+  if (response.code !== 0) return { agents: previous ?? [], events: [] };
+  const agents = parseHerdrAgents(response.stdout);
+  return { agents, events: deriveHerdrEvents(previous, agents, dependencies.now()) };
 }
 async function collectNativeSourceItems(enabled, since, until, stored, dependencies = systemDependencies) {
   const results = stored.events.filter((item) => categoryEnabled(enabled, item.source, item.category) && within(item.occurredAt, since, until));
@@ -280330,6 +280351,10 @@ async function collectNativeSourceItems(enabled, since, until, stored, dependenc
   if (categoryEnabled(enabled, "io.omarchy.system-telemetry", "failed-services")) {
     const response = await dependencies.run(SYSTEMCTL_COMMAND, ["--user", "--failed", "--no-legend", "--plain"]);
     if (response.code === 0) results.push(...parseFailedServices(response.stdout, dependencies.now()));
+  }
+  if (categoryEnabled(enabled, "io.omarchy.herdr", "active-agents")) {
+    const response = await dependencies.run(HERDR_COMMAND, ["agent", "list"]);
+    if (response.code === 0) results.push(...activeHerdrItem(parseHerdrAgents(response.stdout), dependencies.now()));
   }
   return deduplicate(results).filter((item) => within(item.occurredAt, since, until)).slice(0, 200);
 }
@@ -280453,6 +280478,55 @@ function storageWarning(disk, now) {
     usedPercent >= 95 ? "critical" : "normal"
   )];
 }
+function parseHerdrAgents(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!isObject8(parsed) || !isObject8(parsed.result) || !Array.isArray(parsed.result.agents)) return [];
+  return parsed.result.agents.flatMap((value2) => {
+    if (!isObject8(value2)) return [];
+    const id = bounded(isObject8(value2.agent_session) ? value2.agent_session.value : value2.pane_id, 160);
+    const name = bounded(value2.name || value2.terminal_title_stripped || value2.workspace_id || "Agent", 120);
+    const status = bounded(value2.agent_status, 30).toLowerCase();
+    if (!id || !name || !["working", "idle", "done", "blocked", "unknown"].includes(status)) return [];
+    return [{ id, name, status }];
+  }).slice(0, 64);
+}
+function deriveHerdrEvents(previous, current, now) {
+  if (previous === void 0) return [];
+  const before = new Map(previous.map((agent) => [agent.id, agent.status]));
+  return current.flatMap((agent) => {
+    if (before.get(agent.id) === agent.status || !["done", "blocked"].includes(agent.status)) return [];
+    const blocked = agent.status === "blocked";
+    return [{
+      id: `omarchy:herdr:${stableHash(agent.id)}:${agent.status}:${now.toISOString()}`,
+      source: "io.omarchy.herdr",
+      category: blocked ? "blocked-agents" : "completed-agents",
+      app: "Herdr Agents",
+      title: `${agent.name} ${blocked ? "is blocked" : "finished"}`,
+      body: blocked ? "A Herdr agent needs attention." : "A Herdr agent completed its current task.",
+      urgency: blocked ? "normal" : "low",
+      occurredAt: now.toISOString()
+    }];
+  }).slice(0, 64);
+}
+function activeHerdrItem(agents, now) {
+  const active = agents.filter((agent) => agent.status === "working").slice(0, 32);
+  if (active.length === 0) return [];
+  return [{
+    id: `omarchy:herdr:active:${dayKey(now)}:${stableHash(active.map((agent) => agent.id).sort().join("|"))}`,
+    source: "io.omarchy.herdr",
+    category: "active-agents",
+    app: "Herdr Agents",
+    title: `${active.length} Herdr ${active.length === 1 ? "agent" : "agents"} working`,
+    body: bounded(active.map((agent) => agent.name).join(" \xB7 "), 1e3),
+    urgency: "low",
+    occurredAt: now.toISOString()
+  }];
+}
 var systemDependencies = {
   run: runCommand2,
   now: () => /* @__PURE__ */ new Date(),
@@ -280540,6 +280614,16 @@ function parseSnapshot(value2) {
     ...typeof value2.batteryState === "string" ? { batteryState: bounded(value2.batteryState, 40) } : {},
     ...typeof value2.networkState === "string" ? { networkState: bounded(value2.networkState, 60) } : {}
   };
+}
+function parseStoredAgents(value2) {
+  if (!Array.isArray(value2)) return void 0;
+  return value2.flatMap((agent) => {
+    if (!isObject8(agent)) return [];
+    const id = bounded(agent.id, 160);
+    const name = bounded(agent.name, 120);
+    const status = bounded(agent.status, 30);
+    return id && name && ["working", "idle", "done", "blocked", "unknown"].includes(status) ? [{ id, name, status }] : [];
+  }).slice(0, 64);
 }
 function categoryEnabled(enabled, source, category) {
   return (enabled[source] || []).slice(0, 24).includes(category);
@@ -280788,17 +280872,35 @@ function enabledNativeCategories(connectors, requested) {
 async function recordNativeTelemetry() {
   if (nativeSourceSampling) return;
   const telemetry = publicNativeSources().find((source) => source.id === "io.omarchy.system-telemetry");
-  if (telemetry?.enabled !== true || !telemetry.categories.some((category) => category.enabled && ["power", "battery", "network"].includes(category.id))) return;
+  const herdr = publicNativeSources().find((source) => source.id === "io.omarchy.herdr");
+  const sampleTelemetry = telemetry?.enabled === true && telemetry.categories.some((category) => category.enabled && ["power", "battery", "network"].includes(category.id));
+  const sampleHerdr = herdr?.enabled === true && herdr.categories.some((category) => category.enabled && ["completed-agents", "blocked-agents"].includes(category.id));
+  if (!sampleTelemetry && !sampleHerdr) return;
   nativeSourceSampling = true;
   try {
-    const sampled = await sampleNativeTelemetry(nativeSourceState.snapshot);
-    if (sampled.events.length > 0 || !sameTelemetryState(nativeSourceState.snapshot, sampled.snapshot)) {
-      nativeSourceStore.write({ version: 1, snapshot: sampled.snapshot, events: [...nativeSourceState.events, ...sampled.events] });
+    const [telemetrySample, herdrSample] = await Promise.all([
+      sampleTelemetry ? sampleNativeTelemetry(nativeSourceState.snapshot) : void 0,
+      sampleHerdr ? sampleHerdrAgents(nativeSourceState.agents) : void 0
+    ]);
+    const events = [...telemetrySample?.events ?? [], ...herdrSample?.events ?? []];
+    const changed = telemetrySample !== void 0 && !sameTelemetryState(nativeSourceState.snapshot, telemetrySample.snapshot) || herdrSample !== void 0 && !sameHerdrAgents(nativeSourceState.agents, herdrSample.agents);
+    if (events.length > 0 || changed) {
+      nativeSourceStore.write({
+        version: 1,
+        ...telemetrySample?.snapshot || nativeSourceState.snapshot ? { snapshot: telemetrySample?.snapshot ?? nativeSourceState.snapshot } : {},
+        ...herdrSample?.agents || nativeSourceState.agents ? { agents: herdrSample?.agents ?? nativeSourceState.agents } : {},
+        events: [...nativeSourceState.events, ...events]
+      });
       nativeSourceState = nativeSourceStore.read();
     }
   } finally {
     nativeSourceSampling = false;
   }
+}
+function sameHerdrAgents(left, right) {
+  if (left === void 0 || left.length !== right.length) return false;
+  const serialize = (agents) => agents.map((agent) => `${agent.id}\0${agent.name}\0${agent.status}`).sort().join("");
+  return serialize(left) === serialize(right);
 }
 function sameTelemetryState(left, right) {
   return left !== void 0 && left.onBattery === right.onBattery && batteryStateBand(left.batteryPercent) === batteryStateBand(right.batteryPercent) && left.batteryState === right.batteryState && left.networkState === right.networkState;

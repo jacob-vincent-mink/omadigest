@@ -4,9 +4,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   NativeSourceStore,
+  activeHerdrItem,
+  deriveHerdrEvents,
   deriveTelemetryEvents,
   parseCoredumps,
   parseFailedServices,
+  parseHerdrAgents,
   parseOmarchyUpdates,
   parsePowerSupplies,
   storageWarning,
@@ -78,6 +81,27 @@ describe("native sources", () => {
     expect(loaded.events).toHaveLength(256);
     expect(loaded.events.some((item) => item.id === "event-0")).toBe(false);
     expect(readFileSync(join(root, "native-source-state.json"), "utf8").length).toBeLessThan(256 * 1024);
+  });
+
+  it("turns Herdr completion and blocker transitions into bounded evidence", () => {
+    const agents = parseHerdrAgents(JSON.stringify({ result: { agents: [
+      { agent_session: { value: "session-1" }, name: "source_contract", agent_status: "done", cwd: "/private/path" },
+      { pane_id: "w2:p1", terminal_title_stripped: "worker", agent_status: "blocked" }
+    ] } }));
+    const events = deriveHerdrEvents([
+      { id: "session-1", name: "source_contract", status: "working" },
+      { id: "w2:p1", name: "worker", status: "working" }
+    ], agents, new Date("2026-08-20T12:00:00Z"));
+    expect(events.map((item) => item.category)).toEqual(["completed-agents", "blocked-agents"]);
+    expect(JSON.stringify(events)).not.toContain("/private/path");
+  });
+
+  it("reports only active Herdr agents in the optional snapshot category", () => {
+    const items = activeHerdrItem([
+      { id: "one", name: "worker", status: "working" },
+      { id: "two", name: "finished", status: "done" }
+    ], new Date("2026-08-20T12:00:00Z"));
+    expect(items[0]).toMatchObject({ category: "active-agents", title: "1 Herdr agent working", body: "worker" });
   });
 
   it("rejects oversized persisted state on read", () => {

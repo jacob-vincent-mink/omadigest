@@ -17,6 +17,7 @@ const CRASH_COMMAND = "/usr/bin/coredumpctl";
 const UPDATE_COMMAND = "/usr/share/omarchy/bin/omarchy-update-available";
 const SYSTEMCTL_COMMAND = "/usr/bin/systemctl";
 const NMCLI_COMMAND = "/usr/bin/nmcli";
+const HERDR_COMMAND = "/usr/bin/herdr";
 const POWER_ROOT = "/sys/class/power_supply";
 const MAX_COMMAND_BYTES = 256 * 1024;
 const MAX_EVENTS = 256;
@@ -71,6 +72,16 @@ export const NATIVE_SOURCE_CATALOG: NativeSourceDefinition[] = [
       { id: "network", label: "Network", description: "Connectivity state transitions without network names.", defaultEnabled: false },
       { id: "failed-services", label: "Failed services", description: "Names of failed user services without journal bodies.", defaultEnabled: true }
     ]
+  },
+  {
+    id: "io.omarchy.herdr",
+    name: "Herdr Agents",
+    description: "Local completion, blocker, and active-agent signals from Herdr.",
+    categories: [
+      { id: "completed-agents", label: "Completed agents", description: "Agents that moved into the done state.", defaultEnabled: true },
+      { id: "blocked-agents", label: "Blocked agents", description: "Agents that moved into the blocked state.", defaultEnabled: true },
+      { id: "active-agents", label: "Active agents", description: "A bounded point-in-time count of working agents.", defaultEnabled: false }
+    ]
   }
 ];
 
@@ -93,7 +104,9 @@ export type TelemetrySnapshot = {
   networkState?: string;
 };
 
-type StoredState = { version: 1; snapshot?: TelemetrySnapshot; events: NativeSourceItem[] };
+export type HerdrAgentSnapshot = { id: string; name: string; status: string };
+
+type StoredState = { version: 1; snapshot?: TelemetrySnapshot; agents?: HerdrAgentSnapshot[]; events: NativeSourceItem[] };
 type CommandResult = { code: number; stdout: string };
 
 export type NativeSourceDependencies = {
@@ -118,7 +131,8 @@ export class NativeSourceStore {
       const cutoff = now.getTime() - RETENTION_MS;
       const events = parsed.events.flatMap(parseStoredItem).filter((item) => new Date(item.occurredAt).getTime() >= cutoff).slice(-MAX_EVENTS);
       const snapshot = parseSnapshot(parsed.snapshot);
-      return { version: 1, ...(snapshot ? { snapshot } : {}), events };
+      const agents = parseStoredAgents(parsed.agents);
+      return { version: 1, ...(snapshot ? { snapshot } : {}), ...(agents ? { agents } : {}), events };
     } catch {
       return { version: 1, events: [] };
     }
@@ -129,6 +143,7 @@ export class NativeSourceStore {
     const bounded: StoredState = {
       version: 1,
       ...(state.snapshot ? { snapshot: state.snapshot } : {}),
+      ...(state.agents ? { agents: state.agents.slice(0, 64) } : {}),
       events: state.events.filter((item) => new Date(item.occurredAt).getTime() >= cutoff).slice(-MAX_EVENTS)
     };
     const serialized = `${JSON.stringify(bounded, null, 2)}\n`;
@@ -155,6 +170,10 @@ export function nativeSourceStatus(id: string): { ready: boolean; message: strin
     return existsSync(POWER_ROOT) || existsSync(SYSTEMCTL_COMMAND)
       ? { ready: true, message: "Local system telemetry is available" }
       : { ready: false, message: "Local system telemetry is unavailable" };
+  if (id === "io.omarchy.herdr")
+    return existsSync(HERDR_COMMAND)
+      ? { ready: true, message: "Herdr agent status is available" }
+      : { ready: false, message: "Herdr is unavailable" };
   return { ready: false, message: "That Omarchy source is unavailable" };
 }
 
@@ -173,6 +192,16 @@ export async function sampleNativeTelemetry(
     ...(network === undefined ? {} : { networkState: network })
   };
   return { snapshot, events: deriveTelemetryEvents(previous, snapshot) };
+}
+
+export async function sampleHerdrAgents(
+  previous: HerdrAgentSnapshot[] | undefined,
+  dependencies: NativeSourceDependencies = systemDependencies
+): Promise<{ agents: HerdrAgentSnapshot[]; events: NativeSourceItem[] }> {
+  const response = await dependencies.run(HERDR_COMMAND, ["agent", "list"]);
+  if (response.code !== 0) return { agents: previous ?? [], events: [] };
+  const agents = parseHerdrAgents(response.stdout);
+  return { agents, events: deriveHerdrEvents(previous, agents, dependencies.now()) };
 }
 
 export async function collectNativeSourceItems(
@@ -204,6 +233,11 @@ export async function collectNativeSourceItems(
   if (categoryEnabled(enabled, "io.omarchy.system-telemetry", "failed-services")) {
     const response = await dependencies.run(SYSTEMCTL_COMMAND, ["--user", "--failed", "--no-legend", "--plain"]);
     if (response.code === 0) results.push(...parseFailedServices(response.stdout, dependencies.now()));
+  }
+
+  if (categoryEnabled(enabled, "io.omarchy.herdr", "active-agents")) {
+    const response = await dependencies.run(HERDR_COMMAND, ["agent", "list"]);
+    if (response.code === 0) results.push(...activeHerdrItem(parseHerdrAgents(response.stdout), dependencies.now()));
   }
 
   return deduplicate(results).filter((item) => within(item.occurredAt, since, until)).slice(0, 200);
@@ -331,6 +365,54 @@ export function storageWarning(disk: { total: number; available: number }, now: 
   )];
 }
 
+export function parseHerdrAgents(raw: string): HerdrAgentSnapshot[] {
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return []; }
+  if (!isObject(parsed) || !isObject(parsed.result) || !Array.isArray(parsed.result.agents)) return [];
+  return parsed.result.agents.flatMap((value): HerdrAgentSnapshot[] => {
+    if (!isObject(value)) return [];
+    const id = bounded(isObject(value.agent_session) ? value.agent_session.value : value.pane_id, 160);
+    const name = bounded(value.name || value.terminal_title_stripped || value.workspace_id || "Agent", 120);
+    const status = bounded(value.agent_status, 30).toLowerCase();
+    if (!id || !name || !["working", "idle", "done", "blocked", "unknown"].includes(status)) return [];
+    return [{ id, name, status }];
+  }).slice(0, 64);
+}
+
+export function deriveHerdrEvents(previous: HerdrAgentSnapshot[] | undefined, current: HerdrAgentSnapshot[], now: Date): NativeSourceItem[] {
+  if (previous === undefined) return [];
+  const before = new Map(previous.map((agent) => [agent.id, agent.status]));
+  return current.flatMap((agent): NativeSourceItem[] => {
+    if (before.get(agent.id) === agent.status || !["done", "blocked"].includes(agent.status)) return [];
+    const blocked = agent.status === "blocked";
+    return [{
+      id: `omarchy:herdr:${stableHash(agent.id)}:${agent.status}:${now.toISOString()}`,
+      source: "io.omarchy.herdr",
+      category: blocked ? "blocked-agents" : "completed-agents",
+      app: "Herdr Agents",
+      title: `${agent.name} ${blocked ? "is blocked" : "finished"}`,
+      body: blocked ? "A Herdr agent needs attention." : "A Herdr agent completed its current task.",
+      urgency: blocked ? "normal" : "low",
+      occurredAt: now.toISOString()
+    }];
+  }).slice(0, 64);
+}
+
+export function activeHerdrItem(agents: HerdrAgentSnapshot[], now: Date): NativeSourceItem[] {
+  const active = agents.filter((agent) => agent.status === "working").slice(0, 32);
+  if (active.length === 0) return [];
+  return [{
+    id: `omarchy:herdr:active:${dayKey(now)}:${stableHash(active.map((agent) => agent.id).sort().join("|"))}`,
+    source: "io.omarchy.herdr",
+    category: "active-agents",
+    app: "Herdr Agents",
+    title: `${active.length} Herdr ${active.length === 1 ? "agent" : "agents"} working`,
+    body: bounded(active.map((agent) => agent.name).join(" · "), 1_000),
+    urgency: "low",
+    occurredAt: now.toISOString()
+  }];
+}
+
 const systemDependencies: NativeSourceDependencies = {
   run: runCommand,
   now: () => new Date(),
@@ -414,6 +496,17 @@ function parseSnapshot(value: unknown): TelemetrySnapshot | undefined {
     ...(typeof value.batteryState === "string" ? { batteryState: bounded(value.batteryState, 40) } : {}),
     ...(typeof value.networkState === "string" ? { networkState: bounded(value.networkState, 60) } : {})
   };
+}
+
+function parseStoredAgents(value: unknown): HerdrAgentSnapshot[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap((agent): HerdrAgentSnapshot[] => {
+    if (!isObject(agent)) return [];
+    const id = bounded(agent.id, 160);
+    const name = bounded(agent.name, 120);
+    const status = bounded(agent.status, 30);
+    return id && name && ["working", "idle", "done", "blocked", "unknown"].includes(status) ? [{ id, name, status }] : [];
+  }).slice(0, 64);
 }
 
 function categoryEnabled(enabled: Record<string, string[]>, source: string, category: string): boolean {

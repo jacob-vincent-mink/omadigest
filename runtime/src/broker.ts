@@ -25,7 +25,9 @@ import {
   NATIVE_SOURCE_CATALOG,
   NativeSourceStore,
   nativeSourceStatus,
+  sampleHerdrAgents,
   sampleNativeTelemetry,
+  type HerdrAgentSnapshot,
   type TelemetrySnapshot
 } from "./native-sources.js";
 import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration, type SourceStatus } from "./types.js";
@@ -239,17 +241,39 @@ function enabledNativeCategories(connectors: string[], requested: Record<string,
 async function recordNativeTelemetry(): Promise<void> {
   if (nativeSourceSampling) return;
   const telemetry = publicNativeSources().find((source) => source.id === "io.omarchy.system-telemetry");
-  if (telemetry?.enabled !== true || !telemetry.categories.some((category) => category.enabled && ["power", "battery", "network"].includes(category.id))) return;
+  const herdr = publicNativeSources().find((source) => source.id === "io.omarchy.herdr");
+  const sampleTelemetry = telemetry?.enabled === true
+    && telemetry.categories.some((category) => category.enabled && ["power", "battery", "network"].includes(category.id));
+  const sampleHerdr = herdr?.enabled === true
+    && herdr.categories.some((category) => category.enabled && ["completed-agents", "blocked-agents"].includes(category.id));
+  if (!sampleTelemetry && !sampleHerdr) return;
   nativeSourceSampling = true;
   try {
-    const sampled = await sampleNativeTelemetry(nativeSourceState.snapshot);
-    if (sampled.events.length > 0 || !sameTelemetryState(nativeSourceState.snapshot, sampled.snapshot)) {
-      nativeSourceStore.write({ version: 1, snapshot: sampled.snapshot, events: [...nativeSourceState.events, ...sampled.events] });
+    const [telemetrySample, herdrSample] = await Promise.all([
+      sampleTelemetry ? sampleNativeTelemetry(nativeSourceState.snapshot) : undefined,
+      sampleHerdr ? sampleHerdrAgents(nativeSourceState.agents) : undefined
+    ]);
+    const events = [...(telemetrySample?.events ?? []), ...(herdrSample?.events ?? [])];
+    const changed = telemetrySample !== undefined && !sameTelemetryState(nativeSourceState.snapshot, telemetrySample.snapshot)
+      || herdrSample !== undefined && !sameHerdrAgents(nativeSourceState.agents, herdrSample.agents);
+    if (events.length > 0 || changed) {
+      nativeSourceStore.write({
+        version: 1,
+        ...(telemetrySample?.snapshot || nativeSourceState.snapshot ? { snapshot: telemetrySample?.snapshot ?? nativeSourceState.snapshot } : {}),
+        ...(herdrSample?.agents || nativeSourceState.agents ? { agents: herdrSample?.agents ?? nativeSourceState.agents } : {}),
+        events: [...nativeSourceState.events, ...events]
+      });
       nativeSourceState = nativeSourceStore.read();
     }
   } finally {
     nativeSourceSampling = false;
   }
+}
+
+function sameHerdrAgents(left: HerdrAgentSnapshot[] | undefined, right: HerdrAgentSnapshot[]): boolean {
+  if (left === undefined || left.length !== right.length) return false;
+  const serialize = (agents: HerdrAgentSnapshot[]) => agents.map((agent) => `${agent.id}\u0000${agent.name}\u0000${agent.status}`).sort().join("\u0001");
+  return serialize(left) === serialize(right);
 }
 
 function sameTelemetryState(left: TelemetrySnapshot | undefined, right: TelemetrySnapshot): boolean {
