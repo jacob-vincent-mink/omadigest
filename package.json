@@ -10,7 +10,7 @@
     "build": "node runtime/scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm run build && npm test"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.2",

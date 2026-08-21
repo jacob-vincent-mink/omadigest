@@ -6,17 +6,32 @@ import type { AttentionItem } from "./types.js";
 
 export const privacyModeSchema = z.enum(["ignore", "count-only", "digest", "digest-and-handoff"]);
 export type PrivacyMode = z.infer<typeof privacyModeSchema>;
+export type PrivacyRule = { app: string; mode: PrivacyMode; source: "protected-default" | "user" };
 
-const legacyFileSchema = z.object({
+const fileSchema = z.object({
   version: z.literal(1),
   defaultMode: privacyModeSchema,
   applications: z.record(z.string().min(1).max(120), privacyModeSchema)
 }).strict();
-const fileSchema = z.object({ version: z.literal(2), nativeMode: privacyModeSchema }).strict();
+const temporaryGlobalSchema = z.object({ version: z.literal(2), nativeMode: privacyModeSchema }).strict();
+
+const protectedDefaults: Array<{ app: string; aliases: string[] }> = [
+  { app: "Signal", aliases: ["signal", "signal desktop", "signal-desktop", "org.signal.signal"] },
+  { app: "WhatsApp", aliases: ["whatsapp", "whatsapp desktop"] },
+  { app: "Telegram", aliases: ["telegram", "telegram desktop", "org.telegram.desktop"] },
+  { app: "1Password", aliases: ["1password", "1password for linux"] },
+  { app: "Bitwarden", aliases: ["bitwarden"] },
+  { app: "KeePassXC", aliases: ["keepassxc", "keepass"] },
+  { app: "Authy", aliases: ["authy"] }
+];
+
+const protectedAliases = new Map(protectedDefaults.flatMap((rule) =>
+  rule.aliases.map((alias) => [normalizeApplication(alias), rule.app] as const)));
 
 export class PrivacyPolicy {
   readonly #path: string;
   #defaultMode: PrivacyMode = "count-only";
+  #applications = new Map<string, PrivacyMode>();
 
   constructor(configRoot: string) {
     this.#path = join(configRoot, "privacy.json");
@@ -26,11 +41,20 @@ export class PrivacyPolicy {
 
   reload(): void {
     this.#defaultMode = "count-only";
+    this.#applications.clear();
     this.#load();
   }
 
-  status(): { defaultMode: PrivacyMode; rules: [] } {
-    return { defaultMode: this.#defaultMode, rules: [] };
+  status(): { defaultMode: PrivacyMode; rules: PrivacyRule[] } {
+    const rules = new Map<string, PrivacyRule>();
+    for (const rule of protectedDefaults) {
+      const key = normalizeApplication(rule.app);
+      rules.set(key, { app: rule.app, mode: this.#applications.get(key) ?? "ignore", source: this.#applications.has(key) ? "user" : "protected-default" });
+    }
+    for (const [app, mode] of this.#applications) {
+      if (!rules.has(app)) rules.set(app, { app, mode, source: "user" });
+    }
+    return { defaultMode: this.#defaultMode, rules: [...rules.values()].sort((left, right) => left.app.localeCompare(right.app)) };
   }
 
   setDefault(mode: PrivacyMode): void {
@@ -38,10 +62,27 @@ export class PrivacyPolicy {
     this.#save();
   }
 
+  setRule(app: string, mode: PrivacyMode): void {
+    const normalized = normalizeApplication(app);
+    if (normalized === "") throw new Error("Enter an application name.");
+    this.#applications.set(normalized, privacyModeSchema.parse(mode));
+    this.#save();
+  }
+
+  modeFor(app: string): PrivacyMode {
+    const normalized = normalizeApplication(app);
+    const explicit = this.#applications.get(normalized);
+    if (explicit !== undefined) return explicit;
+    const protectedName = protectedAliases.get(normalized);
+    if (protectedName !== undefined) return this.#applications.get(normalizeApplication(protectedName)) ?? "ignore";
+    return this.#defaultMode;
+  }
+
   filter(item: AttentionItem): AttentionItem | undefined {
     if (item.source !== "notifications") return item;
-    if (this.#defaultMode === "ignore") return undefined;
-    if (this.#defaultMode === "count-only") return hiddenItem(item);
+    const mode = this.modeFor(item.app);
+    if (mode === "ignore") return undefined;
+    if (mode === "count-only") return hiddenItem(item);
     return item;
   }
 
@@ -49,7 +90,7 @@ export class PrivacyPolicy {
     return items.flatMap((item) => {
       if (!isActionableEvidence(item)) return [];
       if (item.source !== "notifications") return [item];
-      return this.#defaultMode === "digest-and-handoff" ? [item] : [];
+      return this.modeFor(item.app) === "digest-and-handoff" ? [item] : [];
     });
   }
 
@@ -57,7 +98,8 @@ export class PrivacyPolicy {
     return items.filter((item) => {
       if (!isActionableEvidence(item)) return false;
       if (item.source !== "notifications") return true;
-      return this.#defaultMode === "digest" || this.#defaultMode === "digest-and-handoff";
+      const mode = this.modeFor(item.app);
+      return mode === "digest" || mode === "digest-and-handoff";
     });
   }
 
@@ -74,20 +116,22 @@ export class PrivacyPolicy {
     try {
       if (statSync(this.#path).size > 1024 * 1024) return;
       const raw: unknown = JSON.parse(readFileSync(this.#path, "utf8"));
-      const current = fileSchema.safeParse(raw);
-      if (current.success) this.#defaultMode = current.data.nativeMode;
-      else {
-        const legacy = legacyFileSchema.parse(raw);
-        this.#defaultMode = legacy.defaultMode === "ignore" ? "ignore" : "count-only";
-        this.#save();
+      const value = fileSchema.safeParse(raw);
+      if (value.success) {
+        this.#defaultMode = value.data.defaultMode;
+        this.#applications = new Map(Object.entries(value.data.applications).map(([app, mode]) => [normalizeApplication(app), mode]));
+        return;
       }
+      const temporary = temporaryGlobalSchema.parse(raw);
+      this.#defaultMode = temporary.nativeMode;
+      this.#save();
     } catch { /* Use strict defaults. */ }
   }
 
   #save(): void {
     mkdirSync(dirname(this.#path), { recursive: true, mode: 0o700 });
     const temporary = `${this.#path}.${randomUUID()}.tmp`;
-    const value = { version: 2 as const, nativeMode: this.#defaultMode };
+    const value = { version: 1 as const, defaultMode: this.#defaultMode, applications: Object.fromEntries(this.#applications) };
     writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
     renameSync(temporary, this.#path);
   }

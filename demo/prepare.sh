@@ -35,8 +35,15 @@ chmod 700 "$config_root"
 privacy_tmp="$config_root/privacy.json.demo-tmp"
 cat > "$privacy_tmp" <<'JSON'
 {
-  "version": 2,
-  "nativeMode": "digest-and-handoff"
+  "version": 1,
+  "defaultMode": "count-only",
+  "applications": {
+    "github": "digest-and-handoff",
+    "calendar": "digest-and-handoff",
+    "omarchy": "digest-and-handoff",
+    "omadigest demo": "ignore",
+    "omarchy-action": "ignore"
+  }
 }
 JSON
 chmod 600 "$privacy_tmp"

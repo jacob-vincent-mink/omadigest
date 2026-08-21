@@ -209,9 +209,9 @@ flowchart TD
 
 - Strict discriminated broker commands bound request fields and reject unknown
   shapes.
-- Notification privacy runs before persistence. Native application labels are
-  never treated as authenticated identities; one global policy defaults to
-  count-only and erases content.
+- Notification privacy runs before persistence. Protected app names default to
+  ignore and unknown names default to count-only; individual rules are
+  user-facing content filters, not authenticated identities.
 - Contentless evidence is rejected again before model generation and cannot be
   cited or handed off.
 - Template selection, classification, grouping, and connector selection remain
@@ -239,7 +239,7 @@ flowchart TD
 
 | Boundary | Crossing | Required trust decision | Current enforcement and gap |
 |---|---|---|---|
-| TB0 — desktop session | Apps and same-session processes into OmaDigest | Notification evidence must not acquire UI, model, or action authority; local IPC must not imply unrestricted user intent. | App labels never grant content authority. Production IPC exposes only navigation/content-free status; mutations require explicit demo mode (TM-05/TM-06 fixed). |
+| TB0 — desktop session | Apps and same-session processes into OmaDigest | Notification evidence must not acquire UI, model, or action authority; local IPC must not imply unrestricted user intent. | App-name rules filter content but do not grant tool/action authority. Unknown names default to count-only; production IPC exposes only navigation/content-free status and mutations require explicit demo mode (TM-05 fixed; TM-06 accepted residual). |
 | TB1 — QML to broker | NDJSON commands, events, and snapshots | QML may request typed product operations, but must not perform filesystem, network, connector, or model work itself. | Broker command schemas are strict and notification history is broker-read under file/item/byte bounds. Raw protocol lines still need a byte cap (TM-04 fixed; TM-09 open). |
 | TB2 — broker to model | Bounded notification/connector evidence and structured tool results | Evidence is data, never instructions; model output cannot select tools or cite material outside the supplied set. | Scoped emit-only Pi tools, evidence budgets, deterministic routing, and citation checks enforce the main boundary. Out-of-scope prompt authority is broker-owned; process-argument transport remains open (TM-08 fixed; TM-16 open). |
 | TB3 — broker to connector | Manifest, config, secrets, subprocess authority, network, and response envelope | Installed connector code should receive only its declared, user-approved capability and return bounded opaque evidence. | Connectors have no network/child permission; HTTPS is exact-host broker mediation and commands are rejected. Final responses require matching IDs/versions and clean exit (TM-02/TM-03/TM-19 fixed). |
@@ -258,7 +258,7 @@ byte, time, and retention limits.
 | Review area | Result |
 |---|---|
 | QML text and action sinks | The original markup/resource-loading path was confirmed and fixed across 112 `Text` elements and four `TextArea` elements. Dynamic integration toggles now use a local safe component; action authority no longer derives from a manifest label. |
-| Notification privacy and prompt-injection handling | Privacy erasure occurs before persistence and model use; contentless evidence is rejected again at generation. Sender-controlled app labels no longer grant content access; wider native modes require global consent. |
+| Notification privacy and prompt-injection handling | Privacy erasure occurs before persistence and model use; contentless evidence is rejected again at generation. Per-app label matching remains a deliberate user-facing filter, while all evidence stays untrusted and receives no action authority. |
 | Model and template authority | Digest/template sessions expose only bounded emit tools and deterministic routing remains outside the model. Out-of-scope prompt text is broker-derived, fully previewed, and confirmed with a one-use token. |
 | Filesystem and retention | Package validation, private permissions, retention, atomic installation, config byte/projection checks, and attention disk budgets are substantial controls. Nested persisted-digest validation and some symlink paths still need hardening. |
 | Connector sandbox and credentials | Time, response, package, and protocol bounds fail closed. Direct network/child authority was removed; broker HTTPS and fixed read-only GitHub calls now enforce the intended capability boundary. |
@@ -273,9 +273,10 @@ security boundary; **P2** is a planned hardening item.
 The white-box review traced every external string and persisted object through
 validation, storage, model, process, and UI sinks; inventoried filesystem,
 network, subprocess, credential, and IPC authority; and compared actual bounds
-with the documented contracts. No critical issue was found. TM-01 through TM-08
-are fixed in the v0.1.3 release candidate; the remaining items are P2 hardening
-or explicitly documented residual risks.
+with the documented contracts. No critical issue was found. The release-blocking
+TM-02 through TM-05, TM-07, and TM-08 findings are fixed in the v0.1.3 release
+candidate. TM-06 is retained as a P2 product limitation; the remaining items
+are P2 hardening or explicitly documented residual risks.
 
 | ID | STRIDE | Status | Priority | Scenario and evidence | Recommended treatment |
 |---|---|---:|---:|---|---|
@@ -284,7 +285,7 @@ or explicitly documented residual risks.
 | TM-03 | I, E | Fixed in v0.1.3 | P1 | Host commands are rejected by the manifest, runtime, and validator. The bundled GitHub connector receives no token or executable; fixed read-only `gh api` calls run in trusted broker code and pass only bounded data. |
 | TM-04 | D, I | Fixed in v0.1.3 | P1 | QML no longer reads history or starts shell processes. The broker reads at most 50 regular non-symlink history files under 64-KiB/file and 512-KiB total limits. |
 | TM-05 | S, T, I, D | Fixed in v0.1.3 | P1 | Production IPC exposes navigation plus content-free state. Every costful/mutating demo method checks explicit shell-start demo mode, and request strings are sliced at entry. Demo restore removes the opt-in before restart. |
-| TM-06 | S, I | Fixed in v0.1.3 | P1 | Sender-provided native app labels no longer grant content authority. One global native policy defaults to count-only; wider content modes require explicit global consent, while integrations use validated IDs. Legacy app grants migrate conservatively. |
+| TM-06 | S, I | Accepted residual | P2 | Native app labels are sender-provided, so a local notifier can match another app's content rule. This changes handling only for notifications the sender itself creates; it does not reveal another app's evidence or grant tool authority. Unknown names default to count-only, protected names to ignore, and all resulting evidence remains untrusted data. | Keep per-app filtering as a user control, describe it as name matching rather than authentication, and prefer validated integration IDs when a source needs a stronger identity boundary. |
 | TM-07 | T, D, I | Fixed in v0.1.3 | P1 | Identical snapshots are not appended; changed IDs replace in memory, segments compact at 2 MiB, total event storage is capped at 8 MiB/seven files, and oversized/unreadable segments are removed during load/policy rewrite. |
 | TM-08 | T, E | Fixed in v0.1.3 | P1 | `out_of_scope` no longer accepts a prompt. The broker derives the exact prompt from the original request, displays it in QML, and launches only after consuming a one-use five-minute confirmation token. |
 | TM-09 | D | Open | P2 | Broker stdin is parsed only after a complete newline is buffered. A multi-megabyte malformed line was rejected and the process recovered, but still consumed memory first. | Add a byte-limited line reader and terminate/reset the broker child on a protocol-line violation. |
@@ -328,7 +329,7 @@ not read live OmaDigest data or secrets and made no non-local network requests.
 | Unsupported declared command | Pass | The runtime rejected it before connector execution. |
 | Declared network-host isolation | Pass after TM-02 | Connectors have no direct network namespace; broker mediation rejected undeclared and private endpoints while enforcing exact declared HTTPS hosts. |
 | Declared command isolation | Pass after TM-03 | Manifests cannot request commands, and connector sandboxes have no child-process permission or usable executable path. |
-| Native-notification privacy | Pass after TM-06 | Sender-controlled app labels could not grant content access; global count-only content was erased before persistence/model use. |
+| Native-notification privacy | Pass with TM-06 caveat | Unknown content was erased, protected app content was dropped, and only explicitly permitted names became model-eligible; app-name matching is not sender authentication. |
 | Count-only model exclusion | Pass | Contentless evidence could not trigger a digest model call or citation. |
 | Adversarial sequence resilience | Pass | The broker remained responsive and shut down cleanly. |
 
@@ -338,8 +339,8 @@ installation rollback, connector categories, and privacy-policy tightening.
 
 ## Prioritized remediation
 
-The release-blocking connector, history, IPC, handoff, privacy-identity, and
-attention-retention items were addressed in v0.1.3. The next hardening cycle is:
+The release-blocking connector, history, IPC, handoff, and attention-retention
+items were addressed in v0.1.3. The next hardening cycle is:
 
 1. Add a byte-limited broker protocol-line reader.
 2. Make model jobs cancellable without blocking status/shutdown.

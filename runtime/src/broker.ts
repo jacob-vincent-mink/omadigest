@@ -124,6 +124,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("agent_status"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("privacy_status"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("privacy_set_default"), id: z.string().min(1).max(100), mode: privacyModeSchema }).strict(),
+  z.object({ type: z.literal("privacy_set_rule"), id: z.string().min(1).max(100), app: z.string().min(1).max(120), mode: privacyModeSchema }).strict(),
   z.object({ type: z.literal("auth_begin"), id: z.string().min(1).max(100), methodId: z.string().regex(/^[a-z0-9-]+::(?:oauth|api_key)$/) }).strict(),
   z.object({ type: z.literal("auth_response"), id: z.string().min(1).max(100), flowId: z.string().uuid(), promptId: z.string().uuid(), value: z.string().max(32_768) }).strict(),
   z.object({ type: z.literal("auth_cancel"), id: z.string().min(1).max(100), flowId: z.string().uuid() }).strict(),
@@ -451,9 +452,10 @@ async function handle(raw: string): Promise<boolean> {
     emit({ type: "privacy", id: command.id, policy: privacy.status() });
     return true;
   }
-  if (command.type === "privacy_set_default") {
+  if (command.type === "privacy_set_default" || command.type === "privacy_set_rule") {
     try {
-      privacy.setDefault(command.mode);
+      if (command.type === "privacy_set_default") privacy.setDefault(command.mode);
+      else privacy.setRule(command.app, command.mode);
       attention.applyPolicy((item) => {
         const filtered = privacy.filter(item);
         return filtered === undefined ? undefined : classifyAttentionItem(filtered);

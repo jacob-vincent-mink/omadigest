@@ -205,6 +205,7 @@ export type BrokerCommand =
   | { type: "agent_status"; id: string }
   | { type: "privacy_status"; id: string }
   | { type: "privacy_set_default"; id: string; mode: PrivacyMode }
+  | { type: "privacy_set_rule"; id: string; app: string; mode: PrivacyMode }
   | { type: "auth_begin"; id: string; methodId: string }
   | { type: "auth_response"; id: string; flowId: string; promptId: string; value: string }
   | { type: "auth_cancel"; id: string; flowId: string }

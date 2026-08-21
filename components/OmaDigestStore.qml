@@ -187,6 +187,9 @@ Scope {
   function setPrivacyDefault(mode) {
     send({ type: "privacy_set_default", id: "privacy-" + nextId++, mode: String(mode) })
   }
+  function setPrivacyRule(app, mode) {
+    send({ type: "privacy_set_rule", id: "privacy-" + nextId++, app: String(app || "").trim().slice(0, 120), mode: String(mode) })
+  }
   function beginAuth(methodId) {
     clearError()
     send({ type: "auth_begin", id: "auth-" + nextId++, methodId: String(methodId) })

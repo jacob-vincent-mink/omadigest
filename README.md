@@ -25,7 +25,7 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 ## Highlights
 
 - **Briefings, not another inbox** — answer “what needs me?” instead of replaying every popup.
-- **Privacy before persistence** — native notification labels are unverified, so one global policy defaults to **Count only** with content erased; connected sources use validated IDs.
+- **Privacy before persistence** — protected apps such as Signal start at **Ignore**; unknown apps start at **Count only**, with content erased.
 - **Citations by construction** — every factual digest entry must cite a supplied notification or connector source ID.
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
 - **Attention intelligence** — conservative subject grouping, broker-owned intent routing, signal-aware DND triggers, and safe pattern-based template suggestions make the defaults improve without granting notification text authority.
@@ -158,7 +158,7 @@ integrations/<integration-id>/
 └── README.md
 ```
 
-The bundled GitHub integration uses fixed read-only broker calls through the user's authenticated `gh` session and is exercised end to end in the demo; its connector receives neither a token nor process/network authority. Broker-native Omarchy sources cover bounded crash metadata, update availability, system telemetry, and Herdr agent transitions. Every source exposes category controls and a non-mutating status check; all start disabled except the existing Notifications and Focus/DND inputs. Calendar, chat, task, and social applications still participate through native notifications under the global native-notification policy. See the [integration guide](docs/integrations.md) for the verified release scope and deliberately unbundled connectors.
+The bundled GitHub integration uses fixed read-only broker calls through the user's authenticated `gh` session and is exercised end to end in the demo; its connector receives neither a token nor process/network authority. Broker-native Omarchy sources cover bounded crash metadata, update availability, system telemetry, and Herdr agent transitions. Every source exposes category controls and a non-mutating status check; all start disabled except the existing Notifications and Focus/DND inputs. Calendar, chat, task, and social applications still participate through native notifications and per-app privacy rules. See the [integration guide](docs/integrations.md) for the verified release scope and deliberately unbundled connectors.
 
 ## Documentation
 

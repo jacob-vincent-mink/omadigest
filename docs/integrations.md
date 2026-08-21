@@ -71,7 +71,7 @@ The v0.1 release ships no other external-service connector. Prototypes are not p
 - Gmail requires a complete OAuth authorization and refresh-token lifecycle;
 - RSS/Atom needs a broker-level repeatable-instance contract and broader real-feed compatibility before it can honestly represent multiple subscriptions.
 
-Native notifications from those applications can still be classified and summarized after the user explicitly enables native content globally. The integration-authoring skill remains available for reviewed local connectors, but successful mocked validation is not represented as an official live-tested integration.
+Native notifications from those applications can still be classified and summarized under the user's privacy rules. The integration-authoring skill remains available for reviewed local connectors, but successful mocked validation is not represented as an official live-tested integration.
 
 Repeatable sources are a future broker contract, not duplicated package IDs. A proper implementation needs bounded instance records, per-instance setup/secrets/status/categories, deterministic routing across instances, and explicit add/remove UI.
 

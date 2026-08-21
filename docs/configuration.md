@@ -40,8 +40,12 @@ Integration secrets and TTS keys intentionally remain in Secret Service rather t
 
 ```json
 {
-  "version": 2,
-  "nativeMode": "count-only"
+  "version": 1,
+  "defaultMode": "count-only",
+  "applications": {
+    "signal": "ignore",
+    "github": "digest-and-handoff"
+  }
 }
 ```
 
@@ -52,9 +56,9 @@ Modes are:
 - `digest`: permit content in digest generation but hide it from default-agent handoff;
 - `digest-and-handoff`: also permit cited content after an explicit **Send to agent** click.
 
-Native notification application labels are supplied by the sender and cannot authenticate an application. App-label rules therefore cannot grant content authority. One global native-notification mode defaults to `count-only`; changing it to `digest` or `digest-and-handoff` is explicit consent for all native notifications. Version-1 per-app policy files migrate conservatively to `ignore` or `count-only`, never to a broader content mode.
+Signal, WhatsApp, Telegram, common password managers, and Authy have protected `ignore` defaults unless the user explicitly overrides them. Unknown applications default to `count-only`. Rules match the application name carried by the native notification; they are content filters, not authenticated application identities.
 
-Policy is enforced before broker persistence. Tightening the global mode rewrites retained notification segments to remove or sanitize content. Relaxing it affects future notifications; erased content is not recoverable.
+Policy is enforced before broker persistence. Tightening a rule rewrites retained notification segments to remove or sanitize content. Relaxing it affects future notifications; erased content is not recoverable.
 
 ## External edits
 

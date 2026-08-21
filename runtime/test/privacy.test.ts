@@ -18,11 +18,11 @@ function fixture(app: string): AttentionItem {
 }
 
 describe("PrivacyPolicy", () => {
-  it("erases all native notification content by default because app labels are unverified", () => {
+  it("ignores protected apps and erases unknown notification content by default", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
     roots.push(root);
     const policy = new PrivacyPolicy(root);
-    expect(policy.filter(fixture("Signal"))).toMatchObject({ title: "", body: "", contentAvailable: false });
+    expect(policy.filter(fixture("Signal"))).toBeUndefined();
     const countOnly = policy.filter(fixture("GitHub"));
     expect(countOnly).toMatchObject({ app: "GitHub", title: "", body: "", contentAvailable: false });
     expect(countOnly?.occurredAt).toBe("2026-08-20T11:00:00.000Z");
@@ -34,7 +34,7 @@ describe("PrivacyPolicy", () => {
     roots.push(root);
     const policy = new PrivacyPolicy(root);
     const hidden = policy.filter(fixture("Unknown app"));
-    policy.setDefault("digest");
+    policy.setRule("GitHub", "digest");
     const visible = policy.filter(fixture("GitHub"));
     expect([hidden, visible]).toHaveLength(2);
     expect(policy.evidenceForDigest([hidden!, visible!]).map((item) => item.app)).toEqual(["GitHub"]);
@@ -44,25 +44,25 @@ describe("PrivacyPolicy", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
     roots.push(root);
     const policy = new PrivacyPolicy(root);
+    policy.setRule("GitHub", "digest");
+    const visible = policy.filter(fixture("GitHub"))!;
     const hidden = Array.from({ length: 40 }, (_, index) => policy.filter({
       ...fixture(`Unknown ${index}`), id: `hidden-${index}`
     })!);
-    policy.setDefault("digest");
-    const visible = policy.filter(fixture("GitHub"))!;
     const selected = policy.selectDigestEvidence([...hidden, visible], 1);
     expect(selected.items.map((item) => item.app)).toEqual(["GitHub"]);
     expect(selected.excludedIds).toHaveLength(40);
   });
 
-  it("persists explicit global native digest and handoff permissions", () => {
+  it("persists explicit digest and handoff permissions", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
     roots.push(root);
     const policy = new PrivacyPolicy(root);
-    policy.setDefault("digest");
+    policy.setRule("GitHub", "digest");
     expect(policy.filter(fixture("GitHub"))?.body).toBe("Private body");
     expect(policy.evidenceForDigest([fixture("GitHub")])).toHaveLength(1);
     expect(policy.evidenceForHandoff([fixture("GitHub")])).toEqual([]);
-    policy.setDefault("digest-and-handoff");
+    policy.setRule("GitHub", "digest-and-handoff");
     expect(new PrivacyPolicy(root).evidenceForHandoff([fixture("GitHub")])[0]?.body).toBe("Private body");
   });
 
@@ -73,35 +73,20 @@ describe("PrivacyPolicy", () => {
     attention.ingest([fixture("Signal"), fixture("GitHub")]);
     const policy = new PrivacyPolicy(join(root, "config"));
     attention.applyPolicy((item) => policy.filter(item));
-    expect(attention.byIds(["notification:Signal"])[0]).toMatchObject({ title: "", body: "", contentAvailable: false });
+    expect(attention.byIds(["notification:Signal"])).toEqual([]);
     expect(attention.byIds(["notification:GitHub"])[0]).toMatchObject({ title: "", body: "", contentAvailable: false });
     const eventsDir = join(root, "omadigest", "events");
     const segment = readFileSync(join(eventsDir, readdirSync(eventsDir)[0]!), "utf8");
     expect(segment).not.toContain("Private body");
   });
 
-  it("does not migrate legacy app-label grants into content authority", () => {
-    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-legacy-"));
+  it("recovers the temporary global policy format without broadening access", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-v2-"));
     roots.push(root);
     const path = join(root, "privacy.json");
-    writeFileSync(path, JSON.stringify({
-      version: 1, defaultMode: "count-only", applications: { GitHub: "digest" }
-    }));
+    writeFileSync(path, JSON.stringify({ version: 2, nativeMode: "count-only" }));
     const policy = new PrivacyPolicy(root);
     expect(policy.filter(fixture("GitHub"))).toMatchObject({ title: "", body: "", contentAvailable: false });
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ version: 2, nativeMode: "count-only" });
-  });
-
-  it("requires fresh global consent when a legacy default exposed content", () => {
-    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-legacy-global-"));
-    roots.push(root);
-    const path = join(root, "privacy.json");
-    writeFileSync(path, JSON.stringify({
-      version: 1, defaultMode: "digest-and-handoff", applications: { Signal: "ignore" }
-    }));
-    const policy = new PrivacyPolicy(root);
-    expect(policy.filter(fixture("Signal"))).toMatchObject({ title: "", body: "", contentAvailable: false });
-    expect(policy.evidenceForHandoff([fixture("GitHub")])).toEqual([]);
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ version: 2, nativeMode: "count-only" });
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ version: 1, defaultMode: "count-only", applications: {} });
   });
 });

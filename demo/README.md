@@ -72,9 +72,9 @@ Installation adds one marked `dofile(...)` block to `~/.config/hypr/bindings.lua
 
 ## Privacy behavior in the take
 
-Safe GitHub, Calendar, and Omarchy fixtures are emitted as real native notifications. Demo preparation explicitly enables the global native-notification digest policy and transient demo IPC before restarting the shell; restore clears both by restoring the user's policy and unsetting demo IPC.
+Safe GitHub, Calendar, and Omarchy fixtures are emitted as real native notifications. Demo preparation applies explicit per-app digest rules and transient demo IPC before restarting the shell; restore clears both by restoring the user's policy and unsetting demo IPC.
 
-Outside the isolated take, the default global native policy is `count-only`: app/time/urgency remain available for deterministic aggregate routing, title/body are erased before persistence, and individual contentless records are rejected again before model context, citation validation, and handoff evidence.
+Outside the isolated take, protected app names default to `ignore` and unknown app names default to `count-only`: app/time/urgency remain available for deterministic aggregate routing, title/body are erased before persistence, and individual contentless records are rejected again before model context, citation validation, and handoff evidence.
 
 ## Safety and recovery
 

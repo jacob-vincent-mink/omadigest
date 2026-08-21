@@ -31,7 +31,7 @@ Open **Settings → Privacy** before enabling notification content. Policy is en
 | Digest | Policy-permitted content | Yes | No |
 | Digest + agent | Policy-permitted content | Yes | Yes, after a click |
 
-Omarchy exposes sender-provided application labels, not authenticated sender identities. OmaDigest therefore applies one policy to all native notifications and defaults it to **Count only**. Selecting **Digest** or **Digest + agent** is explicit consent for all native notification content; use a validated integration when a source needs independent controls. Tightening the global policy rewrites retained segments to erase content no longer permitted.
+Protected private applications such as Signal start at **Ignore**. Unknown applications start at **Count only**. Add per-app rules using the name shown in native notifications; tightening a rule rewrites retained segments to erase content no longer permitted.
 
 ## Generate a digest
 
@@ -104,7 +104,7 @@ OmaDigest checks its latest stable GitHub release in the background no more than
 
 Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, custom templates, or all four categories. Every action requires confirmation.
 
-Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or the native-notification privacy policy.
+Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or privacy rules.
 
 ## Troubleshooting
 

@@ -43,7 +43,7 @@ export const integrationManifestSchema = z.object({
   permissions: z.object({
     networkHosts: z.array(z.string().regex(/^[a-z0-9.-]+(?::\d+)?$/)).max(32),
     networkSetupFields: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)).max(8).optional(),
-    commands: z.array(z.never()).max(0),
+    commands: z.array(z.string()).max(0),
     readPaths: z.array(z.string().min(1).max(500)).max(32),
     writePaths: z.array(z.string().min(1).max(500)).max(16)
   }).strict()
