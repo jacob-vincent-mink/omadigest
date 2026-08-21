@@ -24,4 +24,8 @@ OmaDigest enforces notification privacy before persistence or model access, scop
 
 Omarchy shell plugins still run inside the user's long-running Quickshell process and are not an operating-system sandbox. The connector boundary reduces integration access but does not make installed plugin code trustworthy. Review source and dependencies before installation.
 
-Read the complete [security model](docs/security.md), including credentials, connector limitations, retention, prompt-injection handling, and explicit agent handoffs.
+Read the complete [security model](docs/security.md), including credentials,
+connector limitations, retention, prompt-injection handling, and explicit agent
+handoffs. The repository also publishes its reviewed
+[threat model](docs/threat-model.md), including L0/L1/L2 diagrams, STRIDE
+assessment, adversarial test results, open findings, and residual risks.

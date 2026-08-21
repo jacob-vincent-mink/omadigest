@@ -172,6 +172,7 @@ The bundled GitHub integration uses the user's authenticated `gh` session and is
 | [Voice](docs/voice.md) | Voxtype input and provider-based read mode |
 | [Architecture](docs/architecture.md) | QML/broker boundary, protocols, and data flow |
 | [Security](docs/security.md) | Threat boundaries, privacy modes, credentials, and sandbox limits |
+| [Threat model](docs/threat-model.md) | L0/L1/L2 boundaries, STRIDE assessment, adversarial tests, and residual risks |
 | [Development](docs/development.md) | Repository layout, checks, smoke tests, and release requirements |
 
 ## Why OmaDigest
