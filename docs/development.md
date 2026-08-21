@@ -38,6 +38,12 @@ the structured tools supplied by OmaDigest, and the OpenAI/Codex and xAI model
 providers shown in settings. It does not bundle Pi's terminal UI or general
 filesystem and shell tools.
 
+The two tests that execute Bubblewrap require network-namespace support. They
+run during local release validation on Omarchy. GitHub-hosted runners block that
+kernel operation, so CI sets `OMADIGEST_SKIP_SANDBOX_TESTS=1` and reports those
+two cases as skipped; it still runs the syntax-rejection path and every other
+test.
+
 ## Validate as an Omarchy plugin
 
 The Omarchy validator rejects symlinks anywhere in the folder, including npm's `node_modules/.bin`. Validate a clean checkout or temporarily keep `node_modules` outside the plugin root:

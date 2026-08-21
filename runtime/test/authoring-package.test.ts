@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { installAuthoringDirectory, validateAuthoringDirectory } from "../src/authoring-package.js";
 
 const roots: string[] = [];
+const skipSandboxTests = process.env.OMADIGEST_SKIP_SANDBOX_TESTS === "1";
 afterEach(() => { while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true }); });
 
 function fixture(): string {
@@ -37,7 +38,7 @@ test("fixture", () => assert.equal(1, 1));
 }
 
 describe("default-agent authoring packages", () => {
-  it("validates and atomically installs a package disabled", () => {
+  it.skipIf(skipSandboxTests)("validates and atomically installs a package disabled", () => {
     const staging = fixture();
     const config = join(roots[0]!, "config");
     expect(validateAuthoringDirectory(staging).id).toBe("local.authoring-test");

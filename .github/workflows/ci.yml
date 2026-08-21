@@ -21,7 +21,12 @@ jobs:
       - name: Install connector sandbox
         run: sudo apt-get update && sudo apt-get install --yes bubblewrap
       - run: npm ci
-      - run: npm run check
+      - name: Run checks
+        env:
+          # GitHub-hosted runners block the network namespace required by
+          # Bubblewrap. Full sandbox execution remains a release-host check.
+          OMADIGEST_SKIP_SANDBOX_TESTS: "1"
+        run: npm run check
       - name: Verify checked-in broker bundle
         run: git diff --exit-code -- runtime/dist
       - run: node --test integrations/*/connector.test.mjs

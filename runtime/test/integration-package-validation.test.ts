@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateIntegrationPackageFiles } from "../src/integration-package-validation.js";
 
+const skipSandboxTests = process.env.OMADIGEST_SKIP_SANDBOX_TESTS === "1";
+
 const validConnector = `
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
@@ -48,7 +50,7 @@ describe("integration package validation", () => {
     { path: "README.md", content: "# Validation" }
   ];
 
-  it("syntax-checks and runs a valid package test in the sandbox", () => {
+  it.skipIf(skipSandboxTests)("syntax-checks and runs a valid package test in the sandbox", () => {
     expect(() => validateIntegrationPackageFiles(packageFiles(validConnector))).not.toThrow();
   });
 
