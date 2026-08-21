@@ -29,6 +29,17 @@ describe("PrivacyPolicy", () => {
     expect(policy.evidenceForDigest([countOnly!])).toEqual([]);
   });
 
+  it("counts only model-eligible evidence as digestible", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
+    roots.push(root);
+    const policy = new PrivacyPolicy(root);
+    const hidden = policy.filter(fixture("Unknown app"));
+    policy.setRule("GitHub", "digest");
+    const visible = policy.filter(fixture("GitHub"));
+    expect([hidden, visible]).toHaveLength(2);
+    expect(policy.evidenceForDigest([hidden!, visible!]).map((item) => item.app)).toEqual(["GitHub"]);
+  });
+
   it("persists explicit digest and handoff permissions", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
     roots.push(root);

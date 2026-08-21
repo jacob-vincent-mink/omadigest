@@ -4,7 +4,7 @@
 
 The bar's quill opens a deliberately small digest list. The header actions are:
 
-- **+** — generate from currently available attention items;
+- **+** — generate from currently available, privacy-eligible attention items;
 - **✓** — mark the current backlog seen without deleting policy-permitted retained evidence;
 - **Settings** — open sources, templates, privacy, connections, and retained data controls.
 

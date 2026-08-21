@@ -26,6 +26,8 @@ Panel {
   readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
     ? String(notificationService.historyDir) : ""
   readonly property int attentionAvailableCount: OmaDigest.OmaDigestStore.attentionCount
+  readonly property int countOnlyAttentionCount: OmaDigest.OmaDigestStore.countOnlyAttentionCount
+  readonly property int totalAttentionCount: root.attentionAvailableCount + root.countOnlyAttentionCount
 
   property string page: "list"
   property string digestTab: "unread"
@@ -253,6 +255,15 @@ Panel {
     return counts
   }
 
+  function attentionSummaryText() {
+    var available = root.attentionAvailableCount
+    var countOnly = root.countOnlyAttentionCount
+    if (available > 0 && countOnly > 0) return available + " ready · " + countOnly + " count-only"
+    if (available > 0) return available + (available === 1 ? " attention item" : " attention items")
+    if (countOnly > 0) return countOnly + (countOnly === 1 ? " count-only notification" : " count-only notifications")
+    return "No new attention"
+  }
+
   function availableConnectors() {
     var result = ["notifications"]
     var integrations = OmaDigest.OmaDigestStore.integrations || []
@@ -347,8 +358,8 @@ Panel {
 
   function generateDigest(trigger, focusMinutes) {
     var items = root.currentAttentionItems()
-    if (items.length === 0 || OmaDigest.OmaDigestStore.digestState === "working") return
-    OmaDigest.OmaDigestStore.ingest(items)
+    if (root.attentionAvailableCount <= 0 || OmaDigest.OmaDigestStore.digestState === "working") return
+    if (items.length > 0) OmaDigest.OmaDigestStore.ingest(items)
     OmaDigest.OmaDigestStore.generateDigest(root.generationContext(trigger || "manual", focusMinutes || 0), "")
   }
 
@@ -707,6 +718,7 @@ Panel {
         sourcesView: root.sourcesView,
         selectedSourceId: root.selectedSource ? String(root.selectedSource.id || "") : "",
         attentionCount: root.attentionAvailableCount,
+        countOnlyAttentionCount: root.countOnlyAttentionCount,
         unreadCount: root.digestsForTab("unread").length,
         readCount: root.digestsForTab("read").length
       })
@@ -805,7 +817,7 @@ Panel {
                 width: parent.width
                 text: root.page === "list"
                   ? (OmaDigest.OmaDigestStore.digestState === "working"
-                    ? "Generating a digest…" : root.attentionAvailableCount + " attention items")
+                    ? "Generating a digest…" : root.attentionSummaryText())
                   : root.page === "settings" ? "Sources, privacy, connections, and retained data" : ""
                 visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
@@ -837,7 +849,8 @@ Panel {
               PanelActionButton {
                 visible: root.page === "list"
                 iconText: OmaDigest.OmaDigestStore.digestState === "working" ? "…" : "+"
-                tooltipText: root.attentionAvailableCount > 0 ? "Generate a new digest" : "No attention items"
+                tooltipText: root.attentionAvailableCount > 0 ? "Generate a new digest"
+                  : root.countOnlyAttentionCount > 0 ? "Count-only notifications stay private" : "No attention items"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
@@ -845,12 +858,12 @@ Panel {
               }
 
               PanelActionButton {
-                visible: root.page === "list" && root.attentionAvailableCount > 0
+                visible: root.page === "list" && root.totalAttentionCount > 0
                 iconText: "✓"
                 tooltipText: "Mark all attention items seen"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
-                onClicked: OmaDigest.OmaDigestStore.acknowledgeAttention(root.currentAttentionItems())
+                onClicked: OmaDigest.OmaDigestStore.acknowledgeAllAttention()
               }
 
               PanelActionButton {

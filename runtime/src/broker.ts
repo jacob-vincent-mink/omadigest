@@ -127,6 +127,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tts_stop"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("attention_ingest"), id: z.string().min(1).max(100), items: z.array(attentionItemSchema).max(200) }).strict(),
   z.object({ type: z.literal("attention_acknowledge"), id: z.string().min(1).max(100), itemIds: z.array(z.string().min(1).max(200)).max(200) }).strict(),
+  z.object({ type: z.literal("attention_acknowledge_all"), id: z.string().min(1).max(100) }).strict(),
   z.object({
     type: z.literal("template_suggestion_dismiss"), id: z.string().min(1).max(100),
     suggestionId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/)
@@ -308,7 +309,15 @@ function emit(event: BrokerEvent): void {
 }
 
 function emitAttention(id: string): void {
-  emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
+  const pending = attention.pending(500);
+  const digestibleCount = privacy.evidenceForDigest(pending).length;
+  emit({
+    type: "attention",
+    id,
+    digestibleCount,
+    countOnlyCount: pending.length - digestibleCount,
+    acknowledgedIds: attention.acknowledgedIds()
+  });
 }
 
 function currentTemplateSuggestions() {
@@ -482,6 +491,12 @@ async function handle(raw: string): Promise<boolean> {
     return true;
   }
 
+  if (command.type === "attention_acknowledge_all") {
+    attention.acknowledge(attention.pending(500).map((item) => item.id));
+    emitAttention(command.id);
+    return true;
+  }
+
   if (command.type === "template_suggestion_dismiss") {
     templateSuggestionStore.dismiss(command.suggestionId);
     emitTemplateSuggestions(command.id);
@@ -575,6 +590,18 @@ async function handle(raw: string): Promise<boolean> {
       const items = privacy.evidenceForDigest(pendingItems);
       const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
       if (excludedIds.length > 0) attention.acknowledge(excludedIds);
+      if (items.length === 0) {
+        emit({
+          type: "digest_skipped",
+          id: command.id,
+          reason: pendingItems.length > 0
+            ? "Only count-only notifications are available"
+            : "No digestible items are available"
+        });
+        emitAttention(command.id);
+        emitTemplateSuggestions(command.id);
+        return true;
+      }
       if (command.context.trigger !== "manual") {
         const decision = automaticDigestDecision(safeContext, items);
         if (!decision.generate) {

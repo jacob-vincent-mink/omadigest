@@ -281035,7 +281035,7 @@ function isObject8(value2) {
 }
 
 // runtime/src/types.ts
-var PROTOCOL_VERSION = 1;
+var PROTOCOL_VERSION = 2;
 
 // runtime/src/broker.ts
 var contextSchema = external_exports.object({
@@ -281142,6 +281142,7 @@ var commandSchema = external_exports.discriminatedUnion("type", [
   external_exports.object({ type: external_exports.literal("tts_stop"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({ type: external_exports.literal("attention_ingest"), id: external_exports.string().min(1).max(100), items: external_exports.array(attentionItemSchema).max(200) }).strict(),
   external_exports.object({ type: external_exports.literal("attention_acknowledge"), id: external_exports.string().min(1).max(100), itemIds: external_exports.array(external_exports.string().min(1).max(200)).max(200) }).strict(),
+  external_exports.object({ type: external_exports.literal("attention_acknowledge_all"), id: external_exports.string().min(1).max(100) }).strict(),
   external_exports.object({
     type: external_exports.literal("template_suggestion_dismiss"),
     id: external_exports.string().min(1).max(100),
@@ -281300,7 +281301,15 @@ function emit(event) {
 `);
 }
 function emitAttention(id) {
-  emit({ type: "attention", id, count: attention.pending(500).length, acknowledgedIds: attention.acknowledgedIds() });
+  const pending = attention.pending(500);
+  const digestibleCount = privacy.evidenceForDigest(pending).length;
+  emit({
+    type: "attention",
+    id,
+    digestibleCount,
+    countOnlyCount: pending.length - digestibleCount,
+    acknowledgedIds: attention.acknowledgedIds()
+  });
 }
 function currentTemplateSuggestions() {
   return suggestTemplates(attention.recent(200), templates, templateSuggestionStore.active());
@@ -281469,6 +281478,11 @@ async function handle(raw) {
     emitAttention(command.id);
     return true;
   }
+  if (command.type === "attention_acknowledge_all") {
+    attention.acknowledge(attention.pending(500).map((item) => item.id));
+    emitAttention(command.id);
+    return true;
+  }
   if (command.type === "template_suggestion_dismiss") {
     templateSuggestionStore.dismiss(command.suggestionId);
     emitTemplateSuggestions(command.id);
@@ -281559,6 +281573,16 @@ async function handle(raw) {
       const items = privacy.evidenceForDigest(pendingItems);
       const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
       if (excludedIds.length > 0) attention.acknowledge(excludedIds);
+      if (items.length === 0) {
+        emit({
+          type: "digest_skipped",
+          id: command.id,
+          reason: pendingItems.length > 0 ? "Only count-only notifications are available" : "No digestible items are available"
+        });
+        emitAttention(command.id);
+        emitTemplateSuggestions(command.id);
+        return true;
+      }
       if (command.context.trigger !== "manual") {
         const decision = automaticDigestDecision(safeContext, items);
         if (!decision.generate) {
