@@ -44,8 +44,8 @@ Rectangle {
     : root.needsSetup ? ((root.status && root.status.action && root.status.action.label) || "Set up") : ""
   readonly property bool sourceEnabled: root.integration.enabled !== false
   readonly property string categorySummary: root.categorySummaryText()
-  readonly property bool checking: root.status && (root.status.checking === true
-    || String(root.status.state || "") === "checking")
+  readonly property bool checking: root.status !== null && root.status !== undefined
+    && (root.status.checking === true || String(root.status.state || "") === "checking")
 
   width: parent ? parent.width : Style.space(420)
   height: detail ? detailContent.implicitHeight + Style.space(22) : Style.space(58)
@@ -93,7 +93,8 @@ Rectangle {
         var category = root.categories[index]
         if (category.enabled === true || (category.enabled === undefined && category.defaultEnabled === true)) enabledCount++
       }
-      return enabledCount + " of " + root.categories.length + " categories"
+      var summary = enabledCount + " of " + root.categories.length + " categories"
+      return root.sourceEnabled ? summary : "Off · " + summary
     }
     return root.statusLabel
   }
@@ -267,7 +268,7 @@ Rectangle {
     }
 
     Text {
-      visible: root.status && root.status.checkedAt
+      visible: root.status !== null && root.status !== undefined && !!root.status.checkedAt
       width: parent.width
       text: visible ? "Checked " + new Date(root.status.checkedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm") : ""
       color: Qt.darker(root.foreground, 1.5)

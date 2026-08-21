@@ -830,9 +830,9 @@ Panel {
             width: parent.width
             height: visible ? errorContent.implicitHeight + Style.space(20) : 0
             radius: Style.cornerRadius
-            color: Style.normalFillFor(root.foreground, Color.error)
+            color: Style.normalFillFor(root.foreground, Color.urgent)
             border.width: Style.spacing.hairline
-            border.color: Color.error
+            border.color: Color.urgent
 
             Column {
               id: errorContent
@@ -1033,7 +1033,7 @@ Panel {
                   text: OmaDigest.OmaDigestStore.digest ? String(OmaDigest.OmaDigestStore.digest.title) : ""
                   color: root.foreground
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.displaySmall
+                  font.pixelSize: Style.font.display
                   font.bold: true
                   wrapMode: Text.WordWrap
                 }
@@ -1459,7 +1459,7 @@ Panel {
                 text: root.selectedTemplate ? String(root.selectedTemplate.name) : ""
                 color: root.foreground
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.displaySmall
+                font.pixelSize: Style.font.display
                 font.bold: true
                 wrapMode: Text.WordWrap
               }
@@ -1684,7 +1684,7 @@ Panel {
                   visible: OmaDigest.OmaDigestStore.templateEditMessage !== ""
                   width: parent.width
                   text: OmaDigest.OmaDigestStore.templateEditMessage
-                  color: OmaDigest.OmaDigestStore.templateEditState === "error" ? Color.error : Color.accent
+                  color: OmaDigest.OmaDigestStore.templateEditState === "error" ? Color.urgent : Color.accent
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
                   wrapMode: Text.WordWrap
@@ -2048,7 +2048,7 @@ Panel {
                 visible: OmaDigest.OmaDigestStore.dataDeleteMessage !== ""
                 width: parent.width
                 text: OmaDigest.OmaDigestStore.dataDeleteMessage
-                color: OmaDigest.OmaDigestStore.dataDeleteState === "error" ? Color.error : Color.accent
+                color: OmaDigest.OmaDigestStore.dataDeleteState === "error" ? Color.urgent : Color.accent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
@@ -2176,9 +2176,9 @@ Panel {
                 height: visible ? authFlowContent.implicitHeight + Style.space(20) : 0
                 radius: Style.cornerRadius
                 color: Style.normalFillFor(root.foreground,
-                  OmaDigest.OmaDigestStore.auth.phase === "error" ? Color.error : Color.accent)
+                  OmaDigest.OmaDigestStore.auth.phase === "error" ? Color.urgent : Color.accent)
                 border.width: Style.spacing.hairline
-                border.color: OmaDigest.OmaDigestStore.auth.phase === "error" ? Color.error : Color.accent
+                border.color: OmaDigest.OmaDigestStore.auth.phase === "error" ? Color.urgent : Color.accent
 
                 Column {
                   id: authFlowContent
@@ -2468,7 +2468,7 @@ Panel {
                 text: "Configure read aloud"
                 color: root.foreground
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.displaySmall
+                font.pixelSize: Style.font.display
                 font.bold: true
               }
               Text {

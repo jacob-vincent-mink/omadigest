@@ -93,7 +93,7 @@ Column {
     width: parent.width
     horizontalAlignment: Text.AlignHCenter
     text: OmaDigestStore.authoringSkillMessage
-    color: OmaDigestStore.authoringSkillState === "error" ? Color.error : Qt.darker(root.foreground, 1.35)
+    color: OmaDigestStore.authoringSkillState === "error" ? Color.urgent : Qt.darker(root.foreground, 1.35)
     font.family: root.fontFamily
     font.pixelSize: Style.font.caption
     wrapMode: Text.WordWrap
@@ -324,7 +324,7 @@ Column {
     visible: root.kind === "integration" && OmaDigestStore.authoringMessage !== ""
     width: parent.width
     text: OmaDigestStore.authoringMessage
-    color: OmaDigestStore.authoringState === "error" ? Color.error : root.accent
+    color: OmaDigestStore.authoringState === "error" ? Color.urgent : root.accent
     font.family: root.fontFamily
     font.pixelSize: Style.font.caption
     wrapMode: Text.WordWrap
