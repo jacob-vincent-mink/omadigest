@@ -38,4 +38,4 @@
 - [ ] Visually confirm the final quill mark across themes.
 - [x] Capture a marketplace preview from the end-to-end release demo.
 - [x] Finalize the dependency/license inventory.
-- [ ] Publish and verify the v0.1.0 release package and demo asset.
+- [x] Publish and verify the v0.1.0 release package and demo asset.
