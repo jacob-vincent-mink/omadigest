@@ -36,5 +36,6 @@
 - [ ] Live-test Voxtype dictation and its microphone placement/state changes.
 - [ ] Test read mode with real provider credentials.
 - [ ] Visually confirm the final quill mark across themes.
-- [ ] Capture marketplace screenshots.
-- [ ] Finalize dependency/license inventory and release packaging.
+- [x] Capture a marketplace preview from the end-to-end release demo.
+- [x] Finalize the dependency/license inventory.
+- [ ] Publish and verify the v0.1.0 release package and demo asset.

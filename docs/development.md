@@ -50,7 +50,7 @@ The public repository follows the [Omarchy Plugins development guide](https://om
 - local `omarchy plugin validate` and `qmllint` commands documented;
 - public CI for the portable TypeScript, test, audit, bundle, and manifest checks.
 
-A clean UI `preview.png` is optional under the marketplace contract and remains a release task; do not substitute a logo or a desktop capture containing unrelated windows.
+The root `preview.png` is a frame from the end-to-end release demo. It shows the themed OmaDigest panel and contains no unrelated windows.
 
 ## Broker smoke test
 

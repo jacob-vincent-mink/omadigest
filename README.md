@@ -20,7 +20,7 @@ OmaDigest is a native Omarchy attention layer and background agent. Built around
 
 It does **not** replace the notification daemon or put a general-purpose agent inside the shell.
 
-> **Status:** Beta. Core notification intake, privacy enforcement, digest generation, inline template authoring, default-agent integration authoring, explicit agent handoffs, DND re-entry, scheduling, Voxtype input, and provider-based read-aloud are implemented. See the remaining [release validation](TODO.md).
+> **Status:** Beta. The release demo exercises notification intake, privacy, DND re-entry, digest generation, source controls, template suggestions and authoring, deterministic routing, and default-agent integration authoring. Dictation, scheduling, and read-aloud remain optional beta surfaces.
 
 ## Highlights
 
@@ -39,6 +39,12 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Voice both ways** — dictate authoring requests with Voxtype and optionally read completed digests aloud.
 - **Inspectable configuration** — privacy, templates, integrations, permissions, setup, and enablement are file-backed and hot-reloadable.
 - **Theme-native UI** — the Quickshell panel, spacing, typography, and monochrome mark follow the active Omarchy theme.
+
+## 56-second demo
+
+[![Watch the OmaDigest demo](preview.png)](https://github.com/jacob-vincent-mink/omadigest/releases/download/v0.1.0/omadigest-demo.mp4)
+
+[Watch the full demo (MP4)](https://github.com/jacob-vincent-mink/omadigest/releases/download/v0.1.0/omadigest-demo.mp4). Music: “Study and Relax” by Kevin MacLeod, from the [FreePD archive](https://github.com/0lhi/FreePD/blob/cf011c7016595833b550a88ff127f089188b25f8/Miscellaneous/Study%20and%20Relax.mp3), dedicated to the public domain under [CC0 1.0](https://github.com/0lhi/FreePD/blob/cf011c7016595833b550a88ff127f089188b25f8/LICENSE). See [Third-party materials](THIRD_PARTY_NOTICES.md) for all preview and demo-media credits.
 
 ## Install
 
