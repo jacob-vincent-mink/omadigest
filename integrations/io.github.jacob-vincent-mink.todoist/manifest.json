@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jacob-vincent-mink.todoist",
+  "name": "Todoist",
+  "version": "0.1.0",
+  "author": "Jacob Vincent-Mink",
+  "description": "Adds bounded overdue, upcoming, assigned, and recently completed task context from Todoist.",
+  "entryPoint": "connector.mjs",
+  "capabilities": ["sync", "open"],
+  "categories": [
+    { "id": "overdue", "label": "Overdue", "description": "Active tasks whose due date has passed.", "defaultEnabled": true },
+    { "id": "today-upcoming", "label": "Today and upcoming", "description": "Active tasks due today or within the next seven days.", "defaultEnabled": true },
+    { "id": "assigned", "label": "Assigned to me", "description": "Active tasks returned by Todoist's assigned-to-me filter.", "defaultEnabled": true },
+    { "id": "completed-activity", "label": "Completed activity", "description": "Tasks completed during the requested digest window.", "defaultEnabled": false }
+  ],
+  "setup": {
+    "summary": "Uses a Todoist API token for read-only task queries. OmaDigest stores the token as a secret.",
+    "fields": [
+      { "key": "api_token", "label": "API token", "type": "secret", "description": "Copy your personal API token from Todoist Settings → Integrations → Developer.", "required": true }
+    ],
+    "actionLabel": "Check Todoist access"
+  },
+  "permissions": { "networkHosts": ["api.todoist.com", "app.todoist.com"], "commands": [], "readPaths": [], "writePaths": [] }
+}

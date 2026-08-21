@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jacob-vincent-mink.rss",
+  "name": "RSS and Atom",
+  "version": "0.1.0",
+  "author": "Jacob Vincent-Mink",
+  "description": "Adds bounded new-entry and priority-keyword context from one configured RSS or Atom feed.",
+  "entryPoint": "connector.mjs",
+  "capabilities": ["sync"],
+  "categories": [
+    { "id": "new-entries", "label": "New entries", "description": "Feed entries published or updated in the requested digest window.", "defaultEnabled": true },
+    { "id": "priority-keywords", "label": "Priority keyword matches", "description": "New entries matching one of the configured case-insensitive keywords.", "defaultEnabled": true }
+  ],
+  "setup": {
+    "summary": "Fetches one credential-free HTTPS RSS or Atom URL. Private-network addresses and cross-origin redirects are rejected.",
+    "fields": [
+      { "key": "feed_url", "label": "Feed URL", "type": "url", "description": "A public HTTPS RSS or Atom URL without embedded credentials.", "required": true, "placeholder": "https://example.com/feed.xml" },
+      { "key": "priority_keywords", "label": "Priority keywords", "type": "string", "description": "Optional comma-separated case-insensitive keywords (maximum 10) used for priority matching.", "required": false, "placeholder": "urgent, release, incident" }
+    ],
+    "actionLabel": "Check feed"
+  },
+  "permissions": {
+    "networkHosts": ["user-configured-feed.invalid"],
+    "commands": [],
+    "readPaths": [],
+    "writePaths": []
+  }
+}
