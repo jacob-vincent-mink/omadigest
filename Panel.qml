@@ -658,6 +658,15 @@ Panel {
       return "ok"
     }
 
+    function previewRoute(application: string): string {
+      var app = String(application).trim()
+      if (!app) return "invalid"
+      var counts = {}
+      counts[app] = 1
+      OmaDigest.OmaDigestStore.selectTemplate("manual", 1, 0, counts, root.availableConnectors())
+      return "ok"
+    }
+
     function installAuthoringSkill(): string {
       OmaDigest.OmaDigestStore.installAuthoringSkill()
       return "ok"
@@ -712,6 +721,8 @@ Panel {
         integrationStatus: OmaDigest.OmaDigestStore.integrationStatus,
         sourcesView: root.sourcesView,
         selectedSourceId: root.selectedSource ? String(root.selectedSource.id || "") : "",
+        routeTemplateId: OmaDigest.OmaDigestStore.selection
+          ? String(OmaDigest.OmaDigestStore.selection.templateId || "") : "",
         attentionCount: root.attentionAvailableCount,
         unreadCount: root.digestsForTab("unread").length,
         readCount: root.digestsForTab("read").length

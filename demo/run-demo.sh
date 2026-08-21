@@ -241,6 +241,10 @@ omarchy-shell omadigest showTemplate "$github_template" >/dev/null
 sleep 2.4
 stop_clip
 
+# Prove the accepted routing policy before the final model call.
+omarchy-shell omadigest previewRoute GitHub >/dev/null
+wait_for '.routeTemplateId == "github-triage"' 'GitHub Triage to win deterministic routing' 15
+
 # 00:37 — One more real notification routes through the newly installed template.
 log "Scene 9/10: route PR #482 through the new template"
 omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
@@ -256,9 +260,9 @@ wait_for '.digestState == "working" or (.digestState == "ready" and .digestTempl
 sleep 0.8
 stop_clip
 omarchy-shell shell hide "$plugin_id" >/dev/null 2>&1 || true
-wait_for '.digestState == "ready" and .digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "i")) and .readCount > 0' 'the template-routed PR digest'
+wait_for '.digestState == "ready"' 'the final PR digest'
 final_state="$(state)"
-jq -e '.digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "i"))' >/dev/null <<<"$final_state" \
+jq -e '.digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "i")) and .readCount > 0' >/dev/null <<<"$final_state" \
   || { echo "The final digest did not expose the expected PR-specific title/template." >&2; exit 1; }
 
 # 00:41 — Payoff: a specifically named report with citations and agent action.

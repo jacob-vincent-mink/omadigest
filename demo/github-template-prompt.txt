@@ -1,3 +1,3 @@
 Create a template named GitHub Triage with id github-triage.
 
-Use GitHub notifications and the io.github.jacob-vincent-mink.github connector. Require the connector and match GitHub notifications. Use these sections: Needs action, CI and releases, Reviews and mentions, No action. Put failures, review requests, security notices, and release blockers first. Collapse repeated activity, cite every entry, and limit the digest to 12 entries.
+Use GitHub notifications and the io.github.jacob-vincent-mink.github connector. Require the connector, match GitHub notifications, and set priority 90 for manual and scheduled runs. Use these sections: Needs action, CI and releases, Reviews and mentions, No action. Put failures, review requests, security notices, and release blockers first. Collapse repeated activity, cite every entry, and limit the digest to 12 entries.
