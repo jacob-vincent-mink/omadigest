@@ -7,6 +7,7 @@ plugin_id="io.github.jacob-vincent-mink.omadigest"
 github_template="github-triage"
 github_integration="io.github.jacob-vincent-mink.github"
 output_dir="$repo_root/demo/recordings"
+config_root="${XDG_CONFIG_HOME:-$HOME/.config}/omadigest"
 clip_root="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/omadigest-demo-clips.XXXXXX")"
 prepared=false
 recording=false
@@ -147,6 +148,8 @@ wait_for '.integrations | any(.id == "io.github.jacob-vincent-mink.github" and .
 omarchy-shell shell summon "$plugin_id" >/dev/null
 sleep 0.6
 omarchy-shell shell hide "$plugin_id" >/dev/null
+omarchy-shell notifications dismissAll >/dev/null
+sleep 0.25
 
 # 00:00 — Hook: real Omarchy notifications arrive in quick succession.
 log "Scene 1/10: real notification burst"
@@ -236,6 +239,17 @@ omarchy-shell omadigest showDraft template >/dev/null
 sleep 3.0
 omarchy-shell omadigest acceptDraft >/dev/null
 wait_for '.draftState == "saved"' 'the installed template' 30
+installed_template="$config_root/templates/$github_template/template.compiled.json"
+[[ -s "$installed_template" ]] || { echo "The drafted GitHub template was not installed." >&2; exit 1; }
+jq -e --arg connector "$github_integration" '
+  .id == "github-triage"
+  and .priority == 90
+  and (.match.triggers | contains(["manual", "scheduled"]))
+  and (.match.applications | map(ascii_downcase) | index("github") != null)
+  and (.match.requiresConnectors | index($connector) != null)
+  and ((.match | keys - ["applications", "requiresConnectors", "triggers"]) | length == 0)
+' "$installed_template" >/dev/null \
+  || { echo "The drafted GitHub template did not preserve the requested routing policy." >&2; exit 1; }
 sleep 0.8
 omarchy-shell omadigest showTemplate "$github_template" >/dev/null
 sleep 2.4
@@ -291,7 +305,7 @@ for index in "${!clips[@]}"; do
   IFS=$'\t' read -r kicker headline <<<"${scene_labels[$index]}"
   printf '%.6f\t%s\t%s\n' "$scene_start" "$kicker" "$headline" >> "$timeline"
   clip_duration="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "${clips[$index]}")"
-  scene_start="$(awk -v start="$scene_start" -v length="$clip_duration" 'BEGIN { printf "%.6f", start + length }')"
+  scene_start="$(awk -v start="$scene_start" -v clip_seconds="$clip_duration" 'BEGIN { printf "%.6f", start + clip_seconds }')"
 done
 
 "$repo_root/demo/polish-demo.sh" "$raw_output" "$timeline" "$output"
