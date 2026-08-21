@@ -17,13 +17,11 @@ Rectangle {
   signal openRequested(var integration)
 
   readonly property string sourceId: String(root.integration.id || "")
-  readonly property string sourceKind: String(root.integration.kind || root.integration.sourceKind || "connector")
+  readonly property string sourceKind: String(root.integration.kind || root.integration.sourceKind
+    || (root.integration.source === "core" ? "core" : "connector"))
   readonly property bool isCore: sourceKind === "core"
+  readonly property bool configurable: root.integration.configurable !== false
   readonly property var setup: root.integration.setup || ({})
-  readonly property var authentication: root.integration.authentication || root.integration.auth
-    || (root.integration.actions && root.integration.actions.authentication) || null
-  readonly property var setupAction: root.integration.setupAction || root.setup.action
-    || (root.integration.actions && root.integration.actions.setup) || null
   readonly property var categories: root.integration.categories || []
   readonly property var liveStatus: OmaDigestStore.integrationStatus[root.sourceId]
     || OmaDigestStore.integrationSetup[root.sourceId] || null
@@ -32,19 +30,22 @@ Rectangle {
   readonly property string statusLabel: root.normalizedStatusLabel()
   readonly property color statusColor: statusState === "green" ? "#62b879"
     : statusState === "red" ? Color.urgent : "#d6a84b"
-  readonly property bool needsAuthentication: root.statusState === "red" && root.authentication !== null
-    || ["authentication_required", "auth-required", "unauthenticated"].indexOf(
+  readonly property bool needsAuthentication: ["authentication-required", "authentication_required", "auth-required", "unauthenticated"].indexOf(
       String(root.status && root.status.state || "").toLowerCase()) >= 0
+    && ((root.setup.fields || []).length > 0 || (root.status && root.status.action))
   readonly property bool needsSetup: !root.needsAuthentication && !root.isCore
     && !(root.liveStatus && root.liveStatus.ready === true)
-    && ((root.setup.fields || []).length > 0 || root.setupAction !== null
-      || (root.status !== null && root.statusState === "red"))
+    && ((root.setup.fields || []).length > 0
+      || (root.status && root.status.action)
+      || ["setup-required", "setup_required"].indexOf(
+        String(root.status && root.status.state || "").toLowerCase()) >= 0)
   readonly property string contextActionLabel: root.needsAuthentication
-    ? "Authenticate"
-    : root.needsSetup ? "Set up" : ""
+    ? ((root.status && root.status.action && root.status.action.label) || "Authenticate")
+    : root.needsSetup ? ((root.status && root.status.action && root.status.action.label) || "Set up") : ""
   readonly property bool sourceEnabled: root.integration.enabled !== false
   readonly property string categorySummary: root.categorySummaryText()
-  readonly property bool checking: root.status && root.status.checking === true
+  readonly property bool checking: root.status && (root.status.checking === true
+    || String(root.status.state || "") === "checking")
 
   width: parent ? parent.width : Style.space(420)
   height: detail ? detailContent.implicitHeight + Style.space(22) : Style.space(58)
@@ -63,7 +64,7 @@ Rectangle {
     if (root.status && root.status.checking === true) return "yellow"
     var state = String(root.status && root.status.state || "").toLowerCase()
     if (["green", "ready", "connected", "healthy", "ok"].indexOf(state) >= 0) return "green"
-    if (["red", "error", "failed", "authentication_required", "auth-required", "unauthenticated"].indexOf(state) >= 0)
+    if (["red", "error", "failed", "authentication-required", "authentication_required", "auth-required", "unauthenticated"].indexOf(state) >= 0)
       return "red"
     if (["yellow", "warning", "degraded", "setup_required", "setup-required", "checking", "unknown"].indexOf(state) >= 0)
       return "yellow"
@@ -98,14 +99,8 @@ Rectangle {
   }
 
   function activateContextAction() {
-    if (root.needsAuthentication) {
-      OmaDigestStore.authenticateIntegration(root.sourceId, root.authentication || ({}))
-      return
-    }
-    if (root.needsSetup && (root.setup.fields || []).length === 0) {
-      if (root.setupAction) OmaDigestStore.runIntegrationSetupAction(root.sourceId, root.setupAction)
-      else OmaDigestStore.setupIntegration(root.sourceId, ({}))
-    }
+    if ((root.needsAuthentication || root.needsSetup) && (root.setup.fields || []).length === 0)
+      OmaDigestStore.setupIntegration(root.sourceId, ({}))
   }
 
   function setValue(key, value) {
@@ -181,10 +176,10 @@ Rectangle {
         visible: root.contextActionLabel === ""
         anchors.centerIn: parent
         checked: root.sourceEnabled
-        interactive: !root.isCore
+        interactive: root.configurable
+        opacity: root.configurable ? 1 : 0.55
         foreground: root.foreground
         accent: root.accent
-        opacity: root.isCore ? 0.55 : 1
         onToggled: OmaDigestStore.setIntegrationEnabled(root.sourceId, !root.sourceEnabled)
       }
     }
@@ -266,7 +261,7 @@ Rectangle {
         fontSize: Style.font.caption
         bordered: true
         focusable: true
-        enabled: !root.isCore && !root.checking
+        enabled: !root.checking
         onClicked: OmaDigestStore.checkIntegrationStatus(root.sourceId)
       }
     }
@@ -358,13 +353,13 @@ Rectangle {
     Toggle {
       width: parent.width
       label: "Use in digests"
-      description: root.isCore ? "Built into Omarchy and always available" : "Allow templates to request this source"
+      description: root.isCore ? "Allow templates to request this built-in source" : "Allow templates to request this source"
       foreground: root.foreground
       accent: root.accent
       fontFamily: root.fontFamily
       checked: root.sourceEnabled
-      enabled: !root.isCore
-      opacity: root.isCore ? 0.65 : 1
+      enabled: root.configurable
+      opacity: root.configurable ? 1 : 0.65
       onClicked: OmaDigestStore.setIntegrationEnabled(root.sourceId, !root.sourceEnabled)
     }
 
@@ -392,8 +387,8 @@ Rectangle {
           accent: root.accent
           fontFamily: root.fontFamily
           checked: modelData.enabled === true || (modelData.enabled === undefined && modelData.defaultEnabled === true)
-          enabled: !root.isCore
-          opacity: root.isCore ? 0.65 : 1
+          enabled: root.configurable
+          opacity: root.configurable ? 1 : 0.65
           onClicked: OmaDigestStore.setIntegrationCategoryEnabled(
             root.sourceId, String(modelData.id || ""), !checked)
         }
@@ -433,6 +428,7 @@ Rectangle {
           var permissions = root.integration.permissions || ({})
           var pieces = []
           if ((permissions.networkHosts || []).length) pieces.push("Network: " + permissions.networkHosts.join(", "))
+          if ((permissions.networkSetupFields || []).length) pieces.push("Network: configured " + permissions.networkSetupFields.join(", "))
           if ((permissions.commands || []).length) pieces.push("Commands: " + permissions.commands.join(", "))
           if ((permissions.readPaths || []).length) pieces.push("Reads: " + permissions.readPaths.join(", "))
           if ((permissions.writePaths || []).length) pieces.push("Writes: " + permissions.writePaths.join(", "))

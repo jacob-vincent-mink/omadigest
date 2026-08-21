@@ -10,7 +10,19 @@
     "minimumFocusMinutes": 30
   },
   "context": {
-    "connectors": ["notifications"],
+    "connectors": [
+      "notifications",
+      "io.github.jacob-vincent-mink.github",
+      "io.github.jacob-vincent-mink.google-calendar",
+      "io.github.jacob-vincent-mink.linear",
+      "io.github.jacob-vincent-mink.slack",
+      "io.github.jacob-vincent-mink.todoist",
+      "io.github.jacob-vincent-mink.x",
+      "io.github.jacob-vincent-mink.rss",
+      "io.omarchy.crash-reports",
+      "io.omarchy.updates",
+      "io.omarchy.system-telemetry"
+    ],
     "maximumItems": 50,
     "maximumBytes": 60000
   },

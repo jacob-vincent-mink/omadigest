@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { discoverIntegrations, readIntegrationState, setIntegrationCategoryEnabled, setIntegrationEnabled } from "../src/integrations.js";
+import { integrationManifestSchema } from "../src/integration-schema.js";
 
 const temporaryRoots: string[] = [];
 afterEach(() => {
@@ -44,6 +45,23 @@ function createIntegration(root: string, id = "local.calendar", categories?: unk
 }
 
 describe("integrations", () => {
+  it("allows dynamic network access only through declared URL setup fields", () => {
+    const manifest = {
+      schemaVersion: 1, id: "local.feed", name: "Feed", version: "1.0.0", author: "Test",
+      description: "Reads one configured public feed.", entryPoint: "connector.mjs", capabilities: ["sync"],
+      setup: {
+        summary: "Connect a feed.", actionLabel: "Connect",
+        fields: [{ key: "feed_url", label: "Feed URL", type: "url", description: "Public HTTPS feed.", required: true }]
+      },
+      permissions: { networkHosts: [], networkSetupFields: ["feed_url"], commands: [], readPaths: [], writePaths: [] }
+    };
+    expect(integrationManifestSchema.safeParse(manifest).success).toBe(true);
+    expect(integrationManifestSchema.safeParse({
+      ...manifest,
+      setup: { ...manifest.setup, fields: [{ ...manifest.setup.fields[0], type: "secret" }] }
+    }).success).toBe(false);
+  });
+
   it("discovers a valid disabled package", () => {
     const root = temporaryRoot();
     const bundled = join(root, "bundled");

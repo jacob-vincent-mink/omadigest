@@ -12,6 +12,7 @@ test("normalizes bounded GitHub notification metadata", () => {
   assert.deepEqual(items, [{
     id: "github:notification:987",
     connector: "io.github.jacob-vincent-mink.github",
+    category: "reviews",
     kind: "github-notification",
     occurredAt: "2026-08-20T17:30:00.000Z",
     title: "[acme/omadigest] Keep QML presentation-only",
@@ -20,6 +21,14 @@ test("normalizes bounded GitHub notification metadata", () => {
     sensitivity: "work",
     derivedFrom: ["github:notification:987"]
   }]);
+});
+
+test("honors requested GitHub categories", () => {
+  const source = [
+    { id: "review", reason: "review_requested", updated_at: "2026-08-20T17:30:00Z", subject: { title: "Review", type: "PullRequest" }, repository: { full_name: "acme/app" } },
+    { id: "mention", reason: "mention", updated_at: "2026-08-20T17:31:00Z", subject: { title: "Mention", type: "Issue" }, repository: { full_name: "acme/app" } }
+  ];
+  assert.deepEqual(parseNotifications(source, "2026-08-20", "2026-08-21", 50, ["mentions"]).map((item) => item.category), ["mentions"]);
 });
 
 test("drops malformed and out-of-window notifications", () => {

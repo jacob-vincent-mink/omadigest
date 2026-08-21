@@ -7,6 +7,10 @@
   "description": "Adds bounded upcoming-event context from a private Google Calendar iCal address.",
   "entryPoint": "connector.mjs",
   "capabilities": ["sync", "open"],
+  "categories": [
+    { "id": "timed-events", "label": "Timed events", "description": "Meetings and other events with a specific start time.", "defaultEnabled": true },
+    { "id": "all-day-events", "label": "All-day events", "description": "All-day calendar entries and reminders.", "defaultEnabled": true }
+  ],
   "setup": {
     "summary": "Paste the Secret address in iCal format from Google Calendar settings. OmaDigest stores it in Secret Service and never sends it to the digest model.",
     "fields": [

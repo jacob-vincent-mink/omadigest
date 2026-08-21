@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { loadTemplates } from "./templates.js";
 import { selectTemplate } from "./selector.js";
-import { discoverIntegrations, integrationConfigRoot, setIntegrationCategoryEnabled, setIntegrationEnabled } from "./integrations.js";
+import { discoverIntegrations, integrationConfigRoot, readIntegrationState, setIntegrationCategoryEnabled, setIntegrationEnabled } from "./integrations.js";
 import { IntegrationRuntime } from "./integration-runtime.js";
 import { agentConnectionStatus, discoverAgentAuthMethods, loginAgentProvider, runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
 import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
@@ -20,6 +20,14 @@ import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
 import { launchHerdrHandoff } from "./herdr.js";
 import { clearUserIntegrations, clearUserTemplates } from "./data-management.js";
 import { installAuthoringSkillLinks } from "./skill-install.js";
+import {
+  collectNativeSourceItems,
+  NATIVE_SOURCE_CATALOG,
+  NativeSourceStore,
+  nativeSourceStatus,
+  sampleNativeTelemetry,
+  type TelemetrySnapshot
+} from "./native-sources.js";
 import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration, type SourceStatus } from "./types.js";
 
 const contextSchema = z.object({
@@ -153,6 +161,9 @@ const integrationRoots = {
   user: resolve(configRoot, "integrations"),
   state: resolve(configRoot, "integration-state.json")
 };
+const nativeSourceStore = new NativeSourceStore(configRoot);
+let nativeSourceState = nativeSourceStore.read();
+let nativeSourceSampling = false;
 
 type AuthFlow = {
   id: string;
@@ -167,7 +178,7 @@ function publicTemplates() {
 }
 
 function publicIntegrations(): PublicIntegration[] {
-  return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
+  const connectors: PublicIntegration[] = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
     .map(({ manifest, source, enabled, categories }) => ({
       id: manifest.id,
       name: manifest.name,
@@ -179,9 +190,81 @@ function publicIntegrations(): PublicIntegration[] {
       categories,
       capabilities: manifest.capabilities,
       setup: manifest.setup,
-      permissions: manifest.permissions
+      permissions: { ...manifest.permissions, networkSetupFields: manifest.permissions.networkSetupFields ?? [] }
     }));
+  return [...publicNativeSources(), ...connectors]
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
+
+function publicNativeSources(): PublicIntegration[] {
+  const state = readIntegrationState(integrationRoots.state);
+  return NATIVE_SOURCE_CATALOG.map((definition) => {
+    const saved = state.sources[definition.id];
+    const probed = nativeSourceStatus(definition.id);
+    return {
+      id: definition.id,
+      name: definition.name,
+      version: "1.0.0",
+      description: definition.description,
+      source: "core" as const,
+      enabled: saved?.enabled ?? false,
+      status: sourceStatuses.get(definition.id) ?? {
+        state: probed.ready ? "ready" as const : "error" as const,
+        message: probed.message
+      },
+      categories: definition.categories.map((category) => ({
+        ...category,
+        enabled: saved?.categories[category.id] ?? category.defaultEnabled
+      })),
+      capabilities: ["sync"],
+      setup: { summary: definition.description, fields: [], actionLabel: "Refresh" },
+      permissions: { networkHosts: [], networkSetupFields: [], commands: [], readPaths: [], writePaths: [] }
+    };
+  });
+}
+
+function enabledNativeCategories(connectors: string[], requested: Record<string, string[]> | undefined): Record<string, string[]> {
+  const allowed = new Set(connectors.slice(0, 16));
+  const result: Record<string, string[]> = {};
+  for (const source of publicNativeSources()) {
+    if (!source.enabled || !allowed.has(source.id)) continue;
+    const requestedSet = requested?.[source.id] === undefined ? undefined : new Set(requested[source.id]?.slice(0, 32));
+    const categories = source.categories.filter((category) => category.enabled && (requestedSet === undefined || requestedSet.has(category.id)))
+      .map((category) => category.id);
+    if (categories.length > 0) result[source.id] = categories;
+  }
+  return result;
+}
+
+async function recordNativeTelemetry(): Promise<void> {
+  if (nativeSourceSampling) return;
+  const telemetry = publicNativeSources().find((source) => source.id === "io.omarchy.system-telemetry");
+  if (telemetry?.enabled !== true || !telemetry.categories.some((category) => category.enabled && ["power", "battery", "network"].includes(category.id))) return;
+  nativeSourceSampling = true;
+  try {
+    const sampled = await sampleNativeTelemetry(nativeSourceState.snapshot);
+    if (sampled.events.length > 0 || !sameTelemetryState(nativeSourceState.snapshot, sampled.snapshot)) {
+      nativeSourceStore.write({ version: 1, snapshot: sampled.snapshot, events: [...nativeSourceState.events, ...sampled.events] });
+      nativeSourceState = nativeSourceStore.read();
+    }
+  } finally {
+    nativeSourceSampling = false;
+  }
+}
+
+function sameTelemetryState(left: TelemetrySnapshot | undefined, right: TelemetrySnapshot): boolean {
+  return left !== undefined && left.onBattery === right.onBattery && batteryStateBand(left.batteryPercent) === batteryStateBand(right.batteryPercent)
+    && left.batteryState === right.batteryState && left.networkState === right.networkState;
+}
+
+function batteryStateBand(percent: number | undefined): number {
+  if (percent === undefined) return -1;
+  return percent <= 10 ? 2 : percent <= 20 ? 1 : 0;
+}
+
+void recordNativeTelemetry();
+const nativeSourceSampler = setInterval(() => { void recordNativeTelemetry(); }, 15_000);
+nativeSourceSampler.unref();
 
 function emit(event: BrokerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
@@ -362,6 +445,10 @@ async function handle(raw: string): Promise<boolean> {
       }
       if (deleteAll) attention.clear();
       else if (command.target === "notification-history") attention.clearNotifications();
+      if (deleteAll || command.target === "notification-history") {
+        nativeSourceStore.clear();
+        nativeSourceState = { version: 1, events: [] };
+      }
 
       if (deleteAll || command.target === "integrations") {
         const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
@@ -400,14 +487,25 @@ async function handle(raw: string): Promise<boolean> {
       const template = templates.find((candidate) => candidate.manifest.id === selectedId);
       if (template === undefined) throw new Error("The selected digest template is unavailable");
       const now = new Date(command.context.now);
-      const connectorItems = await integrationRuntime.sync(
-        discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state),
-        template.manifest.context.connectors.filter((connector) => connector !== "notifications"),
-        template.manifest.context.connectorCategories,
-        new Date(now.getTime() - 86_400_000).toISOString(),
-        new Date(now.getTime() + 7 * 86_400_000).toISOString()
-      );
-      attention.ingest(connectorItems);
+      const since = new Date(now.getTime() - 86_400_000);
+      const until = new Date(now.getTime() + 7 * 86_400_000);
+      const requestedConnectors = template.manifest.context.connectors.filter((connector) => connector !== "notifications");
+      const [connectorItems, nativeItems] = await Promise.all([
+        integrationRuntime.sync(
+          discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state),
+          requestedConnectors,
+          template.manifest.context.connectorCategories,
+          since.toISOString(),
+          until.toISOString()
+        ),
+        collectNativeSourceItems(
+          enabledNativeCategories(requestedConnectors, template.manifest.context.connectorCategories),
+          since,
+          until,
+          nativeSourceState
+        )
+      ]);
+      attention.ingest([...connectorItems, ...nativeItems]);
       const pendingItems = attention.pending(template.manifest.context.maximumItems);
       const items = privacy.evidenceForDigest(pendingItems);
       const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
@@ -626,6 +724,21 @@ async function handle(raw: string): Promise<boolean> {
   }
 
   if (command.type === "integration_status") {
+    const native = NATIVE_SOURCE_CATALOG.find((candidate) => candidate.id === command.integrationId);
+    if (native !== undefined) {
+      const checking: SourceStatus = { state: "checking", message: "Checking source status…" };
+      rememberSourceStatus(command.integrationId, checking);
+      emitStatus("integration_status", command.id, command.integrationId, checking);
+      const probed = nativeSourceStatus(command.integrationId);
+      const status: SourceStatus = {
+        state: probed.ready ? "ready" : "error",
+        message: probed.message,
+        checkedAt: new Date().toISOString()
+      };
+      rememberSourceStatus(command.integrationId, status);
+      emitStatus("integration_status", command.id, command.integrationId, status);
+      return true;
+    }
     const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
     const integration = discovered.find((candidate) => candidate.manifest.id === command.integrationId);
     if (integration === undefined) {
@@ -644,13 +757,17 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "integration_set_category_enabled") {
     const integration = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state)
       .find((candidate) => candidate.manifest.id === command.integrationId);
-    if (integration === undefined || !integration.categories.some((category) => category.id === command.categoryId)) {
+    const native = NATIVE_SOURCE_CATALOG.find((candidate) => candidate.id === command.integrationId);
+    const hasCategory = integration?.categories.some((category) => category.id === command.categoryId)
+      || native?.categories.some((category) => category.id === command.categoryId);
+    if (!hasCategory) {
       emit({ type: "error", id: command.id, code: "integration_category_unavailable", message: "That source category is unavailable." });
       return true;
     }
     try {
       setIntegrationCategoryEnabled(integrationRoots.state, command.integrationId, command.categoryId, command.enabled);
       emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
+      if (native !== undefined) void recordNativeTelemetry();
     } catch (error) {
       emit({ type: "error", id: command.id, code: "integration_state_failed", message: boundedMessage(error, "The category setting could not be saved.") });
     }
@@ -665,16 +782,25 @@ async function handle(raw: string): Promise<boolean> {
     }
     try {
       if (command.enabled) {
-        const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
-        const target = discovered.find((integration) => integration.manifest.id === command.integrationId);
-        if (target === undefined) throw new Error("That integration is unavailable");
-        const status = await integrationRuntime.status(target);
-        rememberSourceStatus(command.integrationId, status);
-        if (status.state !== "ready") throw new Error(status.message || "Set up this integration before enabling it");
+        const native = NATIVE_SOURCE_CATALOG.find((candidate) => candidate.id === command.integrationId);
+        if (native !== undefined) {
+          const probed = nativeSourceStatus(native.id);
+          if (!probed.ready) throw new Error(probed.message);
+          rememberSourceStatus(native.id, { state: "ready", message: probed.message, checkedAt: new Date().toISOString() });
+        } else {
+          const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
+          const target = discovered.find((integration) => integration.manifest.id === command.integrationId);
+          if (target === undefined) throw new Error("That integration is unavailable");
+          const status = await integrationRuntime.status(target);
+          rememberSourceStatus(command.integrationId, status);
+          if (status.state !== "ready") throw new Error(status.message || "Set up this integration before enabling it");
+        }
       }
       setIntegrationEnabled(integrationRoots.state, command.integrationId, command.enabled);
       emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
+      void recordNativeTelemetry();
     } catch (error) {
+      emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
       emit({
         type: "error",
         id: command.id,

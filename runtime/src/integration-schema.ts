@@ -42,10 +42,20 @@ export const integrationManifestSchema = z.object({
   }).strict(),
   permissions: z.object({
     networkHosts: z.array(z.string().regex(/^[a-z0-9.-]+(?::\d+)?$/)).max(32),
+    networkSetupFields: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)).max(8).optional(),
     commands: z.array(z.string().regex(/^[a-zA-Z0-9._+-]+$/)).max(16),
     readPaths: z.array(z.string().min(1).max(500)).max(32),
     writePaths: z.array(z.string().min(1).max(500)).max(16)
   }).strict()
-}).strict();
+}).strict().superRefine((manifest, context) => {
+  for (const [index, key] of (manifest.permissions.networkSetupFields ?? []).entries()) {
+    const field = manifest.setup.fields.find((candidate) => candidate.key === key);
+    if (field?.type !== "url") context.addIssue({
+      code: "custom",
+      path: ["permissions", "networkSetupFields", index],
+      message: "Dynamic network permissions must reference a declared URL setup field"
+    });
+  }
+});
 
 export type IntegrationManifest = z.infer<typeof integrationManifestSchema>;

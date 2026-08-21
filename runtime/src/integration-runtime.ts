@@ -224,6 +224,8 @@ function boundEvidence(value: unknown, fallback: string): string {
 
 async function callConnector(integration: DiscoveredIntegration, request: Record<string, unknown>): Promise<Record<string, any>> {
   const commandEnvironment = await connectorCommandEnvironment(integration);
+  const hasNetworkPermission = integration.manifest.permissions.networkHosts.length > 0
+    || (integration.manifest.permissions.networkSetupFields ?? []).length > 0;
   return new Promise((resolveCall, rejectCall) => {
     const args = [
       "--die-with-parent", "--unshare-all",
@@ -242,13 +244,13 @@ async function callConnector(integration: DiscoveredIntegration, request: Record
       args.push("--ro-bind", executable, `/commands/${command}`);
     }
     for (const [key, value] of Object.entries(commandEnvironment)) args.push("--setenv", key, value);
-    if (integration.manifest.permissions.networkHosts.length > 0) {
+    if (hasNetworkPermission) {
       args.push("--share-net");
       if (existsSync("/run/systemd/resolve"))
         args.push("--dir", "/run", "--ro-bind", "/run/systemd/resolve", "/run/systemd/resolve");
     }
     args.push("/usr/bin/node", "--permission", "--allow-fs-read=/integration");
-    if (integration.manifest.permissions.networkHosts.length > 0) args.push("--allow-net");
+    if (hasNetworkPermission) args.push("--allow-net");
     if (integration.manifest.permissions.commands.length > 0) args.push("--allow-child-process");
     args.push(`/integration/${integration.manifest.entryPoint}`);
     const child = spawn("bwrap", args, {

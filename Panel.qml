@@ -262,9 +262,9 @@ Panel {
   }
 
   function omarchySources() {
-    return [
+    var builtIn = [
       {
-        id: "omarchy.notifications", name: "Notifications", kind: "core", enabled: true,
+        id: "omarchy.notifications", name: "Notifications", kind: "core", enabled: true, configurable: false,
         description: "Privacy-filtered evidence from Omarchy notifications.",
         status: {
           state: root.notificationService ? "green" : "red",
@@ -278,7 +278,7 @@ Panel {
         permissions: {}
       },
       {
-        id: "omarchy.focus", name: "Focus / DND", kind: "core", enabled: true,
+        id: "omarchy.focus", name: "Focus / DND", kind: "core", enabled: true, configurable: false,
         description: "Focus re-entry timing and digest triggers.",
         status: {
           state: root.notificationService ? "green" : "yellow",
@@ -292,11 +292,15 @@ Panel {
         permissions: {}
       }
     ]
+    var integrations = OmaDigest.OmaDigestStore.integrations || []
+    for (var index = 0; index < integrations.length; index++)
+      if (String(integrations[index].source || "") === "core") builtIn.push(integrations[index])
+    return builtIn
   }
 
   function connectedServiceSources() {
     return (OmaDigest.OmaDigestStore.integrations || []).filter(function(source) {
-      return String(source.kind || source.sourceKind || "connector") !== "core"
+      return String(source.kind || source.sourceKind || (source.source === "core" ? "core" : "connector")) !== "core"
     })
   }
 
@@ -385,8 +389,9 @@ Panel {
     }
 
     function onIntegrationsChanged() {
-      if (!root.selectedSource || String(root.selectedSource.kind || root.selectedSource.sourceKind || "") === "core") return
+      if (!root.selectedSource) return
       var wanted = String(root.selectedSource.id || "")
+      if (wanted === "omarchy.notifications" || wanted === "omarchy.focus") return
       var available = OmaDigest.OmaDigestStore.integrations || []
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id || "") !== wanted) continue

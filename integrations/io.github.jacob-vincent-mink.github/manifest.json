@@ -7,6 +7,14 @@
   "description": "Adds bounded unread GitHub notification context through your existing GitHub CLI session.",
   "entryPoint": "connector.mjs",
   "capabilities": ["sync", "open"],
+  "categories": [
+    { "id": "reviews", "label": "Review requests", "description": "Pull-request review requests and review activity.", "defaultEnabled": true },
+    { "id": "mentions", "label": "Mentions", "description": "Direct and team mentions in GitHub threads.", "defaultEnabled": true },
+    { "id": "assignments", "label": "Assignments", "description": "Issues and pull requests assigned to you.", "defaultEnabled": true },
+    { "id": "ci-security", "label": "CI and security", "description": "Check-run activity and security alerts.", "defaultEnabled": true },
+    { "id": "participating", "label": "Participating threads", "description": "Comments and state changes on threads you follow.", "defaultEnabled": true },
+    { "id": "invitations", "label": "Invitations", "description": "Repository invitations and access-related activity.", "defaultEnabled": true }
+  ],
   "setup": {
     "summary": "Uses the active gh login. OmaDigest never stores the GitHub token and only imports bounded notification metadata.",
     "fields": [],

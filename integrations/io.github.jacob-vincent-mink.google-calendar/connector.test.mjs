@@ -18,7 +18,13 @@ test("parses bounded calendar events", () => {
   assert.equal(events[0].uid, "abc123");
   assert.equal(events[0].summary, "Design, review");
   assert.equal(events[0].start.toISOString(), "2026-08-20T09:00:00.000Z");
+  assert.equal(events[0].allDay, false);
   assert.equal(events[0].url, "https://calendar.google.com/event");
+});
+
+test("classifies all-day events separately", () => {
+  const events = parseIcs("BEGIN:VEVENT\r\nUID:day\r\nDTSTART;VALUE=DATE:20260821\r\nSUMMARY:Offsite\r\nEND:VEVENT");
+  assert.equal(events[0].allDay, true);
 });
 
 test("ignores malformed events", () => {

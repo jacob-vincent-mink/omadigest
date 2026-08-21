@@ -13825,11 +13825,21 @@ var integrationManifestSchema = external_exports.object({
   }).strict(),
   permissions: external_exports.object({
     networkHosts: external_exports.array(external_exports.string().regex(/^[a-z0-9.-]+(?::\d+)?$/)).max(32),
+    networkSetupFields: external_exports.array(external_exports.string().regex(/^[a-z][a-z0-9_]{0,63}$/)).max(8).optional(),
     commands: external_exports.array(external_exports.string().regex(/^[a-zA-Z0-9._+-]+$/)).max(16),
     readPaths: external_exports.array(external_exports.string().min(1).max(500)).max(32),
     writePaths: external_exports.array(external_exports.string().min(1).max(500)).max(16)
   }).strict()
-}).strict();
+}).strict().superRefine((manifest, context) => {
+  for (const [index, key] of (manifest.permissions.networkSetupFields ?? []).entries()) {
+    const field = manifest.setup.fields.find((candidate) => candidate.key === key);
+    if (field?.type !== "url") context.addIssue({
+      code: "custom",
+      path: ["permissions", "networkSetupFields", index],
+      message: "Dynamic network permissions must reference a declared URL setup field"
+    });
+  }
+});
 
 // runtime/src/integration-package-validation.ts
 import { execFileSync } from "node:child_process";

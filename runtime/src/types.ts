@@ -90,7 +90,7 @@ export type PublicIntegration = {
   name: string;
   version: string;
   description: string;
-  source: "bundled" | "user";
+  source: "core" | "bundled" | "user";
   enabled: boolean;
   status: SourceStatus;
   categories: PublicSourceCategory[];
@@ -100,7 +100,7 @@ export type PublicIntegration = {
     fields: Array<{ key: string; label: string; type: "string" | "secret" | "url" | "boolean"; description: string; required: boolean }>;
     actionLabel: string;
   };
-  permissions: { networkHosts: string[]; commands: string[]; readPaths: string[]; writePaths: string[] };
+  permissions: { networkHosts: string[]; networkSetupFields: string[]; commands: string[]; readPaths: string[]; writePaths: string[] };
 };
 
 export type SourceStatusState = "unknown" | "checking" | "ready" | "authentication-required" | "setup-required" | "error";

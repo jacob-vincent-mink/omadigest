@@ -30,7 +30,7 @@ The manifest declares:
 - one `.mjs` entry point;
 - `sync`, `resolve`, and/or `open` capabilities;
 - setup fields rendered by OmaDigest settings;
-- every network host, external command, read path, and write path.
+- every static network host, validated URL setup field used as a dynamic host, external command, read path, and write path.
 
 Secret setup fields go to Secret Service. Ordinary fields are written mode `0600` below the OmaDigest configuration root. Neither is stored in the package.
 
@@ -49,7 +49,7 @@ The runtime supplies:
 - 128 KiB output limit;
 - schema validation of returned context.
 
-Bubblewrap and Node's permission model are defense in depth, not a complete malicious-code proof. Network permission is currently process-wide once declared; the runtime independently reviews URLs and connector schemas but cannot enforce a hostname-only kernel policy. Generated code therefore still requires human review. `gh` is the only supported external command and receives broker-controlled authentication; declared host-path mounts remain unsupported.
+Bubblewrap and Node's permission model are defense in depth, not a complete malicious-code proof. Network permission is currently process-wide once declared; the runtime independently reviews URLs and connector schemas but cannot enforce a hostname-only kernel policy. A connector with a user-configured public HTTPS endpoint declares the corresponding URL field in `networkSetupFields` and must reject credentials, redirects, and private or local addresses before fetching. Generated code therefore still requires human review. `gh` is the only supported external command and receives broker-controlled authentication; declared host-path mounts remain unsupported.
 
 ## Setup
 

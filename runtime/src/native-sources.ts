@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   renameSync,
   statSync,
   statfsSync,
@@ -137,6 +138,24 @@ export class NativeSourceStore {
     writeFileSync(temporary, serialized, { mode: 0o600 });
     renameSync(temporary, this.#path);
   }
+
+  clear(): void { rmSync(this.#path, { force: true }); }
+}
+
+export function nativeSourceStatus(id: string): { ready: boolean; message: string } {
+  if (id === "io.omarchy.crash-reports")
+    return existsSync(CRASH_COMMAND)
+      ? { ready: true, message: "System crash metadata is available" }
+      : { ready: false, message: "systemd crash metadata is unavailable" };
+  if (id === "io.omarchy.updates")
+    return existsSync(UPDATE_COMMAND)
+      ? { ready: true, message: "Omarchy update checks are available" }
+      : { ready: false, message: "The Omarchy update checker is unavailable" };
+  if (id === "io.omarchy.system-telemetry")
+    return existsSync(POWER_ROOT) || existsSync(SYSTEMCTL_COMMAND)
+      ? { ready: true, message: "Local system telemetry is available" }
+      : { ready: false, message: "Local system telemetry is unavailable" };
+  return { ready: false, message: "That Omarchy source is unavailable" };
 }
 
 export async function sampleNativeTelemetry(

@@ -31,14 +31,15 @@ async function handle(request) {
   try { parsed = JSON.parse(raw); }
   catch { throw new ConnectorError("source_invalid", "GitHub returned invalid notification data."); }
   if (!Array.isArray(parsed)) throw new ConnectorError("source_invalid", "GitHub returned invalid notification data.");
-  const items = parseNotifications(parsed, request.since, request.until, limit);
+  const items = parseNotifications(parsed, request.since, request.until, limit, request.categories);
   emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
   return true;
 }
 
-export function parseNotifications(values, sinceValue, untilValue, limit = 50) {
+export function parseNotifications(values, sinceValue, untilValue, limit = 50, requestedCategories) {
   const since = boundary(sinceValue, new Date(0));
   const until = boundary(untilValue, new Date(8_640_000_000_000_000));
+  const categories = requestedCategorySet(requestedCategories, ["reviews", "mentions", "assignments", "ci-security", "participating", "invitations"]);
   return values.flatMap((notification) => {
     const id = bounded(notification?.id, 180);
     const updated = new Date(notification?.updated_at || "");
@@ -47,10 +48,13 @@ export function parseNotifications(values, sinceValue, untilValue, limit = 50) {
     if (!id || !repository || !subject || Number.isNaN(updated.getTime()) || updated < since || updated > until) return [];
     const type = subjectType(notification?.subject?.type);
     const reason = reasonLabel(notification?.reason);
+    const category = reasonCategory(notification?.reason);
+    if (!categories.has(category)) return [];
     const url = apiUrlToWebUrl(notification?.subject?.url, notification?.repository?.html_url);
     return [{
       id: `github:notification:${id}`,
       connector: CONNECTOR_ID,
+      category,
       kind: "github-notification",
       occurredAt: updated.toISOString(),
       title: bounded(`[${repository}] ${subject}`, 2_000),
@@ -96,6 +100,19 @@ function reasonLabel(value) {
     state_change: "State changed", subscribed: "Watching this thread", team_mention: "Your team was mentioned"
   };
   return labels[String(value || "")] || "GitHub update";
+}
+function reasonCategory(value) {
+  const reason = String(value || "");
+  if (reason === "review_requested") return "reviews";
+  if (reason === "mention" || reason === "team_mention") return "mentions";
+  if (reason === "assign") return "assignments";
+  if (reason === "ci_activity" || reason === "security_alert") return "ci-security";
+  if (reason === "invitation") return "invitations";
+  return "participating";
+}
+function requestedCategorySet(value, defaults) {
+  if (!Array.isArray(value)) return new Set(defaults);
+  return new Set(value.filter((category) => defaults.includes(category)).slice(0, defaults.length));
 }
 function subjectType(value) {
   const labels = { PullRequest: "Pull request", Issue: "Issue", Release: "Release", Discussion: "Discussion", CheckSuite: "Check run" };

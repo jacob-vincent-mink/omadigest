@@ -8785,8 +8785,8 @@ function getBunSandboxEnvValue(name) {
   if (procEnvCache === null) {
     procEnvCache = /* @__PURE__ */ new Map();
     try {
-      const { readFileSync: readFileSync28 } = __require("node:fs");
-      const data = readFileSync28("/proc/self/environ", "utf-8");
+      const { readFileSync: readFileSync29 } = __require("node:fs");
+      const data = readFileSync29("/proc/self/environ", "utf-8");
       for (const entry of data.split("\0")) {
         const idx = entry.indexOf("=");
         if (idx > 0) {
@@ -24712,11 +24712,11 @@ var require_ponyfill_es2018 = __commonJS({
           throw new TypeError(`${context} is not a function.`);
         }
       }
-      function isObject8(x4) {
+      function isObject9(x4) {
         return typeof x4 === "object" && x4 !== null || typeof x4 === "function";
       }
       function assertObject(x4, context) {
-        if (!isObject8(x4)) {
+        if (!isObject9(x4)) {
           throw new TypeError(`${context} is not an object.`);
         }
       }
@@ -30919,7 +30919,7 @@ var require_gaxios = __commonJS({
     var retry_js_1 = require_retry3();
     var stream_1 = __require("stream");
     var interceptor_js_1 = require_interceptor();
-    var randomUUID17 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
+    var randomUUID18 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
     var HTTP_STATUS_NO_CONTENT = 204;
     var Gaxios = class {
       agentCache = /* @__PURE__ */ new Map();
@@ -31192,7 +31192,7 @@ var require_gaxios = __commonJS({
          */
         ["Blob", "File", "FormData"].includes(opts.data?.constructor?.name || "");
         if (opts.multipart?.length) {
-          const boundary = await randomUUID17();
+          const boundary = await randomUUID18();
           preparedHeaders.set("content-type", `multipart/related; boundary=${boundary}`);
           opts.body = stream_1.Readable.from(this.getMultipartRequest(opts.multipart, boundary));
         } else if (shouldDirectlyPassData) {
@@ -36219,11 +36219,11 @@ var require_verify_stream = __commonJS({
     var toString2 = require_tostring();
     var util = __require("util");
     var JWS_REGEX = /^[a-zA-Z0-9\-_]+?\.[a-zA-Z0-9\-_]+?\.([a-zA-Z0-9\-_]+)?$/;
-    function isObject8(thing) {
+    function isObject9(thing) {
       return Object.prototype.toString.call(thing) === "[object Object]";
     }
     function safeJsonParse(thing) {
-      if (isObject8(thing))
+      if (isObject9(thing))
         return thing;
       try {
         return JSON.parse(thing);
@@ -67708,7 +67708,7 @@ var require_core = __commonJS({
       return match2 && match2.index === 0;
     }
     var BACKREF_RE = /\[(?:[^\\\]]|\\.)*\]|\(\??|\\([1-9][0-9]*)|\\./;
-    function join52(regexps, separator = "|") {
+    function join53(regexps, separator = "|") {
       let numCaptures = 0;
       return regexps.map((regex2) => {
         numCaptures += 1;
@@ -68012,7 +68012,7 @@ var require_core = __commonJS({
             this.exec = () => null;
           }
           const terminators = this.regexes.map((el) => el[1]);
-          this.matcherRe = langRe(join52(terminators), true);
+          this.matcherRe = langRe(join53(terminators), true);
           this.lastIndex = 0;
         }
         /** @param {string} s */
@@ -114488,7 +114488,7 @@ var require_jiti = __commonJS({
         }, pathe_M_eThtNZ_dirname = function(e4) {
           const t4 = pathe_M_eThtNZ_normalizeWindowsPath(e4).replace(/\/$/, "").split("/").slice(0, -1);
           return 1 === t4.length && Je3.test(t4[0]) && (t4[0] += "/"), t4.join("/") || (isAbsolute6(e4) ? "/" : ".");
-        }, basename16 = function(e4, t4) {
+        }, basename17 = function(e4, t4) {
           const i3 = pathe_M_eThtNZ_normalizeWindowsPath(e4).split("/");
           let n8 = "";
           for (let e5 = i3.length - 1; e5 >= 0; e5--) {
@@ -115209,7 +115209,7 @@ Default "index" lookups for the main are deprecated for ES modules.`, "Deprecati
           if (!e4.opts.fsCache || !t4.filename) return i3();
           const n8 = ` /* v${Ti2}-${utils_hash(t4.source, 16)} */
 `;
-          let a2 = `${basename16(pathe_M_eThtNZ_dirname(t4.filename))}-${(function(e5) {
+          let a2 = `${basename17(pathe_M_eThtNZ_dirname(t4.filename))}-${(function(e5) {
             const t5 = e5.split(Wt3).pop();
             if (!t5) return;
             const i4 = t5.lastIndexOf(".");
@@ -115255,7 +115255,7 @@ Default "index" lookups for the main are deprecated for ES modules.`, "Deprecati
           return i3.startsWith("#!") && (i3 = "// " + i3), i3;
         }
         function eval_evalModule(t4, i3, n8 = {}) {
-          const a2 = n8.id || (n8.filename ? basename16(n8.filename) : `_jitiEval.${n8.ext || (n8.async ? "mjs" : "js")}`), c2 = n8.filename || jitiResolve(t4, a2, { async: n8.async }), l4 = n8.ext || extname2(c2), y3 = n8.cache || t4.parentCache || {}, E3 = /\.[cm]?tsx?$/.test(l4), w3 = ".mjs" === l4 || ".js" === l4 && "module" === (function(e4) {
+          const a2 = n8.id || (n8.filename ? basename17(n8.filename) : `_jitiEval.${n8.ext || (n8.async ? "mjs" : "js")}`), c2 = n8.filename || jitiResolve(t4, a2, { async: n8.async }), l4 = n8.ext || extname2(c2), y3 = n8.cache || t4.parentCache || {}, E3 = /\.[cm]?tsx?$/.test(l4), w3 = ".mjs" === l4 || ".js" === l4 && "module" === (function(e4) {
             for (; e4 && "." !== e4 && "/" !== e4; ) {
               e4 = pathe_M_eThtNZ_join(e4, "..");
               try {
@@ -115303,7 +115303,7 @@ Default "index" lookups for the main are deprecated for ES modules.`, "Deprecati
                     (0, $e3.mkdirSync)(n10, { recursive: true });
                   } catch {
                   }
-                  const a4 = pathe_M_eThtNZ_join(n10, `${basename16(i7, extname2(i7))}-${Date.now()}-${Math.random().toString(36).slice(2)}.mjs`);
+                  const a4 = pathe_M_eThtNZ_join(n10, `${basename17(i7, extname2(i7))}-${Date.now()}-${Math.random().toString(36).slice(2)}.mjs`);
                   return (0, $e3.writeFileSync)(a4, t6), a4;
                 })(l5, n9), debug(t5, "[esm]", "[tempfile]", c4), a3(pathToFileURL4(c4))), E4 = y4 ? a3(y4).catch((e4) => {
                   if ("ENAMETOOLONG" !== e4?.code) throw e4;
@@ -163316,7 +163316,7 @@ var require_snapshot_recorder = __commonJS({
   "node_modules/@earendil-works/pi-coding-agent/node_modules/undici/lib/mock/snapshot-recorder.js"(exports, module) {
     "use strict";
     var { writeFile: writeFile3, readFile: readFile7, mkdir: mkdir3 } = __require("node:fs/promises");
-    var { dirname: dirname34, resolve: resolve19 } = __require("node:path");
+    var { dirname: dirname35, resolve: resolve19 } = __require("node:path");
     var { setTimeout: setTimeout2, clearTimeout: clearTimeout2 } = __require("node:timers");
     var { InvalidArgumentError, UndiciError } = require_errors2();
     var { hashId, isUrlExcludedFactory, normalizeHeaders, createHeaderFilters } = require_snapshot_utils();
@@ -163562,7 +163562,7 @@ var require_snapshot_recorder = __commonJS({
           throw new InvalidArgumentError("Snapshot path is required");
         }
         const resolvedPath = resolve19(path16);
-        await mkdir3(dirname34(resolvedPath), { recursive: true });
+        await mkdir3(dirname35(resolvedPath), { recursive: true });
         const data = Array.from(this.#snapshots.entries()).map(([hash2, snapshot]) => ({
           hash: hash2,
           snapshot
@@ -175445,9 +175445,9 @@ ${captureLines}` : capture.stack;
 
 // runtime/src/broker.ts
 import { createInterface as createInterface5 } from "node:readline";
-import { execFile as execFile6 } from "node:child_process";
-import { existsSync as existsSync32, readdirSync as readdirSync14, statSync as statSync17 } from "node:fs";
-import { randomUUID as randomUUID16 } from "node:crypto";
+import { execFile as execFile7 } from "node:child_process";
+import { existsSync as existsSync33, readdirSync as readdirSync15, statSync as statSync18 } from "node:fs";
+import { randomUUID as randomUUID17 } from "node:crypto";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 import { resolve as resolve18 } from "node:path";
 
@@ -178432,13 +178432,13 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
     }
     return propValues;
   });
-  const isObject8 = isObject;
+  const isObject9 = isObject;
   const catchall = def.catchall;
   let value2;
   inst._zod.parse = (payload, ctx) => {
     value2 ?? (value2 = _normalized.value);
     const input = payload.value;
-    if (!isObject8(input)) {
+    if (!isObject9(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -178536,7 +178536,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     return (payload, ctx) => fn(shape, payload, ctx);
   };
   let fastpass;
-  const isObject8 = isObject;
+  const isObject9 = isObject;
   const jit = !globalConfig.jitless;
   const allowsEval2 = allowsEval;
   const fastEnabled = jit && allowsEval2.value;
@@ -178545,7 +178545,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
   inst._zod.parse = (payload, ctx) => {
     value2 ?? (value2 = _normalized.value);
     const input = payload.value;
-    if (!isObject8(input)) {
+    if (!isObject9(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -189398,11 +189398,21 @@ var integrationManifestSchema = external_exports.object({
   }).strict(),
   permissions: external_exports.object({
     networkHosts: external_exports.array(external_exports.string().regex(/^[a-z0-9.-]+(?::\d+)?$/)).max(32),
+    networkSetupFields: external_exports.array(external_exports.string().regex(/^[a-z][a-z0-9_]{0,63}$/)).max(8).optional(),
     commands: external_exports.array(external_exports.string().regex(/^[a-zA-Z0-9._+-]+$/)).max(16),
     readPaths: external_exports.array(external_exports.string().min(1).max(500)).max(32),
     writePaths: external_exports.array(external_exports.string().min(1).max(500)).max(16)
   }).strict()
-}).strict();
+}).strict().superRefine((manifest, context) => {
+  for (const [index3, key] of (manifest.permissions.networkSetupFields ?? []).entries()) {
+    const field = manifest.setup.fields.find((candidate) => candidate.key === key);
+    if (field?.type !== "url") context.addIssue({
+      code: "custom",
+      path: ["permissions", "networkSetupFields", index3],
+      message: "Dynamic network permissions must reference a declared URL setup field"
+    });
+  }
+});
 
 // runtime/src/integrations.ts
 var MAX_MANIFEST_BYTES2 = 64 * 1024;
@@ -189734,6 +189744,7 @@ function boundEvidence(value2, fallback) {
 }
 async function callConnector(integration, request) {
   const commandEnvironment = await connectorCommandEnvironment(integration);
+  const hasNetworkPermission = integration.manifest.permissions.networkHosts.length > 0 || (integration.manifest.permissions.networkSetupFields ?? []).length > 0;
   return new Promise((resolveCall, rejectCall) => {
     const args = [
       "--die-with-parent",
@@ -189777,13 +189788,13 @@ async function callConnector(integration, request) {
       args.push("--ro-bind", executable, `/commands/${command}`);
     }
     for (const [key, value2] of Object.entries(commandEnvironment)) args.push("--setenv", key, value2);
-    if (integration.manifest.permissions.networkHosts.length > 0) {
+    if (hasNetworkPermission) {
       args.push("--share-net");
       if (existsSync3("/run/systemd/resolve"))
         args.push("--dir", "/run", "--ro-bind", "/run/systemd/resolve", "/run/systemd/resolve");
     }
     args.push("/usr/bin/node", "--permission", "--allow-fs-read=/integration");
-    if (integration.manifest.permissions.networkHosts.length > 0) args.push("--allow-net");
+    if (hasNetworkPermission) args.push("--allow-net");
     if (integration.manifest.permissions.commands.length > 0) args.push("--allow-child-process");
     args.push(`/integration/${integration.manifest.entryPoint}`);
     const child = spawn("bwrap", args, {
@@ -254663,8 +254674,8 @@ function isDirectoryTarget(originalPath, repositoryPath) {
   if (originalPath.endsWith("/")) {
     return true;
   }
-  const basename16 = path14.posix.basename(repositoryPath);
-  return !basename16.includes(".");
+  const basename17 = path14.posix.basename(repositoryPath);
+  return !basename17.includes(".");
 }
 function normalizeChangelogLinkTarget(target, tag) {
   let canonicalTarget = target.replace(LEGACY_REPO_RE, `https://github.com/${GITHUB_REPO}`);
@@ -280178,6 +280189,398 @@ function installAuthoringSkillLinks(pluginRoot2, env2 = process.env) {
   return destinations;
 }
 
+// runtime/src/native-sources.ts
+import { execFile as execFile6 } from "node:child_process";
+import {
+  existsSync as existsSync32,
+  mkdirSync as mkdirSync22,
+  readFileSync as readFileSync28,
+  readdirSync as readdirSync14,
+  rmSync as rmSync10,
+  renameSync as renameSync11,
+  statSync as statSync17,
+  statfsSync,
+  writeFileSync as writeFileSync20
+} from "node:fs";
+import { basename as basename16, dirname as dirname34, join as join52 } from "node:path";
+import { randomUUID as randomUUID16 } from "node:crypto";
+var CRASH_COMMAND = "/usr/bin/coredumpctl";
+var UPDATE_COMMAND = "/usr/share/omarchy/bin/omarchy-update-available";
+var SYSTEMCTL_COMMAND = "/usr/bin/systemctl";
+var NMCLI_COMMAND = "/usr/bin/nmcli";
+var POWER_ROOT = "/sys/class/power_supply";
+var MAX_COMMAND_BYTES = 256 * 1024;
+var MAX_EVENTS = 256;
+var MAX_STATE_BYTES2 = 256 * 1024;
+var RETENTION_MS = 7 * 864e5;
+var NATIVE_SOURCE_CATALOG = [
+  {
+    id: "io.omarchy.crash-reports",
+    name: "Crash Reports",
+    description: "Summarizes recent application crashes from the local system journal.",
+    categories: [{
+      id: "application-crashes",
+      label: "Application crashes",
+      description: "Program name, signal, process ID, and crash time; never core contents.",
+      defaultEnabled: true
+    }]
+  },
+  {
+    id: "io.omarchy.updates",
+    name: "Omarchy Updates",
+    description: "Reports when an Omarchy update is available.",
+    categories: [{
+      id: "available-updates",
+      label: "Available updates",
+      description: "Bounded package or development-checkout update summaries.",
+      defaultEnabled: true
+    }]
+  },
+  {
+    id: "io.omarchy.system-telemetry",
+    name: "System Telemetry",
+    description: "Local power, storage, network, and service-state signals.",
+    categories: [
+      { id: "power", label: "Power", description: "Charger connect and disconnect transitions.", defaultEnabled: true },
+      { id: "battery", label: "Battery", description: "Low and critical battery threshold transitions.", defaultEnabled: true },
+      { id: "storage", label: "Storage", description: "Low free-space warnings for the root filesystem.", defaultEnabled: true },
+      { id: "network", label: "Network", description: "Connectivity state transitions without network names.", defaultEnabled: false },
+      { id: "failed-services", label: "Failed services", description: "Names of failed user services without journal bodies.", defaultEnabled: true }
+    ]
+  }
+];
+var NativeSourceStore = class {
+  #path;
+  constructor(configRoot2) {
+    this.#path = join52(configRoot2, "native-source-state.json");
+  }
+  read(now = /* @__PURE__ */ new Date()) {
+    try {
+      if (statSync17(this.#path).size > MAX_STATE_BYTES2) return { version: 1, events: [] };
+      const parsed = JSON.parse(readFileSync28(this.#path, "utf8"));
+      if (!isObject8(parsed) || parsed.version !== 1 || !Array.isArray(parsed.events)) return { version: 1, events: [] };
+      const cutoff = now.getTime() - RETENTION_MS;
+      const events = parsed.events.flatMap(parseStoredItem).filter((item) => new Date(item.occurredAt).getTime() >= cutoff).slice(-MAX_EVENTS);
+      const snapshot = parseSnapshot(parsed.snapshot);
+      return { version: 1, ...snapshot ? { snapshot } : {}, events };
+    } catch {
+      return { version: 1, events: [] };
+    }
+  }
+  write(state2, now = /* @__PURE__ */ new Date()) {
+    const cutoff = now.getTime() - RETENTION_MS;
+    const bounded2 = {
+      version: 1,
+      ...state2.snapshot ? { snapshot: state2.snapshot } : {},
+      events: state2.events.filter((item) => new Date(item.occurredAt).getTime() >= cutoff).slice(-MAX_EVENTS)
+    };
+    const serialized = `${JSON.stringify(bounded2, null, 2)}
+`;
+    if (Buffer.byteLength(serialized, "utf8") > MAX_STATE_BYTES2) throw new Error("Native source state is too large");
+    mkdirSync22(dirname34(this.#path), { recursive: true, mode: 448 });
+    const temporary = `${this.#path}.${randomUUID16()}.tmp`;
+    writeFileSync20(temporary, serialized, { mode: 384 });
+    renameSync11(temporary, this.#path);
+  }
+  clear() {
+    rmSync10(this.#path, { force: true });
+  }
+};
+function nativeSourceStatus(id) {
+  if (id === "io.omarchy.crash-reports")
+    return existsSync32(CRASH_COMMAND) ? { ready: true, message: "System crash metadata is available" } : { ready: false, message: "systemd crash metadata is unavailable" };
+  if (id === "io.omarchy.updates")
+    return existsSync32(UPDATE_COMMAND) ? { ready: true, message: "Omarchy update checks are available" } : { ready: false, message: "The Omarchy update checker is unavailable" };
+  if (id === "io.omarchy.system-telemetry")
+    return existsSync32(POWER_ROOT) || existsSync32(SYSTEMCTL_COMMAND) ? { ready: true, message: "Local system telemetry is available" } : { ready: false, message: "Local system telemetry is unavailable" };
+  return { ready: false, message: "That Omarchy source is unavailable" };
+}
+async function sampleNativeTelemetry(previous, dependencies = systemDependencies) {
+  const now = dependencies.now();
+  const supplies = parsePowerSupplies(dependencies.readPowerSupplies());
+  const network = await readNetworkState(dependencies);
+  const snapshot = {
+    capturedAt: now.toISOString(),
+    ...supplies.onBattery === void 0 ? {} : { onBattery: supplies.onBattery },
+    ...supplies.batteryPercent === void 0 ? {} : { batteryPercent: supplies.batteryPercent },
+    ...supplies.batteryState === void 0 ? {} : { batteryState: supplies.batteryState },
+    ...network === void 0 ? {} : { networkState: network }
+  };
+  return { snapshot, events: deriveTelemetryEvents(previous, snapshot) };
+}
+async function collectNativeSourceItems(enabled, since, until, stored, dependencies = systemDependencies) {
+  const results = stored.events.filter((item) => categoryEnabled(enabled, item.source, item.category) && within(item.occurredAt, since, until));
+  if (categoryEnabled(enabled, "io.omarchy.crash-reports", "application-crashes")) {
+    const response = await dependencies.run(CRASH_COMMAND, [
+      "--no-pager",
+      "--no-legend",
+      `--since=${since.toISOString()}`,
+      `--until=${until.toISOString()}`,
+      "--json=short"
+    ]);
+    if (response.code === 0) results.push(...parseCoredumps(response.stdout, since, until));
+  }
+  if (categoryEnabled(enabled, "io.omarchy.updates", "available-updates")) {
+    const response = await dependencies.run(UPDATE_COMMAND, []);
+    results.push(...parseOmarchyUpdates(response.stdout, response.code, dependencies.now()));
+  }
+  if (categoryEnabled(enabled, "io.omarchy.system-telemetry", "storage")) {
+    results.push(...storageWarning(dependencies.rootDisk(), dependencies.now()));
+  }
+  if (categoryEnabled(enabled, "io.omarchy.system-telemetry", "failed-services")) {
+    const response = await dependencies.run(SYSTEMCTL_COMMAND, ["--user", "--failed", "--no-legend", "--plain"]);
+    if (response.code === 0) results.push(...parseFailedServices(response.stdout, dependencies.now()));
+  }
+  return deduplicate(results).filter((item) => within(item.occurredAt, since, until)).slice(0, 200);
+}
+function parseCoredumps(raw, since = /* @__PURE__ */ new Date(0), until = /* @__PURE__ */ new Date(864e13)) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+  return values.flatMap((value2) => {
+    if (!isObject8(value2)) return [];
+    const occurredAt = coredumpTime(value2.time);
+    if (occurredAt === void 0 || !within(occurredAt, since, until)) return [];
+    const executable = bounded(basename16(String(value2.exe || "")), 120) || "Application";
+    const pid = bounded(value2.pid, 20);
+    const signal = bounded(value2.sig, 8);
+    if (pid === "") return [];
+    return [{
+      id: `omarchy:crash:${pid}:${occurredAt}`,
+      source: "io.omarchy.crash-reports",
+      category: "application-crashes",
+      app: "Crash Reports",
+      title: `${executable} crashed`,
+      body: bounded(`${signalName(signal)}${pid ? ` \xB7 PID ${pid}` : ""}`, 300),
+      urgency: "normal",
+      occurredAt
+    }];
+  }).sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)).slice(0, 50);
+}
+function parseOmarchyUpdates(raw, exitCode, now) {
+  if (exitCode !== 0) return [];
+  const lines = raw.split(/\r?\n/u).map((line) => bounded(line, 300)).filter((line) => line !== "" && line !== "Omarchy is up to date").slice(0, 20);
+  if (lines.length === 0) return [];
+  const occurredAt = now.toISOString();
+  return [{
+    id: `omarchy:update:${dayKey(now)}:${stableHash(lines.join("\n"))}`,
+    source: "io.omarchy.updates",
+    category: "available-updates",
+    app: "Omarchy Updates",
+    title: lines.length === 1 ? "Omarchy update available" : `${lines.length} Omarchy updates available`,
+    body: bounded(lines.join(" \xB7 "), 1500),
+    urgency: "normal",
+    occurredAt
+  }];
+}
+function parsePowerSupplies(values) {
+  const batteries = values.filter((value2) => String(value2.type || "").toLowerCase() === "battery");
+  const linePower = values.filter((value2) => ["mains", "usb", "usb_c"].includes(String(value2.type || "").toLowerCase()));
+  const online = linePower.map((value2) => Number(value2.online)).filter(Number.isFinite);
+  const percentages = batteries.map((value2) => Number(value2.capacity)).filter((value2) => Number.isFinite(value2) && value2 >= 0 && value2 <= 100);
+  const states2 = batteries.map((value2) => bounded(value2.status, 40).toLowerCase()).filter(Boolean);
+  return {
+    ...online.length === 0 ? {} : { onBattery: !online.some((value2) => value2 > 0) },
+    ...percentages.length === 0 ? {} : { batteryPercent: Math.round(percentages.reduce((sum, value2) => sum + value2, 0) / percentages.length) },
+    ...states2.length === 0 ? {} : { batteryState: states2[0] }
+  };
+}
+function deriveTelemetryEvents(previous, current) {
+  if (previous === void 0) return [];
+  const events = [];
+  if (previous.onBattery !== void 0 && current.onBattery !== void 0 && previous.onBattery !== current.onBattery) {
+    events.push(telemetryItem(
+      "power",
+      current.onBattery ? "Charger disconnected" : "Charger connected",
+      current.onBattery ? "The system switched to battery power." : "The system switched to external power.",
+      current.capturedAt,
+      "normal"
+    ));
+  }
+  const priorBand = batteryBand(previous.batteryPercent);
+  const currentBand = batteryBand(current.batteryPercent);
+  if (currentBand > priorBand) {
+    const percent = current.batteryPercent ?? 0;
+    events.push(telemetryItem(
+      "battery",
+      currentBand === 2 ? "Battery critically low" : "Battery low",
+      `Battery is at ${percent}%.`,
+      current.capturedAt,
+      currentBand === 2 ? "critical" : "normal"
+    ));
+  }
+  if (previous.networkState !== void 0 && current.networkState !== void 0 && previous.networkState !== current.networkState) {
+    events.push(telemetryItem(
+      "network",
+      "Network connectivity changed",
+      `Connectivity is now ${bounded(current.networkState, 60)}.`,
+      current.capturedAt,
+      current.networkState === "full" ? "low" : "normal"
+    ));
+  }
+  return events;
+}
+function parseFailedServices(raw, now) {
+  const occurredAt = now.toISOString();
+  return raw.split(/\r?\n/u).flatMap((line) => {
+    const service = bounded(line.trim().split(/\s+/u)[0], 180);
+    if (!/^[a-zA-Z0-9@_.:-]+\.(?:service|socket|timer|path)$/u.test(service)) return [];
+    return [{
+      id: `omarchy:service:${service}:${dayKey(now)}`,
+      source: "io.omarchy.system-telemetry",
+      category: "failed-services",
+      app: "System Telemetry",
+      title: `${service} failed`,
+      body: "A user service is in the failed state.",
+      urgency: "normal",
+      occurredAt
+    }];
+  }).slice(0, 30);
+}
+function storageWarning(disk, now) {
+  if (!Number.isFinite(disk.total) || !Number.isFinite(disk.available) || disk.total <= 0 || disk.available < 0) return [];
+  const usedPercent = Math.round((1 - Math.min(disk.available, disk.total) / disk.total) * 100);
+  if (usedPercent < 85) return [];
+  return [telemetryItem(
+    "storage",
+    usedPercent >= 95 ? "Storage critically low" : "Storage running low",
+    `Root filesystem is ${usedPercent}% used.`,
+    now.toISOString(),
+    usedPercent >= 95 ? "critical" : "normal"
+  )];
+}
+var systemDependencies = {
+  run: runCommand2,
+  now: () => /* @__PURE__ */ new Date(),
+  readPowerSupplies,
+  rootDisk: () => {
+    const value2 = statfsSync("/");
+    return { total: Number(value2.blocks) * Number(value2.bsize), available: Number(value2.bavail) * Number(value2.bsize) };
+  }
+};
+function readPowerSupplies() {
+  if (!existsSync32(POWER_ROOT)) return [];
+  let names2;
+  try {
+    names2 = readdirSync14(POWER_ROOT).slice(0, 32);
+  } catch {
+    return [];
+  }
+  return names2.map((name) => {
+    const root = join52(POWER_ROOT, name);
+    return {
+      type: readSmallFile(join52(root, "type")),
+      online: readSmallFile(join52(root, "online")),
+      capacity: readSmallFile(join52(root, "capacity")),
+      status: readSmallFile(join52(root, "status"))
+    };
+  });
+}
+function readSmallFile(path16) {
+  try {
+    if (statSync17(path16).size > 1024) return "";
+    return bounded(readFileSync28(path16, "utf8"), 200);
+  } catch {
+    return "";
+  }
+}
+async function readNetworkState(dependencies) {
+  const response = await dependencies.run(NMCLI_COMMAND, ["-t", "-f", "CONNECTIVITY", "general"]);
+  if (response.code !== 0) return void 0;
+  const state2 = bounded(response.stdout.split(/\r?\n/u)[0], 60).toLowerCase();
+  return ["none", "portal", "limited", "full", "unknown"].includes(state2) ? state2 : void 0;
+}
+function runCommand2(file2, args) {
+  return new Promise((resolveCall) => {
+    execFile6(file2, args, { encoding: "utf8", timeout: 15e3, maxBuffer: MAX_COMMAND_BYTES }, (error48, stdout) => {
+      const code = error48 && typeof error48 === "object" && "code" in error48 && typeof error48.code === "number" ? error48.code : error48 ? -1 : 0;
+      resolveCall({ code, stdout: String(stdout || "").slice(0, MAX_COMMAND_BYTES) });
+    });
+  });
+}
+function telemetryItem(category, title, body, occurredAt, urgency) {
+  return {
+    id: `omarchy:telemetry:${category}:${occurredAt}`,
+    source: "io.omarchy.system-telemetry",
+    category,
+    app: "System Telemetry",
+    title: bounded(title, 2e3),
+    body: bounded(body, 8e3),
+    urgency,
+    occurredAt
+  };
+}
+function parseStoredItem(value2) {
+  if (!isObject8(value2)) return [];
+  const occurredAt = bounded(value2.occurredAt, 50);
+  const urgency = value2.urgency;
+  if (Number.isNaN(new Date(occurredAt).getTime()) || !["low", "normal", "critical"].includes(String(urgency))) return [];
+  const item = {
+    id: bounded(value2.id, 240),
+    source: bounded(value2.source, 128),
+    category: bounded(value2.category, 64),
+    app: bounded(value2.app, 120),
+    title: bounded(value2.title, 2e3),
+    body: bounded(value2.body, 8e3),
+    urgency,
+    occurredAt
+  };
+  return item.id && item.source && item.category && item.app && item.title ? [item] : [];
+}
+function parseSnapshot(value2) {
+  if (!isObject8(value2) || typeof value2.capturedAt !== "string" || Number.isNaN(new Date(value2.capturedAt).getTime())) return void 0;
+  return {
+    capturedAt: value2.capturedAt,
+    ...typeof value2.onBattery === "boolean" ? { onBattery: value2.onBattery } : {},
+    ...typeof value2.batteryPercent === "number" && value2.batteryPercent >= 0 && value2.batteryPercent <= 100 ? { batteryPercent: value2.batteryPercent } : {},
+    ...typeof value2.batteryState === "string" ? { batteryState: bounded(value2.batteryState, 40) } : {},
+    ...typeof value2.networkState === "string" ? { networkState: bounded(value2.networkState, 60) } : {}
+  };
+}
+function categoryEnabled(enabled, source, category) {
+  return (enabled[source] || []).slice(0, 24).includes(category);
+}
+function within(raw, since, until) {
+  const time4 = new Date(raw).getTime();
+  return Number.isFinite(time4) && time4 >= since.getTime() && time4 <= until.getTime();
+}
+function deduplicate(items) {
+  const seen = /* @__PURE__ */ new Set();
+  return items.filter((item) => !seen.has(item.id) && seen.add(item.id)).sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+}
+function coredumpTime(value2) {
+  const micros = typeof value2 === "number" ? value2 : Number(value2);
+  if (!Number.isFinite(micros) || micros <= 0) return void 0;
+  const date5 = new Date(Math.floor(micros / 1e3));
+  return Number.isNaN(date5.getTime()) ? void 0 : date5.toISOString();
+}
+function signalName(raw) {
+  const names2 = { "4": "SIGILL", "6": "SIGABRT", "7": "SIGBUS", "8": "SIGFPE", "9": "SIGKILL", "11": "SIGSEGV" };
+  return names2[raw] || (raw ? `Signal ${raw}` : "Process failure");
+}
+function batteryBand(value2) {
+  if (value2 === void 0) return 0;
+  return value2 <= 10 ? 2 : value2 <= 20 ? 1 : 0;
+}
+function dayKey(date5) {
+  return date5.toISOString().slice(0, 10);
+}
+function stableHash(value2) {
+  let hash2 = 2166136261;
+  for (const character of value2) hash2 = Math.imul(hash2 ^ character.codePointAt(0), 16777619);
+  return (hash2 >>> 0).toString(16).padStart(8, "0");
+}
+function bounded(value2, length) {
+  return String(value2 ?? "").replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").trim().slice(0, length);
+}
+function isObject8(value2) {
+  return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
+}
+
 // runtime/src/types.ts
 var PROTOCOL_VERSION = 1;
 
@@ -280322,12 +280725,15 @@ var integrationRoots = {
   user: resolve18(configRoot, "integrations"),
   state: resolve18(configRoot, "integration-state.json")
 };
+var nativeSourceStore = new NativeSourceStore(configRoot);
+var nativeSourceState = nativeSourceStore.read();
+var nativeSourceSampling = false;
 var authFlow;
 function publicTemplates() {
   return templates.map(({ manifest, instructions }) => ({ ...manifest, instructions }));
 }
 function publicIntegrations() {
-  return discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).map(({ manifest, source, enabled, categories }) => ({
+  const connectors = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).map(({ manifest, source, enabled, categories }) => ({
     id: manifest.id,
     name: manifest.name,
     version: manifest.version,
@@ -280338,9 +280744,74 @@ function publicIntegrations() {
     categories,
     capabilities: manifest.capabilities,
     setup: manifest.setup,
-    permissions: manifest.permissions
+    permissions: { ...manifest.permissions, networkSetupFields: manifest.permissions.networkSetupFields ?? [] }
   }));
+  return [...publicNativeSources(), ...connectors].sort((left, right) => left.name.localeCompare(right.name));
 }
+function publicNativeSources() {
+  const state2 = readIntegrationState(integrationRoots.state);
+  return NATIVE_SOURCE_CATALOG.map((definition) => {
+    const saved = state2.sources[definition.id];
+    const probed = nativeSourceStatus(definition.id);
+    return {
+      id: definition.id,
+      name: definition.name,
+      version: "1.0.0",
+      description: definition.description,
+      source: "core",
+      enabled: saved?.enabled ?? false,
+      status: sourceStatuses.get(definition.id) ?? {
+        state: probed.ready ? "ready" : "error",
+        message: probed.message
+      },
+      categories: definition.categories.map((category) => ({
+        ...category,
+        enabled: saved?.categories[category.id] ?? category.defaultEnabled
+      })),
+      capabilities: ["sync"],
+      setup: { summary: definition.description, fields: [], actionLabel: "Refresh" },
+      permissions: { networkHosts: [], networkSetupFields: [], commands: [], readPaths: [], writePaths: [] }
+    };
+  });
+}
+function enabledNativeCategories(connectors, requested) {
+  const allowed = new Set(connectors.slice(0, 16));
+  const result = {};
+  for (const source of publicNativeSources()) {
+    if (!source.enabled || !allowed.has(source.id)) continue;
+    const requestedSet = requested?.[source.id] === void 0 ? void 0 : new Set(requested[source.id]?.slice(0, 32));
+    const categories = source.categories.filter((category) => category.enabled && (requestedSet === void 0 || requestedSet.has(category.id))).map((category) => category.id);
+    if (categories.length > 0) result[source.id] = categories;
+  }
+  return result;
+}
+async function recordNativeTelemetry() {
+  if (nativeSourceSampling) return;
+  const telemetry = publicNativeSources().find((source) => source.id === "io.omarchy.system-telemetry");
+  if (telemetry?.enabled !== true || !telemetry.categories.some((category) => category.enabled && ["power", "battery", "network"].includes(category.id))) return;
+  nativeSourceSampling = true;
+  try {
+    const sampled = await sampleNativeTelemetry(nativeSourceState.snapshot);
+    if (sampled.events.length > 0 || !sameTelemetryState(nativeSourceState.snapshot, sampled.snapshot)) {
+      nativeSourceStore.write({ version: 1, snapshot: sampled.snapshot, events: [...nativeSourceState.events, ...sampled.events] });
+      nativeSourceState = nativeSourceStore.read();
+    }
+  } finally {
+    nativeSourceSampling = false;
+  }
+}
+function sameTelemetryState(left, right) {
+  return left !== void 0 && left.onBattery === right.onBattery && batteryStateBand(left.batteryPercent) === batteryStateBand(right.batteryPercent) && left.batteryState === right.batteryState && left.networkState === right.networkState;
+}
+function batteryStateBand(percent) {
+  if (percent === void 0) return -1;
+  return percent <= 10 ? 2 : percent <= 20 ? 1 : 0;
+}
+void recordNativeTelemetry();
+var nativeSourceSampler = setInterval(() => {
+  void recordNativeTelemetry();
+}, 15e3);
+nativeSourceSampler.unref();
 function emit(event) {
   process.stdout.write(`${JSON.stringify(event)}
 `);
@@ -280374,10 +280845,10 @@ async function reloadFileBackedConfiguration() {
 function configurationFingerprint(root) {
   const parts = [];
   const visit = (path16, relative9, depth) => {
-    if (depth > 5 || parts.length > 2e3 || !existsSync32(path16)) return;
+    if (depth > 5 || parts.length > 2e3 || !existsSync33(path16)) return;
     let stat5;
     try {
-      stat5 = statSync17(path16);
+      stat5 = statSync18(path16);
     } catch {
       return;
     }
@@ -280385,7 +280856,7 @@ function configurationFingerprint(root) {
     if (!stat5.isDirectory()) return;
     let names2;
     try {
-      names2 = readdirSync14(path16).sort();
+      names2 = readdirSync15(path16).sort();
     } catch {
       return;
     }
@@ -280515,6 +280986,10 @@ async function handle(raw) {
       }
       if (deleteAll) attention.clear();
       else if (command.target === "notification-history") attention.clearNotifications();
+      if (deleteAll || command.target === "notification-history") {
+        nativeSourceStore.clear();
+        nativeSourceState = { version: 1, events: [] };
+      }
       if (deleteAll || command.target === "integrations") {
         const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
         await integrationRuntime.clearSecrets(discovered);
@@ -280553,14 +281028,25 @@ async function handle(raw) {
       const template = templates.find((candidate) => candidate.manifest.id === selectedId);
       if (template === void 0) throw new Error("The selected digest template is unavailable");
       const now = new Date(command.context.now);
-      const connectorItems = await integrationRuntime.sync(
-        discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state),
-        template.manifest.context.connectors.filter((connector) => connector !== "notifications"),
-        template.manifest.context.connectorCategories,
-        new Date(now.getTime() - 864e5).toISOString(),
-        new Date(now.getTime() + 7 * 864e5).toISOString()
-      );
-      attention.ingest(connectorItems);
+      const since = new Date(now.getTime() - 864e5);
+      const until = new Date(now.getTime() + 7 * 864e5);
+      const requestedConnectors = template.manifest.context.connectors.filter((connector) => connector !== "notifications");
+      const [connectorItems, nativeItems] = await Promise.all([
+        integrationRuntime.sync(
+          discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state),
+          requestedConnectors,
+          template.manifest.context.connectorCategories,
+          since.toISOString(),
+          until.toISOString()
+        ),
+        collectNativeSourceItems(
+          enabledNativeCategories(requestedConnectors, template.manifest.context.connectorCategories),
+          since,
+          until,
+          nativeSourceState
+        )
+      ]);
+      attention.ingest([...connectorItems, ...nativeItems]);
       const pendingItems = attention.pending(template.manifest.context.maximumItems);
       const items = privacy.evidenceForDigest(pendingItems);
       const excludedIds = pendingItems.filter((item) => !items.some((candidate) => candidate.id === item.id)).map((item) => item.id);
@@ -280774,6 +281260,21 @@ async function handle(raw) {
     return true;
   }
   if (command.type === "integration_status") {
+    const native = NATIVE_SOURCE_CATALOG.find((candidate) => candidate.id === command.integrationId);
+    if (native !== void 0) {
+      const checking2 = { state: "checking", message: "Checking source status\u2026" };
+      rememberSourceStatus(command.integrationId, checking2);
+      emitStatus("integration_status", command.id, command.integrationId, checking2);
+      const probed = nativeSourceStatus(command.integrationId);
+      const status2 = {
+        state: probed.ready ? "ready" : "error",
+        message: probed.message,
+        checkedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      rememberSourceStatus(command.integrationId, status2);
+      emitStatus("integration_status", command.id, command.integrationId, status2);
+      return true;
+    }
     const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
     const integration = discovered.find((candidate) => candidate.manifest.id === command.integrationId);
     if (integration === void 0) {
@@ -280790,13 +281291,16 @@ async function handle(raw) {
   }
   if (command.type === "integration_set_category_enabled") {
     const integration = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state).find((candidate) => candidate.manifest.id === command.integrationId);
-    if (integration === void 0 || !integration.categories.some((category) => category.id === command.categoryId)) {
+    const native = NATIVE_SOURCE_CATALOG.find((candidate) => candidate.id === command.integrationId);
+    const hasCategory = integration?.categories.some((category) => category.id === command.categoryId) || native?.categories.some((category) => category.id === command.categoryId);
+    if (!hasCategory) {
       emit({ type: "error", id: command.id, code: "integration_category_unavailable", message: "That source category is unavailable." });
       return true;
     }
     try {
       setIntegrationCategoryEnabled(integrationRoots.state, command.integrationId, command.categoryId, command.enabled);
       emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
+      if (native !== void 0) void recordNativeTelemetry();
     } catch (error48) {
       emit({ type: "error", id: command.id, code: "integration_state_failed", message: boundedMessage(error48, "The category setting could not be saved.") });
     }
@@ -280810,16 +281314,25 @@ async function handle(raw) {
     }
     try {
       if (command.enabled) {
-        const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
-        const target = discovered.find((integration) => integration.manifest.id === command.integrationId);
-        if (target === void 0) throw new Error("That integration is unavailable");
-        const status = await integrationRuntime.status(target);
-        rememberSourceStatus(command.integrationId, status);
-        if (status.state !== "ready") throw new Error(status.message || "Set up this integration before enabling it");
+        const native = NATIVE_SOURCE_CATALOG.find((candidate) => candidate.id === command.integrationId);
+        if (native !== void 0) {
+          const probed = nativeSourceStatus(native.id);
+          if (!probed.ready) throw new Error(probed.message);
+          rememberSourceStatus(native.id, { state: "ready", message: probed.message, checkedAt: (/* @__PURE__ */ new Date()).toISOString() });
+        } else {
+          const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
+          const target = discovered.find((integration) => integration.manifest.id === command.integrationId);
+          if (target === void 0) throw new Error("That integration is unavailable");
+          const status = await integrationRuntime.status(target);
+          rememberSourceStatus(command.integrationId, status);
+          if (status.state !== "ready") throw new Error(status.message || "Set up this integration before enabling it");
+        }
       }
       setIntegrationEnabled(integrationRoots.state, command.integrationId, command.enabled);
       emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
+      void recordNativeTelemetry();
     } catch (error48) {
+      emit({ type: "integrations", id: command.id, integrations: publicIntegrations() });
       emit({
         type: "error",
         id: command.id,
@@ -280867,7 +281380,7 @@ function boundedMessage(error48, fallback) {
 }
 function beginAuth(methodId) {
   if (authFlow !== void 0) cancelAuth(authFlow);
-  const flow = { id: randomUUID16(), methodId, controller: new AbortController() };
+  const flow = { id: randomUUID17(), methodId, controller: new AbortController() };
   authFlow = flow;
   emit({ type: "auth", phase: "starting", flowId: flow.id, methodId, message: "Starting secure sign-in\u2026" });
   void runAuth(flow);
@@ -280906,7 +281419,7 @@ function promptAuth(flow, prompt) {
     return Promise.reject(new Error("Authentication prompt was cancelled"));
   flow.prompt?.reject(new Error("Authentication prompt was cancelled"));
   return new Promise((resolvePrompt, rejectPrompt) => {
-    const promptId = randomUUID16();
+    const promptId = randomUUID17();
     const signals = [flow.controller.signal, prompt.signal].filter((signal2) => signal2 !== void 0);
     const signal = signals.length === 1 ? signals[0] ?? flow.controller.signal : AbortSignal.any(signals);
     const onAbort = () => rejectPrompt(new Error("Authentication prompt was cancelled"));
@@ -280988,7 +281501,7 @@ function isAllowedExternalUrl(raw) {
 }
 function launchExternalUrl(url2) {
   return new Promise((resolveLaunch, rejectLaunch) => {
-    const child = execFile6(
+    const child = execFile7(
       "omarchy",
       ["launch", "browser", url2],
       { timeout: 1e4, windowsHide: true },
@@ -281067,7 +281580,7 @@ function formatTemplateRevision(template, request) {
 }
 function launchDefaultAgent(prompt) {
   return new Promise((resolveLaunch, rejectLaunch) => {
-    const child = execFile6("omarchy", ["agent", "prompt", prompt], {
+    const child = execFile7("omarchy", ["agent", "prompt", prompt], {
       timeout: 1e4,
       windowsHide: true
     }, (error48) => error48 === null ? resolveLaunch() : rejectLaunch(error48));

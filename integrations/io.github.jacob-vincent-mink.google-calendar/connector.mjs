@@ -42,13 +42,16 @@ async function handle(request) {
   const since = parseBoundary(request.since, new Date());
   const until = parseBoundary(request.until, new Date(since.getTime() + 7 * 86_400_000));
   const limit = Math.max(1, Math.min(100, Number(request.limit) || 50));
+  const categories = requestedCategorySet(request.categories, ["timed-events", "all-day-events"]);
   const events = parseIcs(text)
     .filter((event) => event.start && event.start <= until && (event.end || event.start) >= since)
+    .filter((event) => categories.has(event.allDay ? "all-day-events" : "timed-events"))
     .sort((a, b) => a.start - b.start)
     .slice(0, limit)
     .map((event) => ({
       id: `google-calendar:event:${event.uid}`,
       connector: "io.github.jacob-vincent-mink.google-calendar",
+      category: event.allDay ? "all-day-events" : "timed-events",
       kind: "calendar-event",
       occurredAt: event.start.toISOString(),
       title: event.summary || "Untitled event",
@@ -69,8 +72,10 @@ export function parseIcs(raw) {
     for (const line of block.split(/\r?\n/)) {
       const colon = line.indexOf(":");
       if (colon < 0) continue;
-      const key = line.slice(0, colon).split(";", 1)[0].toUpperCase();
+      const fieldName = line.slice(0, colon);
+      const key = fieldName.split(";", 1)[0].toUpperCase();
       if (!fields.has(key)) fields.set(key, line.slice(colon + 1));
+      if (key === "DTSTART" && /(?:^|;)VALUE=DATE(?:;|$)/iu.test(fieldName)) fields.set("DTSTART_ALL_DAY", "true");
     }
     const start = parseIcsDate(fields.get("DTSTART"));
     if (!start) return [];
@@ -79,6 +84,7 @@ export function parseIcs(raw) {
       summary: decodeText(fields.get("SUMMARY") || ""),
       start,
       end: parseIcsDate(fields.get("DTEND")),
+      allDay: fields.get("DTSTART_ALL_DAY") === "true" || /^\d{8}$/u.test(fields.get("DTSTART") || ""),
       url: safeEventUrl(fields.get("URL"))
     }];
   });
@@ -97,6 +103,10 @@ function parseIcsDate(value) {
 function parseBoundary(value, fallback) {
   const parsed = typeof value === "string" ? new Date(value) : fallback;
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+function requestedCategorySet(value, defaults) {
+  if (!Array.isArray(value)) return new Set(defaults);
+  return new Set(value.filter((category) => defaults.includes(category)).slice(0, defaults.length));
 }
 function decodeText(value) { return bounded(value.replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1"), 2_000); }
 function bounded(value, length) { return String(value).replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").trim().slice(0, length); }
