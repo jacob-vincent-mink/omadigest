@@ -108,6 +108,7 @@ BarWidget {
           color: Color.accent
 
           Text {
+            textFormat: Text.PlainText
             id: unreadLabel
             anchors.fill: parent
             anchors.leftMargin: Style.space(2)

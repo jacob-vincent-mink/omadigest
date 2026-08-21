@@ -813,6 +813,7 @@ Panel {
               spacing: Style.space(1)
 
               Text {
+                textFormat: Text.PlainText
                 text: root.page === "settings" ? "OMADIGEST SETTINGS"
                   : root.page === "detail" ? "DIGEST" : "OMADIGEST"
                 color: root.foreground
@@ -823,6 +824,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: root.page === "list"
                   ? (OmaDigest.OmaDigestStore.digestState === "working"
@@ -928,6 +930,7 @@ Panel {
               Row {
                 width: parent.width
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width - dismissError.width
                   text: OmaDigest.OmaDigestStore.errorCode === "model_not_connected"
                     ? "Connect an AI model" : "OmaDigest couldn't complete that action"
@@ -938,6 +941,7 @@ Panel {
                   wrapMode: Text.WordWrap
                 }
                 Text {
+                  textFormat: Text.PlainText
                   id: dismissError
                   text: "×"
                   color: root.foreground
@@ -953,6 +957,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: OmaDigest.OmaDigestStore.errorCode === "model_not_connected"
                   ? "Digest generation needs an authenticated Pi model. Open Connections for the current status."
@@ -964,6 +969,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 visible: OmaDigest.OmaDigestStore.errorCode === "model_not_connected"
                 text: "Open Connections →"
                 color: Color.accent
@@ -1016,6 +1022,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               visible: root.digestsForTab(root.digestTab).length === 0
               width: parent.width
               horizontalAlignment: Text.AlignHCenter
@@ -1058,6 +1065,7 @@ Panel {
                     width: parent.width - digestChevron.width - Style.space(12)
                     spacing: Style.space(2)
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: String(modelData.title)
                       color: root.foreground
@@ -1067,6 +1075,7 @@ Panel {
                       elide: Text.ElideRight
                     }
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: new Date(modelData.generatedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm")
                         + " · " + String(modelData.templateId)
@@ -1078,6 +1087,7 @@ Panel {
                   }
 
                   Text {
+                    textFormat: Text.PlainText
                     id: digestChevron
                     anchors.verticalCenter: parent.verticalCenter
                     text: "󰅂"
@@ -1112,6 +1122,7 @@ Panel {
                 width: parent.width - detailActions.width - Style.space(8)
                 spacing: Style.space(2)
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: OmaDigest.OmaDigestStore.digest ? String(OmaDigest.OmaDigestStore.digest.title) : ""
                   color: root.foreground
@@ -1121,6 +1132,7 @@ Panel {
                   wrapMode: Text.WordWrap
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: OmaDigest.OmaDigestStore.digest
                     ? new Date(OmaDigest.OmaDigestStore.digest.generatedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm") : ""
                   color: Qt.darker(root.foreground, 1.4)
@@ -1168,6 +1180,7 @@ Panel {
                 spacing: Style.space(6)
 
                 Text {
+                  textFormat: Text.PlainText
                   text: String(modelData.title).toUpperCase()
                   color: Color.accent
                   font.family: root.fontFamily
@@ -1193,6 +1206,7 @@ Panel {
                       spacing: Style.space(7)
 
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: String(modelData.headline) + "\n" + String(modelData.explanation)
                         color: root.foreground
@@ -1210,6 +1224,7 @@ Panel {
                           ? Style.hoverFillFor(root.foreground, Color.accent)
                           : Style.normalFillFor(root.foreground, Color.accent)
                         Text {
+                          textFormat: Text.PlainText
                           anchors.centerIn: parent
                           text: "Send to agent  →"
                           color: Color.accent
@@ -1260,6 +1275,7 @@ Panel {
                     ? Style.selectedFillFor(root.foreground, Color.accent)
                     : (settingsTabMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent")
                   Text {
+                    textFormat: Text.PlainText
                     anchors.centerIn: parent
                     text: String(modelData.label)
                     color: root.settingsPage === modelData.id ? Color.accent : root.foreground
@@ -1301,6 +1317,7 @@ Panel {
                 spacing: Style.space(7)
 
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: "OMADIGEST " + String(root.releaseUpdate.latestVersion || "") + " IS AVAILABLE"
                   color: Color.accent
@@ -1312,6 +1329,7 @@ Panel {
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: "You’re on " + String(root.releaseUpdate.currentVersion || "this version")
                     + ". Review the release, then update with Omarchy when you’re ready."
@@ -1360,6 +1378,7 @@ Panel {
               spacing: Style.space(8)
 
               Text {
+                textFormat: Text.PlainText
                 text: "OMARCHY"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
@@ -1382,6 +1401,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 topPadding: Style.space(5)
                 text: "CONNECTED SERVICES"
                 color: Qt.darker(root.foreground, 1.35)
@@ -1392,6 +1412,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 visible: root.connectedServiceSources().length === 0
                 width: parent.width
                 text: "No connected services yet."
@@ -1452,6 +1473,7 @@ Panel {
                 width: parent.width
                 spacing: Style.space(2)
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: root.selectedSource ? String(root.selectedSource.name || "Source") : "Source"
                   color: root.foreground
@@ -1461,6 +1483,7 @@ Panel {
                   elide: Text.ElideRight
                 }
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: root.selectedSource ? String(root.selectedSource.description || "") : ""
                   color: Qt.darker(root.foreground, 1.35)
@@ -1500,6 +1523,7 @@ Panel {
                 onClicked: root.showSourceList()
               }
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: "ADD SOURCE"
                 color: root.foreground
@@ -1544,6 +1568,7 @@ Panel {
                     spacing: Style.space(6)
 
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: "SUGGESTED FOR YOU · " + Number(modelData.itemCount || 0) + " RECENT"
                       color: Color.accent
@@ -1554,6 +1579,7 @@ Panel {
                       elide: Text.ElideRight
                     }
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: String(modelData.title || "Suggested template")
                       color: root.foreground
@@ -1563,6 +1589,7 @@ Panel {
                       wrapMode: Text.WordWrap
                     }
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: String(modelData.description || "")
                       color: Qt.darker(root.foreground, 1.3)
@@ -1622,6 +1649,7 @@ Panel {
                     spacing: Style.space(8)
 
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width - templateChevron.width - Style.space(10)
                       text: String(modelData.name) + "\n" + String(modelData.description)
                       color: root.foreground
@@ -1630,6 +1658,7 @@ Panel {
                       wrapMode: Text.WordWrap
                     }
                     Text {
+                      textFormat: Text.PlainText
                       id: templateChevron
                       anchors.verticalCenter: parent.verticalCenter
                       text: "󰅂"
@@ -1650,6 +1679,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 text: "CREATE A TEMPLATE"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
@@ -1673,6 +1703,7 @@ Panel {
               spacing: Style.space(12)
 
               Text {
+                textFormat: Text.PlainText
                 text: "‹ All templates"
                 color: Color.accent
                 font.family: root.fontFamily
@@ -1687,6 +1718,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: root.selectedTemplate ? String(root.selectedTemplate.name) : ""
                 color: root.foreground
@@ -1696,6 +1728,7 @@ Panel {
                 wrapMode: Text.WordWrap
               }
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: root.selectedTemplate ? String(root.selectedTemplate.description) : ""
                 color: Qt.darker(root.foreground, 1.25)
@@ -1727,6 +1760,7 @@ Panel {
                     border.color: Style.normalBorderFor(root.foreground, Color.accent)
 
                     Text {
+                      textFormat: Text.PlainText
                       anchors.centerIn: parent
                       text: String(modelData.label)
                       color: root.foreground
@@ -1762,6 +1796,7 @@ Panel {
                   spacing: Style.space(8)
 
                   Text {
+                    textFormat: Text.PlainText
                     width: parent.width
                     text: root.selectedTemplate
                       ? "SECTIONS\n" + (root.selectedTemplate.output.sections || []).join("  ·  ") : ""
@@ -1771,6 +1806,7 @@ Panel {
                     wrapMode: Text.WordWrap
                   }
                   Text {
+                    textFormat: Text.PlainText
                     width: parent.width
                     text: root.selectedTemplate
                       ? "SOURCES\n" + (root.selectedTemplate.context.connectors || []).join("  ·  ") : ""
@@ -1780,6 +1816,7 @@ Panel {
                     wrapMode: Text.WordWrap
                   }
                   Text {
+                    textFormat: Text.PlainText
                     width: parent.width
                     text: {
                       if (!root.selectedTemplate) return ""
@@ -1798,6 +1835,7 @@ Panel {
                     wrapMode: Text.WordWrap
                   }
                   Text {
+                    textFormat: Text.PlainText
                     width: parent.width
                     text: root.selectedTemplate
                       ? "LIMITS\n" + root.selectedTemplate.output.maximumEntries + " entries  ·  "
@@ -1811,6 +1849,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 visible: root.templateEditMode === "view"
                 text: "INSTRUCTIONS"
                 color: Color.accent
@@ -1820,6 +1859,7 @@ Panel {
                 font.letterSpacing: 1
               }
               Text {
+                textFormat: Text.PlainText
                 visible: root.templateEditMode === "view"
                 width: parent.width
                 text: root.selectedTemplate ? String(root.selectedTemplate.instructions) : ""
@@ -1835,6 +1875,7 @@ Panel {
                 spacing: Style.space(8)
 
                 Text {
+                  textFormat: Text.PlainText
                   text: "INSTRUCTIONS"
                   color: Color.accent
                   font.family: root.fontFamily
@@ -1843,6 +1884,7 @@ Panel {
                   font.letterSpacing: 1
                 }
                 QQC.TextArea {
+                  textFormat: TextEdit.PlainText
                   id: templateInstructionsEdit
                   width: parent.width
                   height: Style.space(180)
@@ -1859,6 +1901,7 @@ Panel {
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   text: "ROUTING POLICY · JSON"
                   color: Color.accent
                   font.family: root.fontFamily
@@ -1867,6 +1910,7 @@ Panel {
                   font.letterSpacing: 1
                 }
                 QQC.TextArea {
+                  textFormat: TextEdit.PlainText
                   id: templatePolicyEdit
                   width: parent.width
                   height: Style.space(250)
@@ -1897,6 +1941,7 @@ Panel {
                       color: modelData.save ? Color.accent : Style.normalFillFor(root.foreground, Color.accent)
                       opacity: modelData.save && OmaDigest.OmaDigestStore.templateEditState === "saving" ? 0.55 : 1
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: modelData.save && OmaDigest.OmaDigestStore.templateEditState === "saving" ? "Validating…" : String(modelData.label)
                         color: modelData.save ? Color.background : root.foreground
@@ -1915,6 +1960,7 @@ Panel {
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   visible: OmaDigest.OmaDigestStore.templateEditMessage !== ""
                   width: parent.width
                   text: OmaDigest.OmaDigestStore.templateEditMessage
@@ -1931,6 +1977,7 @@ Panel {
                 spacing: Style.space(8)
 
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: "Describe the change. The constrained template agent receives the current template, shows its plan here, and returns a complete validated revision for review."
                   color: Qt.darker(root.foreground, 1.25)
@@ -1948,6 +1995,7 @@ Panel {
                   fontFamily: root.fontFamily
                 }
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   horizontalAlignment: Text.AlignHCenter
                   text: "Cancel revision"
@@ -1971,6 +2019,7 @@ Panel {
               spacing: Style.space(12)
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: "PRIVACY POLICY"
                 color: Color.accent
@@ -1980,6 +2029,7 @@ Panel {
                 font.letterSpacing: 1
               }
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: "Policy is enforced before notification content is retained or sent to an AI. Protected applications start at Ignore; unknown applications start at Count only."
                 color: root.foreground
@@ -1999,6 +2049,7 @@ Panel {
                   anchors.margins: Style.space(10)
                   spacing: Style.space(7)
                   Text {
+                    textFormat: Text.PlainText
                     text: "UNKNOWN APPLICATIONS"
                     color: root.foreground
                     font.family: root.fontFamily
@@ -2018,6 +2069,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 text: "APPLICATION RULES"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
@@ -2046,6 +2098,7 @@ Panel {
                       anchors.verticalCenter: parent.verticalCenter
                       width: parent.width - privacyRulePicker.width - Style.space(10)
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: String(modelData.app)
                         color: root.foreground
@@ -2055,6 +2108,7 @@ Panel {
                         elide: Text.ElideRight
                       }
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: modelData.source === "protected-default" ? "Protected default" : "User rule"
                         color: Qt.darker(root.foreground, 1.45)
@@ -2078,6 +2132,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 text: "ADD OR OVERRIDE A RULE"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
@@ -2110,6 +2165,7 @@ Panel {
                 color: Color.accent
                 opacity: privacyAppInput.text.trim() ? 1 : 0.5
                 Text {
+                  textFormat: Text.PlainText
                   anchors.centerIn: parent
                   text: "Save rule"
                   color: Color.background
@@ -2129,6 +2185,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: "Ignore: no retention or count · Count only: content is erased · Digest: content may reach the connected AI · Digest + agent: cited content may also accompany an explicit Send to agent action."
                 color: Qt.darker(root.foreground, 1.35)
@@ -2144,6 +2201,7 @@ Panel {
               spacing: Style.space(12)
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: "DELETE OMADIGEST DATA"
                 color: Color.accent
@@ -2154,6 +2212,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: "These controls affect only data retained by OmaDigest. Omarchy's own notification history is never deleted."
                 color: Qt.darker(root.foreground, 1.35)
@@ -2188,6 +2247,7 @@ Panel {
                       width: parent.width - dataDeleteButton.width - Style.space(10)
                       spacing: Style.space(2)
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: String(modelData.title)
                         color: root.foreground
@@ -2196,6 +2256,7 @@ Panel {
                         font.bold: true
                       }
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: String(modelData.description)
                         color: Qt.darker(root.foreground, 1.4)
@@ -2244,6 +2305,7 @@ Panel {
                     width: parent.width - deleteAllButton.width - Style.space(10)
                     spacing: Style.space(2)
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: "Delete all"
                       color: Color.urgent
@@ -2252,6 +2314,7 @@ Panel {
                       font.bold: true
                     }
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       text: "Delete every category above. Model connections and privacy rules remain."
                       color: root.foreground
@@ -2279,6 +2342,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 visible: OmaDigest.OmaDigestStore.dataDeleteMessage !== ""
                 width: parent.width
                 text: OmaDigest.OmaDigestStore.dataDeleteMessage
@@ -2317,6 +2381,7 @@ Panel {
                       width: parent.width - connectionState.width - Style.space(10)
                       spacing: Style.space(2)
                       Text {
+                        textFormat: Text.PlainText
                         text: "CONNECT OMADIGEST"
                         color: Color.accent
                         font.family: root.fontFamily
@@ -2325,6 +2390,7 @@ Panel {
                         font.letterSpacing: 1
                       }
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: "Choose the account OmaDigest should use to build and draft briefings."
                         color: Qt.darker(root.foreground, 1.35)
@@ -2334,6 +2400,7 @@ Panel {
                       }
                     }
                     Text {
+                      textFormat: Text.PlainText
                       id: connectionState
                       text: OmaDigest.OmaDigestStore.agentConnection.connected ? "● Connected" : "Not connected"
                       color: OmaDigest.OmaDigestStore.agentConnection.connected ? Color.accent : Qt.darker(root.foreground, 1.35)
@@ -2355,6 +2422,7 @@ Panel {
                   }
 
                   Text {
+                    textFormat: Text.PlainText
                     width: parent.width
                     text: {
                       var selected = root.authOptions.find(function(option) { return option.value === authMethodPicker.value })
@@ -2373,6 +2441,7 @@ Panel {
                     color: Color.accent
                     opacity: authMethodPicker.value !== "" && authMethodPicker.enabled ? 1 : 0.5
                     Text {
+                      textFormat: Text.PlainText
                       anchors.centerIn: parent
                       text: OmaDigest.OmaDigestStore.agentConnection.connected ? "Connect another" : "Connect"
                       color: Color.background
@@ -2392,6 +2461,7 @@ Panel {
                   }
 
                   Text {
+                    textFormat: Text.PlainText
                     visible: OmaDigest.OmaDigestStore.agentConnection.connected
                     width: parent.width
                     text: visible ? OmaDigest.OmaDigestStore.agentConnection.provider + " · "
@@ -2421,6 +2491,7 @@ Panel {
                   spacing: Style.space(8)
 
                   Text {
+                    textFormat: Text.PlainText
                     width: parent.width
                     text: OmaDigest.OmaDigestStore.auth.phase === "complete" ? "Connected"
                       : OmaDigest.OmaDigestStore.auth.phase === "error" ? "Sign-in failed" : "Sign-in in progress"
@@ -2431,6 +2502,7 @@ Panel {
                     wrapMode: Text.WordWrap
                   }
                   Text {
+                    textFormat: Text.PlainText
                     visible: text !== ""
                     width: parent.width
                     text: String(OmaDigest.OmaDigestStore.auth.message || "")
@@ -2440,6 +2512,7 @@ Panel {
                     wrapMode: Text.WordWrap
                   }
                   Text {
+                    textFormat: Text.PlainText
                     visible: OmaDigest.OmaDigestStore.auth.userCode !== ""
                     text: visible ? "Code: " + OmaDigest.OmaDigestStore.auth.userCode : ""
                     color: root.foreground
@@ -2455,6 +2528,7 @@ Panel {
                     radius: Style.cornerRadius
                     color: Color.accent
                     Text {
+                      textFormat: Text.PlainText
                       anchors.centerIn: parent
                       text: "Open sign-in page"
                       color: Color.background
@@ -2482,6 +2556,7 @@ Panel {
                         ? Style.selectedFillFor(root.foreground, Color.accent)
                         : Style.normalFillFor(root.foreground, Color.accent)
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: String(modelData.label)
                         color: root.foreground
@@ -2523,6 +2598,7 @@ Panel {
                       radius: Style.cornerRadius
                       color: Color.accent
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: "Continue"
                         color: Color.background
@@ -2543,6 +2619,7 @@ Panel {
                       radius: Style.cornerRadius
                       color: Style.normalFillFor(root.foreground, Color.accent)
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: "Cancel"
                         color: root.foreground
@@ -2573,6 +2650,7 @@ Panel {
                   spacing: Style.space(10)
 
                   Text {
+                    textFormat: Text.PlainText
                     text: "VOICE"
                     color: Color.accent
                     font.family: root.fontFamily
@@ -2590,6 +2668,7 @@ Panel {
                       anchors.verticalCenter: parent.verticalCenter
                       width: parent.width - voiceInputPicker.width - Style.space(10)
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: "Voice input"
                         color: root.foreground
@@ -2598,6 +2677,7 @@ Panel {
                         font.bold: true
                       }
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: "Used by the microphone control while drafting."
                         color: Qt.darker(root.foreground, 1.4)
@@ -2628,6 +2708,7 @@ Panel {
                       anchors.verticalCenter: parent.verticalCenter
                       width: parent.width - readModePicker.width - configureReadMode.width - Style.space(16)
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: "Read aloud"
                         color: root.foreground
@@ -2636,6 +2717,7 @@ Panel {
                         font.bold: true
                       }
                       Text {
+                        textFormat: Text.PlainText
                         width: parent.width
                         text: OmaDigest.OmaDigestStore.tts.configured ? "Ready" : "Not configured"
                         color: Qt.darker(root.foreground, 1.4)
@@ -2666,6 +2748,7 @@ Panel {
                       radius: Style.cornerRadius
                       color: Style.normalFillFor(root.foreground, Color.accent)
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: "Configure"
                         color: root.foreground
@@ -2683,6 +2766,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 visible: root.connectionView === "read-mode"
                 text: "‹ Connections"
                 color: Color.accent
@@ -2697,6 +2781,7 @@ Panel {
                 }
               }
               Text {
+                textFormat: Text.PlainText
                 visible: root.connectionView === "read-mode"
                 width: parent.width
                 text: "Configure read aloud"
@@ -2706,6 +2791,7 @@ Panel {
                 font.bold: true
               }
               Text {
+                textFormat: Text.PlainText
                 visible: root.connectionView === "read-mode"
                 width: parent.width
                 text: root.ttsProvider === "elevenlabs"
@@ -2759,6 +2845,7 @@ Panel {
                 color: Color.accent
                 opacity: ttsEndpoint.text.trim() && ttsModel.text.trim() && ttsVoice.text.trim() && ttsApiKey.text.trim() ? 1 : 0.5
                 Text {
+                  textFormat: Text.PlainText
                   anchors.centerIn: parent
                   text: "Save read mode"
                   color: Color.background

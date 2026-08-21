@@ -47,6 +47,7 @@ Column {
   }
 
   Text {
+    textFormat: Text.PlainText
     visible: root.kind === "integration"
     width: parent.width
     text: "Builds in your default coding agent with full tests, then installs disabled through OmaDigest validation."
@@ -70,6 +71,7 @@ Column {
     opacity: OmaDigestStore.authoringSkillState === "installing" ? 0.55 : 1
 
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: OmaDigestStore.authoringSkillState === "installed" ? "Agent skill installed"
         : OmaDigestStore.authoringSkillState === "installing" ? "Installing skill…" : "Install agent skill"
@@ -89,6 +91,7 @@ Column {
   }
 
   Text {
+    textFormat: Text.PlainText
     visible: root.kind === "integration" && OmaDigestStore.authoringSkillMessage !== ""
     width: parent.width
     horizontalAlignment: Text.AlignHCenter
@@ -113,6 +116,7 @@ Column {
     height: Style.space(100)
 
     QQC.TextArea {
+      textFormat: TextEdit.PlainText
       id: request
       anchors.fill: parent
       color: root.foreground
@@ -195,6 +199,7 @@ Column {
         height: Style.space(18)
 
         Text {
+          textFormat: Text.PlainText
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           text: root.kind === "integration" ? "Building integration" : "Building template"
@@ -205,6 +210,7 @@ Column {
         }
 
         Text {
+          textFormat: Text.PlainText
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           text: root.elapsedText()
@@ -229,6 +235,7 @@ Column {
             height: Style.space(17)
 
             Text {
+              textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
               text: OmaDigestStore.draftPlan.length > 0
@@ -243,6 +250,7 @@ Column {
             }
 
             Text {
+              textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.leftMargin: Style.space(18)
               anchors.right: parent.right
@@ -260,6 +268,7 @@ Column {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: OmaDigestStore.draftPlan.length === 0 && OmaDigestStore.draftProgress.length === 0
           width: parent.width
           text: "Starting constrained draft session…"
@@ -299,6 +308,7 @@ Column {
       opacity: request.text.trim() && !root.isWorking && !root.isLaunching ? 1 : 0.5
 
       Text {
+        textFormat: Text.PlainText
         anchors.centerIn: parent
         text: root.kind === "integration"
           ? (root.isLaunching ? "Opening agent…" : "Build in default agent")
@@ -321,6 +331,7 @@ Column {
   }
 
   Text {
+    textFormat: Text.PlainText
     visible: root.kind === "integration" && OmaDigestStore.authoringMessage !== ""
     width: parent.width
     text: OmaDigestStore.authoringMessage
@@ -331,6 +342,7 @@ Column {
   }
 
   Text {
+    textFormat: Text.PlainText
     visible: root.currentDraft !== null
     width: parent.width
     text: {
@@ -348,6 +360,7 @@ Column {
   }
 
   QQC.TextArea {
+    textFormat: TextEdit.PlainText
     visible: root.currentDraft !== null
       && (root.currentDraft.kind === "template" || root.currentDraft.kind === "integration")
     width: parent.width
@@ -381,6 +394,7 @@ Column {
         radius: Style.cornerRadius
         color: modelData.accept ? root.accent : Style.normalFillFor(root.foreground, root.accent)
         Text {
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           text: String(modelData.label)
           color: modelData.accept ? Color.background : root.foreground
@@ -407,6 +421,7 @@ Column {
       ? Style.hoverFillFor(root.foreground, root.accent)
       : Style.normalFillFor(root.foreground, root.accent)
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: root.currentDraft === null ? "Recover in Herdr" : "Continue in Herdr"
       color: root.foreground
@@ -442,6 +457,7 @@ Column {
     radius: Style.cornerRadius
     color: Style.normalFillFor(root.foreground, root.accent)
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: "Open in default agent"
       color: root.foreground

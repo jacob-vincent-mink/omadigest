@@ -40,8 +40,8 @@ Rectangle {
       || ["setup-required", "setup_required"].indexOf(
         String(root.status && root.status.state || "").toLowerCase()) >= 0)
   readonly property string contextActionLabel: root.needsAuthentication
-    ? ((root.status && root.status.action && root.status.action.label) || "Authenticate")
-    : root.needsSetup ? ((root.status && root.status.action && root.status.action.label) || "Set up") : ""
+    ? "Authenticate"
+    : root.needsSetup ? "Set up" : ""
   readonly property bool sourceEnabled: root.integration.enabled !== false
   readonly property string categorySummary: root.categorySummaryText()
   readonly property bool checking: root.status !== null && root.status !== undefined
@@ -132,6 +132,7 @@ Rectangle {
       spacing: Style.space(1)
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: String(root.integration.name || "Source")
         color: root.foreground
@@ -141,6 +142,7 @@ Rectangle {
         elide: Text.ElideRight
       }
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: root.categorySummary
         color: Qt.darker(root.foreground, 1.4)
@@ -186,6 +188,7 @@ Rectangle {
     }
 
     Text {
+      textFormat: Text.PlainText
       id: compactChevron
       width: Style.space(16)
       anchors.verticalCenter: parent.verticalCenter
@@ -234,6 +237,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(1)
         Text {
+          textFormat: Text.PlainText
           width: parent.width
           text: root.statusState === "green" ? "Ready" : root.statusState === "red" ? "Needs attention" : "Check recommended"
           color: root.foreground
@@ -243,6 +247,7 @@ Rectangle {
           elide: Text.ElideRight
         }
         Text {
+          textFormat: Text.PlainText
           width: parent.width
           text: root.statusLabel
           color: Qt.darker(root.foreground, 1.35)
@@ -268,6 +273,7 @@ Rectangle {
     }
 
     Text {
+      textFormat: Text.PlainText
       visible: root.status !== null && root.status !== undefined && !!root.status.checkedAt
       width: parent.width
       text: visible ? "Checked " + new Date(root.status.checkedAt).toLocaleString(Qt.locale(), "MMM d · hh:mm") : ""
@@ -306,6 +312,7 @@ Rectangle {
         }
 
         Text {
+          textFormat: Text.PlainText
           width: parent.width
           text: String(modelData.label || "Setting")
           color: root.foreground
@@ -323,7 +330,7 @@ Rectangle {
           font.family: root.fontFamily
           onTextChanged: root.setValue(modelData.key, text)
         }
-        Toggle {
+        PlainToggle {
           visible: String(modelData.type) === "boolean"
           width: parent.width
           label: String(modelData.label || "Setting")
@@ -341,7 +348,7 @@ Rectangle {
       visible: root.needsSetup && (root.setup.fields || []).length > 0
       width: parent.width
       height: visible ? Style.space(34) : 0
-      text: String(root.setup.actionLabel || "Set up")
+      text: "Save settings"
       foreground: Color.background
       background: root.accent
       accent: root.accent
@@ -351,7 +358,7 @@ Rectangle {
       onClicked: OmaDigestStore.setupIntegration(root.sourceId, root.values)
     }
 
-    Toggle {
+    PlainToggle {
       width: parent.width
       label: "Use in digests"
       description: root.isCore ? "Allow templates to request this built-in source" : "Allow templates to request this source"
@@ -370,6 +377,7 @@ Rectangle {
       spacing: Style.space(6)
 
       Text {
+        textFormat: Text.PlainText
         text: "CATEGORIES"
         color: Qt.darker(root.foreground, 1.35)
         font.family: root.fontFamily
@@ -379,7 +387,7 @@ Rectangle {
       }
       Repeater {
         model: root.categories
-        Toggle {
+        PlainToggle {
           required property var modelData
           width: parent.width
           label: String(modelData.label || modelData.id || "Category")
@@ -416,6 +424,7 @@ Rectangle {
       spacing: Style.space(5)
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: String(root.setup.summary || root.integration.description || "No additional connection details.")
         color: Qt.darker(root.foreground, 1.3)
@@ -424,6 +433,7 @@ Rectangle {
         wrapMode: Text.WordWrap
       }
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: {
           var permissions = root.integration.permissions || ({})

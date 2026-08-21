@@ -16,6 +16,17 @@ Notification and connector strings are framed as untrusted evidence. They never 
 
 Structured output does not prove that model classification is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, and unsupported actions cannot execute.
 
+## Display boundary
+
+Notification, connector, model, template, status, and authentication strings are
+untrusted data even after schema validation. Every OmaDigest QML `Text` and
+`TextArea` surface explicitly uses plain-text rendering. Generated integration
+labels use a plugin-local plain-text toggle instead of passing those values into
+host controls whose rendering policy OmaDigest does not own. Action labels that
+carry setup authority are fixed by OmaDigest rather than accepted from a
+generated manifest. This prevents markup-shaped data from becoming rich text or
+causing local or remote resource loads in the long-running Quickshell process.
+
 ## Credentials
 
 TTS keys and integration `secret` fields are stored through Secret Service (`secret-tool`). They are not written into `shell.json`, template files, generated packages, digest history, logs, or model prompts. A compromised process running as the same desktop user may still be able to request unlocked Secret Service items; that is outside OmaDigest's process boundary.
