@@ -25,7 +25,17 @@ node --test integrations/*/connector.test.mjs
 qmllint -I "$OMARCHY_PATH/shell" BarWidget.qml Panel.qml components/*.qml
 ```
 
-`npm run check` type-checks, runs Vitest, and creates `runtime/dist/omadigest-broker.mjs`. The bundle includes a `createRequire` bridge because some pinned Pi dependencies still use CommonJS dynamic imports.
+`npm run check` type-checks, runs Vitest, and creates the minified
+`runtime/dist/omadigest-broker.mjs` entry point plus its checked-in
+`runtime/dist/chunks/` modules. Code splitting keeps each executable text file
+within the marketplace scanner's per-file bound. The bundle includes a
+`createRequire` bridge because some pinned Pi dependencies still use CommonJS
+dynamic imports.
+
+OmaDigest builds against a deliberately scoped Pi surface: the low-level Agent,
+the structured tools supplied by OmaDigest, and the OpenAI/Codex and xAI model
+providers shown in settings. It does not bundle Pi's terminal UI or general
+filesystem and shell tools.
 
 ## Validate as an Omarchy plugin
 
@@ -71,7 +81,7 @@ Before publishing:
 
 - clean install from a plain git clone;
 - no install hook, sudo, package-manager action, or runtime npm download;
-- checked-in reproducible broker bundle and source map;
+- checked-in reproducible broker entry point, chunks, and source maps;
 - lockfile-derived dependency/license inventory;
 - manifest validation and QML lint;
 - live notification, Pi auth, dictation, Secret Service, connector, and TTS smoke tests;

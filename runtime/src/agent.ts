@@ -1,23 +1,15 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  defineTool,
-  ModelRuntime,
-  SessionManager,
-  SettingsManager
-} from "@earendil-works/pi-coding-agent";
+import { defineTool } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types.js";
+import { ModelRuntime } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/model-runtime.js";
+import { Agent } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-agent-core/dist/agent.js";
+import type { AgentTool } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-agent-core/dist/types.js";
+import type { Model, Message } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/types.js";
 import { Type } from "typebox";
 import { registerBundledOAuthFlowLoaders } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/load.js";
-import { anthropicOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/anthropic.js";
 import { openaiCodexOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js";
-import { githubCopilotOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js";
-import { openRouterOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/openrouter.js";
-import { kimiCodingOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js";
 import { xaiOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/xai.js";
-import { createRadiusOAuth } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/oauth/radius.js";
 import type { AuthInteraction, AuthType } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
 import { compiledTemplateSchema } from "./template-schema.js";
 import { integrationManifestSchema } from "./integration-schema.js";
@@ -29,13 +21,13 @@ import { validateIntegrationPackageFiles } from "./integration-package-validatio
 import type { AttentionItem, Digest, DigestTemplate } from "./types.js";
 
 registerBundledOAuthFlowLoaders({
-  anthropic: () => anthropicOAuth,
+  anthropic: async () => { throw new Error("Anthropic authentication is not exposed by OmaDigest"); },
   openaiCodex: () => openaiCodexOAuth,
-  githubCopilot: () => githubCopilotOAuth,
-  openrouter: () => openRouterOAuth,
-  kimiCoding: () => kimiCodingOAuth,
+  githubCopilot: async () => { throw new Error("GitHub Copilot authentication is not exposed by OmaDigest"); },
+  openrouter: async () => { throw new Error("OpenRouter authentication is not exposed by OmaDigest"); },
+  kimiCoding: async () => { throw new Error("Kimi authentication is not exposed by OmaDigest"); },
   xai: () => xaiOAuth,
-  radius: (options) => createRadiusOAuth(options)
+  radius: async () => { throw new Error("Radius authentication is not exposed by OmaDigest"); }
 });
 
 const MAX_REQUEST_CHARS = 20_000;
@@ -320,33 +312,20 @@ export async function runDraftAgent(
     "When calling out_of_scope, suggestedPrompt must faithfully preserve the user's original request for the default agent; do not replace it with an OmaDigest task.",
     skill
   ].join("\n\n");
-  const loader = new DefaultResourceLoader({
-    cwd: pluginRoot,
-    agentDir: join(pluginRoot, ".agent-runtime"),
-    noExtensions: true,
-    noSkills: true,
-    systemPromptOverride: () => systemPrompt,
-    appendSystemPromptOverride: () => []
-  });
-  await loader.reload();
   onProgress?.({ kind: "system", phase: "session", message: "Starting a constrained draft session" });
-  const settings = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
-  const { session } = await createAgentSession({
+  const session = createScopedAgent(
     model,
-    modelRuntime: runtime,
-    resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(pluginRoot),
-    settingsManager: settings,
-    tools: [kind === "template" ? "emit_template_draft" : "emit_integration_draft", "report_draft_progress", "request_clarification", "out_of_scope"],
-    customTools: [kind === "template" ? emitTemplate : emitIntegration, reportProgress, clarification, outOfScope]
-  });
+    runtime,
+    systemPrompt,
+    [kind === "template" ? emitTemplate : emitIntegration, reportProgress, clarification, outOfScope]
+  );
   onProgress?.({ kind: "system",
     phase: "generate",
     message: kind === "integration" ? "Generating the structured integration package" : "Generating the structured digest template"
   });
 
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; void session.abort(); }, timeoutMs);
+  const timer = setTimeout(() => { timedOut = true; session.abort(); }, timeoutMs);
   timer.unref();
   const debugEvents: string[] = [];
   const unsubscribe = session.subscribe((event) => {
@@ -390,9 +369,9 @@ export async function runDraftAgent(
         error: typeof message?.errorMessage === "string" ? message.errorMessage.slice(0, 500) : undefined,
         content: Array.isArray(message?.content) ? message.content.map((part: any) => part?.type) : undefined
       }));
-      process.stderr.write(`omadigest draft diagnostics: ${JSON.stringify({ events: debugEvents.slice(-20), tools: session.agent.state.tools.map((tool) => tool.name), messages })}\n`);
+      process.stderr.write(`omadigest draft diagnostics: ${JSON.stringify({ events: debugEvents.slice(-20), tools: session.state.tools.map((tool) => tool.name), messages })}\n`);
     }
-    session.dispose();
+    session.reset();
   }
   if (timedOut) throw new Error("The drafting agent timed out");
   if (result === undefined) throw new Error("The drafting agent did not submit a structured result");
@@ -463,25 +442,8 @@ export async function runDigestAgent(
     "Give the digest a concise, evidence-specific title that reflects the selected template and subject. Never use a generic title such as Today's Digest, Daily Briefing, or the template name alone.",
     template.instructions
   ].join("\n\n");
-  const loader = new DefaultResourceLoader({
-    cwd: pluginRoot,
-    agentDir: join(pluginRoot, ".agent-runtime"),
-    noExtensions: true,
-    noSkills: true,
-    systemPromptOverride: () => systemPrompt,
-    appendSystemPromptOverride: () => []
-  });
-  await loader.reload();
-  const { session } = await createAgentSession({
-    model,
-    modelRuntime: runtime,
-    resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(pluginRoot),
-    settingsManager: SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } }),
-    tools: ["emit_digest"],
-    customTools: [emitDigest]
-  });
-  const timer = setTimeout(() => { void session.abort(); }, timeoutMs);
+  const session = createScopedAgent(model, runtime, systemPrompt, [emitDigest]);
+  const timer = setTimeout(() => { session.abort(); }, timeoutMs);
   timer.unref();
   try {
     await session.prompt([
@@ -494,7 +456,7 @@ export async function runDigestAgent(
       await session.prompt("Call emit_digest now with the complete cited result. Do not answer with ordinary text.");
   } finally {
     clearTimeout(timer);
-    session.dispose();
+    session.reset();
   }
   if (emitted === undefined) throw new Error("The digest agent did not submit a structured result");
   return {
@@ -557,6 +519,26 @@ function selectAgentModel<T extends { id: string }>(models: readonly T[]): T | u
   return models.find((model) => /(?:mini|haiku|flash)/iu.test(model.id) && !/spark/iu.test(model.id))
     ?? models.find((model) => !/spark/iu.test(model.id))
     ?? models[0];
+}
+
+function createScopedAgent(
+  model: Model<any>,
+  runtime: ModelRuntime,
+  systemPrompt: string,
+  tools: unknown[]
+): Agent {
+  return new Agent({
+    initialState: { systemPrompt, model, thinkingLevel: "off", tools: tools as AgentTool[], messages: [] },
+    convertToLlm: (messages) => messages.filter((message) =>
+      message.role === "user" || message.role === "assistant" || message.role === "toolResult"
+    ) as Message[],
+    streamFn: (activeModel, context, options) => runtime.streamSimple(activeModel, context, {
+      ...options,
+      maxRetries: 0
+    }),
+    sessionId: randomUUID(),
+    toolExecution: "sequential"
+  });
 }
 
 function toolError(message: string) {

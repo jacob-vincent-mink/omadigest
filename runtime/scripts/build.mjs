@@ -1,15 +1,38 @@
 import { build } from "esbuild";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
+const scopedProviderCatalog = {
+  name: "omadigest-scoped-provider-catalog",
+  setup(context) {
+    context.onResolve({ filter: /^@earendil-works\/pi-ai\/providers\/all$/ }, () => ({
+      path: resolve("runtime/src/provider-catalog.ts")
+    }));
+    context.onResolve({ filter: /^@earendil-works\/pi-ai\/compat$/ }, () => ({
+      path: resolve("runtime/src/pi-ai-compat.ts")
+    }));
+    context.onResolve({ filter: /^zod$/ }, () => ({
+      path: resolve("runtime/src/zod-lite.ts")
+    }));
+  }
+};
 
 await mkdir("runtime/dist", { recursive: true });
+await rm("runtime/dist/chunks", { recursive: true, force: true });
 await build({
-  entryPoints: ["runtime/src/index.ts"],
-  outfile: "runtime/dist/omadigest-broker.mjs",
+  entryPoints: { "omadigest-broker": "runtime/src/index.ts" },
+  outdir: "runtime/dist",
+  entryNames: "[name]",
+  chunkNames: "chunks/[name]-[hash]",
+  outExtension: { ".js": ".mjs" },
   bundle: true,
+  splitting: true,
   platform: "node",
   format: "esm",
   target: "node22",
+  minify: true,
   sourcemap: true,
+  plugins: [scopedProviderCatalog],
   banner: {
     js: "#!/usr/bin/env node\nimport { createRequire as __omadigestCreateRequire } from 'node:module';\nvar require = __omadigestCreateRequire(import.meta.url);"
   }
@@ -23,6 +46,7 @@ await build({
   platform: "node",
   format: "esm",
   target: "node22",
+  minify: true,
   sourcemap: true,
   banner: {
     js: "#!/usr/bin/env node\nimport { createRequire as __omadigestCreateRequire } from 'node:module';\nvar require = __omadigestCreateRequire(import.meta.url);"

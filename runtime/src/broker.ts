@@ -9,7 +9,7 @@ import { loadTemplates } from "./templates.js";
 import { selectTemplate } from "./selector.js";
 import { discoverIntegrations, integrationConfigRoot, readIntegrationState, setIntegrationCategoryEnabled, setIntegrationEnabled } from "./integrations.js";
 import { IntegrationRuntime } from "./integration-runtime.js";
-import { agentConnectionStatus, discoverAgentAuthMethods, loginAgentProvider, runDigestAgent, runDraftAgent, type DraftResult } from "./agent.js";
+import type { DraftResult } from "./agent.js";
 import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
 import { AttentionStore, attentionItemSchema } from "./attention.js";
 import { installDraft, installTemplateEdit } from "./drafts.js";
@@ -46,6 +46,13 @@ const contextSchema = z.object({
   availableConnectors: z.array(z.string().min(1).max(80)).max(64),
   now: z.string().datetime()
 }).strict();
+
+type AgentModule = typeof import("./agent.js");
+let agentModulePromise: Promise<AgentModule> | undefined;
+function agentModule(): Promise<AgentModule> {
+  agentModulePromise ??= import("./agent.js");
+  return agentModulePromise;
+}
 
 const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("initialize"), protocolVersion: z.number().int() }).strict(),
@@ -407,7 +414,7 @@ async function handle(raw: string): Promise<boolean> {
       protocolVersion: PROTOCOL_VERSION,
       templates: publicTemplates(),
       integrations: publicIntegrations(),
-      authMethods: await discoverAgentAuthMethods(),
+      authMethods: await (await agentModule()).discoverAgentAuthMethods(),
       privacy: privacy.status(),
       templateSuggestions: currentTemplateSuggestions(),
       update: releaseUpdates.status()
@@ -432,7 +439,7 @@ async function handle(raw: string): Promise<boolean> {
   }
 
   if (command.type === "agent_status") {
-    const status = await agentConnectionStatus();
+    const status = await (await agentModule()).agentConnectionStatus();
     emit({ type: "agent_status", id: command.id, ...status });
     return true;
   }
@@ -644,7 +651,7 @@ async function handle(raw: string): Promise<boolean> {
         }
       }
       emit({ type: "digest_state", id: command.id, state: "working", templateId: selectedId });
-      const digest = await runDigestAgent(template, items, pluginRoot);
+      const digest = await (await agentModule()).runDigestAgent(template, items, pluginRoot);
       digestHistory.save(digest);
       attention.acknowledge(items.map((item) => item.id));
       emit({ type: "digest", id: command.id, digest });
@@ -705,7 +712,7 @@ async function handle(raw: string): Promise<boolean> {
         protocolVersion: PROTOCOL_VERSION,
         templates: publicTemplates(),
         integrations: publicIntegrations(),
-        authMethods: await discoverAgentAuthMethods(),
+        authMethods: await (await agentModule()).discoverAgentAuthMethods(),
         privacy: privacy.status(),
         templateSuggestions: currentTemplateSuggestions(),
         update: releaseUpdates.status()
@@ -732,7 +739,7 @@ async function handle(raw: string): Promise<boolean> {
       if (command.type === "template_revise" && revisionTemplate === undefined)
         throw new Error("The template to revise is unavailable");
       const request = revisionTemplate === undefined ? command.request : formatTemplateRevision(revisionTemplate, command.request);
-      const draft = await runDraftAgent(
+      const draft = await (await agentModule()).runDraftAgent(
         "template",
         request,
         pluginRoot,
@@ -998,15 +1005,15 @@ function beginAuth(methodId: string): void {
 
 async function runAuth(flow: AuthFlow): Promise<void> {
   try {
-    await loginAgentProvider(flow.methodId, {
+    await (await agentModule()).loginAgentProvider(flow.methodId, {
       signal: flow.controller.signal,
       prompt: (prompt) => promptAuth(flow, prompt),
       notify: (event) => notifyAuth(flow, event)
     });
     if (flow.controller.signal.aborted || authFlow?.id !== flow.id) return;
-    const status = await agentConnectionStatus();
+    const status = await (await agentModule()).agentConnectionStatus();
     emit({ type: "agent_status", id: `auth-${flow.id}`, ...status });
-    emit({ type: "auth_methods", methods: await discoverAgentAuthMethods() });
+    emit({ type: "auth_methods", methods: await (await agentModule()).discoverAgentAuthMethods() });
     emit({ type: "auth", phase: "complete", flowId: flow.id, methodId: flow.methodId, message: "Connected. OmaDigest is ready to generate." });
   } catch (error) {
     if (flow.controller.signal.aborted) {
