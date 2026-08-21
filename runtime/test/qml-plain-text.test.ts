@@ -37,4 +37,36 @@ describe("QML untrusted-text boundary", () => {
     expect(card).not.toContain("root.status.action.label");
     expect(card).not.toContain("text: String(root.setup.actionLabel");
   });
+
+  it("keeps notification-history filesystem work out of QML", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    expect(panel).not.toContain("historyReader");
+    expect(panel).not.toContain("notificationHistoryDir");
+    expect(panel).not.toContain("awk 1");
+    expect(panel).toContain("OmaDigest.OmaDigestStore.refreshNotificationHistory()");
+  });
+
+  it("gates every costful or mutating demo IPC method", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    expect(panel).toContain('Quickshell.env("OMADIGEST_DEMO_IPC") === "1"');
+    const methods = [
+      "previewDataDeletion", "startDraft", "prepareDraft", "submitDraft", "submitPreparedDraft",
+      "showDraft", "acceptDraft", "editTemplate", "setupIntegration", "setupIntegrationDefaults",
+      "enableIntegration", "checkIntegration", "previewRoute", "installAuthoringSkill", "generate",
+      "beginFocus", "triggerFocusReentry"
+    ];
+    for (const method of methods) {
+      const start = panel.indexOf(`function ${method}(`);
+      expect(start, method).toBeGreaterThanOrEqual(0);
+      expect(panel.slice(start, start + 240), method).toContain("demoGuard()");
+    }
+  });
+
+  it("shows a broker-derived exact prompt before a default-agent handoff", () => {
+    const editor = readFileSync(join(repositoryRoot, "components", "DraftEditor.qml"), "utf8");
+    expect(editor).not.toContain("suggestedPrompt");
+    expect(editor).toContain("EXACT DEFAULT-AGENT PROMPT");
+    expect(editor).toContain("prepareDefaultAgentHandoff(request.text)");
+    expect(editor).toContain("confirmDefaultAgentHandoff()");
+  });
 });

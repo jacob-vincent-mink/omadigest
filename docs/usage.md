@@ -31,7 +31,7 @@ Open **Settings → Privacy** before enabling notification content. Policy is en
 | Digest | Policy-permitted content | Yes | No |
 | Digest + agent | Policy-permitted content | Yes | Yes, after a click |
 
-Protected private applications such as Signal start at **Ignore**. Unknown applications start at **Count only**. Tightening a rule rewrites retained segments to erase content no longer permitted by the policy.
+Omarchy exposes sender-provided application labels, not authenticated sender identities. OmaDigest therefore applies one policy to all native notifications and defaults it to **Count only**. Selecting **Digest** or **Digest + agent** is explicit consent for all native notification content; use a validated integration when a source needs independent controls. Tightening the global policy rewrites retained segments to erase content no longer permitted.
 
 ## Generate a digest
 
@@ -57,7 +57,7 @@ Open **Settings → Templates** to inspect installed skills or create one from a
 
 Open any installed template to choose **Edit manually** or **Revise with agent**. Manual edits expose both readable instructions and the compiled routing JSON, then pass through broker validation and atomic installation. Agent revisions receive the current template inside the same tool-restricted session, must preserve its ID, show their plan, and return a complete proposal for review. Editing a bundled template creates a user overlay; **Settings → Data → Delete templates** removes overlays and restores packaged defaults.
 
-The scoped drafting session cannot edit files or browse the system. If the request is unrelated it can only propose an explicit default-agent handoff. If legitimate authoring needs broader follow-up, **Continue in Herdr** transfers the request and a bounded draft snapshot to a dedicated workspace after confirmation.
+The scoped drafting session cannot edit files or browse the system. If the request is unrelated, the broker derives a prompt only from the original request and shows the exact bounded prompt before a second confirmation can launch the default agent. If legitimate authoring needs broader follow-up, **Continue in Herdr** transfers the request and a bounded draft snapshot to a dedicated workspace after confirmation.
 
 ## Sources
 
@@ -104,7 +104,7 @@ OmaDigest checks its latest stable GitHub release in the background no more than
 
 Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, custom templates, or all four categories. Every action requires confirmation.
 
-Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or privacy rules.
+Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or the native-notification privacy policy.
 
 ## Troubleshooting
 

@@ -198,13 +198,13 @@ export type BrokerCommand =
   | { type: "template_update"; id: string; templateId: string; instructions: string; compiledJson: string }
   | { type: "authoring_handoff"; id: string; kind: "integration"; request: string }
   | { type: "authoring_skill_install"; id: string }
-  | { type: "handoff_default_agent"; id: string; prompt: string }
+  | { type: "handoff_prepare"; id: string; request: string }
+  | { type: "handoff_default_agent"; id: string; token: string }
   | { type: "handoff_herdr"; id: string; kind: "template" | "integration"; request: string; draftJson: string }
   | { type: "digest_handoff"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
   | { type: "agent_status"; id: string }
   | { type: "privacy_status"; id: string }
   | { type: "privacy_set_default"; id: string; mode: PrivacyMode }
-  | { type: "privacy_set_rule"; id: string; app: string; mode: PrivacyMode }
   | { type: "auth_begin"; id: string; methodId: string }
   | { type: "auth_response"; id: string; flowId: string; promptId: string; value: string }
   | { type: "auth_cancel"; id: string; flowId: string }
@@ -219,6 +219,7 @@ export type BrokerCommand =
   | { type: "tts_pause"; id: string }
   | { type: "tts_stop"; id: string }
   | { type: "attention_ingest"; id: string; items: AttentionItem[] }
+  | { type: "attention_refresh_notifications"; id: string }
   | { type: "attention_acknowledge"; id: string; itemIds: string[] }
   | { type: "attention_acknowledge_all"; id: string }
   | { type: "template_suggestion_dismiss"; id: string; suggestionId: string }
@@ -244,6 +245,7 @@ export type BrokerEvent =
   | { type: "draft"; id: string; draft: unknown }
   | { type: "draft_saved"; id: string; draftId: string; kind: "template" | "integration" }
   | { type: "template_saved"; id: string; templateId: string }
+  | { type: "handoff_preview"; id: string; token: string; prompt: string }
   | { type: "handoff"; id: string; state: "launched"; target?: "default-agent" | "herdr" | "authoring-agent" }
   | { type: "authoring_skill"; id: string; state: "installed"; locations: number }
   | { type: "agent_status"; id: string; connected: boolean; provider: string; model: string }

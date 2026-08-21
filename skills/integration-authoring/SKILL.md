@@ -11,7 +11,7 @@ Build one self-contained integration package that turns an external source into 
 
 - Produce exactly one directory named after the manifest ID.
 - Required files: `manifest.json`, `connector.mjs`, `README.md`, and `connector.test.mjs`.
-- Use Node.js standard-library APIs only. An external command may be used only when the request requires it, the manifest declares it, and the broker allowlists it; currently `gh` is the sole supported command. The broker injects authenticated `gh` access at runtime. Tests must mock command execution and never depend on host authentication or network access.
+- Use Node.js standard-library APIs only. External commands and direct network access are forbidden. Request bounded HTTPS through the broker-mediated NDJSON exchange described by the connector protocol. Tests must mock those exchanges and never depend on host authentication or live network access.
 - Speak the versioned NDJSON connector protocol in [connector protocol](references/connector-protocol.md).
 - Keep all source-specific parsing inside this directory.
 - Store no credentials. Setup values arrive from the broker for one request; secrets belong to the broker's credential store.
@@ -22,7 +22,7 @@ Build one self-contained integration package that turns an external source into 
 
 ## Permissions
 
-Declare every network host, external command, read path, and write path in the manifest. Empty is better than speculative. If a public HTTPS host comes from user configuration, declare the corresponding `url` setup key in `permissions.networkSetupFields`; validate it against credentials, redirects, and private/local addresses in connector code. Declarations are reviewed disclosures and future sandbox inputs; they are not permission to exceed the connector operation.
+Declare every HTTPS host in `networkHosts`; `commands`, `readPaths`, and `writePaths` must be empty. If a public HTTPS host comes from user configuration, declare the corresponding `url` setup key in `permissions.networkSetupFields`. The broker enforces exact scheme/host/port, validates DNS against private and non-routable addresses, refuses automatic redirects, and bounds request count, bytes, and time. The connector process itself receives no network or child-process authority.
 
 Integrations are generated into staging, validated, tested in a restricted subprocess, reviewed as a complete diff, installed only after acceptance, and remain disabled until separately enabled. Do not weaken any stage.
 

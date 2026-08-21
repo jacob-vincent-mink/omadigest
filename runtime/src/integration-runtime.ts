@@ -1,12 +1,19 @@
 import { execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { createInterface } from "node:readline";
 import { z } from "zod";
 import type { AttentionItem, SourceStatus } from "./types.js";
 import { DEFAULT_CATEGORY_ID, type DiscoveredIntegration } from "./integrations.js";
+import { proxyConnectorHttps } from "./connector-network.js";
 
 const MAX_CONNECTOR_RESPONSE_BYTES = 64 * 1024;
+const MAX_CONNECTOR_PROTOCOL_BYTES = 1024 * 1024;
+const MAX_CONNECTOR_NETWORK_REQUESTS = 8;
+const MAX_INTEGRATION_CONFIG_BYTES = 256 * 1024;
+const GITHUB_INTEGRATION_ID = "io.github.jacob-vincent-mink.github";
+const MAX_GITHUB_RESPONSE_BYTES = 512 * 1024;
 const boundedString = (maximumChars: number, maximumBytes: number) => z.string().max(maximumChars).refine(
   (value) => Buffer.byteLength(value, "utf8") <= maximumBytes,
   "Connector string is too large"
@@ -64,7 +71,8 @@ export class IntegrationRuntime {
   async status(integration: DiscoveredIntegration): Promise<SourceStatus> {
     try {
       const config = await this.config(integration);
-      const response = await callConnector(integration, { version: 1, type: "probe", id: randomUUID(), config });
+      const request = await prepareConnectorRequest(integration, { version: 1, type: "probe", id: randomUUID(), config });
+      const response = await callConnector(integration, request);
       return normalizeConnectorStatus(integration, response);
     } catch (error) {
       return normalizeConnectorError(integration, error);
@@ -85,9 +93,10 @@ export class IntegrationRuntime {
         const categories = enabledCategoriesForSync(integration, requestedCategories?.[integration.manifest.id]);
         if (categories.length === 0) return [];
         const config = await this.config(integration);
-        const response = await callConnector(integration, {
+        const request = await prepareConnectorRequest(integration, {
           version: 1, type: "sync", id: randomUUID(), config, categories, since, until, limit: 50, cursor: null
         });
+        const response = await callConnector(integration, request);
         if (response.type !== "items" || !Array.isArray(response.items)) return [];
         if (response.items.length > 100) return [];
         return filterConnectorItems(integration, categories, response.items);
@@ -99,10 +108,21 @@ export class IntegrationRuntime {
   async config(integration: DiscoveredIntegration): Promise<Record<string, string | boolean>> {
     let publicValues: Record<string, string | boolean> = {};
     try {
-      const raw: unknown = JSON.parse(readFileSync(this.#publicConfigPath(integration.manifest.id), "utf8"));
+      const configPath = this.#publicConfigPath(integration.manifest.id);
+      if (statSync(configPath).size > MAX_INTEGRATION_CONFIG_BYTES) throw new Error("Integration configuration is too large");
+      const raw: unknown = JSON.parse(readFileSync(configPath, "utf8"));
       if (isObject(raw) && raw.version === 1 && isObject(raw.values)) {
-        publicValues = Object.fromEntries(Object.entries(raw.values).filter((entry): entry is [string, string | boolean] =>
-          typeof entry[1] === "string" || typeof entry[1] === "boolean"));
+        const declared = new Map(integration.manifest.setup.fields.map((field) => [field.key, field]));
+        publicValues = Object.fromEntries(Object.entries(raw.values).flatMap((entry): Array<[string, string | boolean]> => {
+          const field = declared.get(entry[0]);
+          if (field === undefined || field.type === "secret") return [];
+          if (field.type === "boolean") return typeof entry[1] === "boolean" ? [[entry[0], entry[1]]] : [];
+          if (typeof entry[1] !== "string" || entry[1].length > 20_000) return [];
+          if (field.type === "url") {
+            try { validateSetupUrl(entry[1]); } catch { return []; }
+          }
+          return [[entry[0], entry[1]]];
+        }));
       }
     } catch { /* No public setup yet. */ }
     for (const field of integration.manifest.setup.fields) {
@@ -223,9 +243,8 @@ function boundEvidence(value: unknown, fallback: string): string {
 }
 
 async function callConnector(integration: DiscoveredIntegration, request: Record<string, unknown>): Promise<Record<string, any>> {
-  const commandEnvironment = await connectorCommandEnvironment(integration);
-  const hasNetworkPermission = integration.manifest.permissions.networkHosts.length > 0
-    || (integration.manifest.permissions.networkSetupFields ?? []).length > 0;
+  if (integration.manifest.permissions.commands.length > 0)
+    throw new Error("Connector host commands are not supported");
   return new Promise((resolveCall, rejectCall) => {
     const args = [
       "--die-with-parent", "--unshare-all",
@@ -234,75 +253,114 @@ async function callConnector(integration: DiscoveredIntegration, request: Record
       "--ro-bind", "/lib64", "/lib64",
       "--ro-bind", "/etc", "/etc",
       "--ro-bind", integration.directory, "/integration",
-      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/commands",
+      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
       "--setenv", "HOME", "/nonexistent",
-      "--setenv", "PATH", "/commands"
+      "--setenv", "PATH", "/nonexistent",
+      "/usr/bin/node", "--permission", "--allow-fs-read=/integration",
+      `/integration/${integration.manifest.entryPoint}`
     ];
-    for (const command of integration.manifest.permissions.commands) {
-      const executable = allowedConnectorCommand(command);
-      if (executable === undefined) { rejectCall(new Error(`Unsupported connector command: ${command}`)); return; }
-      args.push("--ro-bind", executable, `/commands/${command}`);
-    }
-    for (const [key, value] of Object.entries(commandEnvironment)) args.push("--setenv", key, value);
-    if (hasNetworkPermission) {
-      args.push("--share-net");
-      if (existsSync("/run/systemd/resolve"))
-        args.push("--dir", "/run", "--ro-bind", "/run/systemd/resolve", "/run/systemd/resolve");
-    }
-    args.push("/usr/bin/node", "--permission", "--allow-fs-read=/integration");
-    if (hasNetworkPermission) args.push("--allow-net");
-    if (integration.manifest.permissions.commands.length > 0) args.push("--allow-child-process");
-    args.push(`/integration/${integration.manifest.entryPoint}`);
     const child = spawn("bwrap", args, {
       cwd: "/",
       env: { PATH: process.env.PATH || "/usr/bin", HOME: "/nonexistent", LANG: process.env.LANG || "C.UTF-8" },
       stdio: ["pipe", "pipe", "pipe"]
     });
-    let stdout = "";
+    let settled = false;
+    let protocolBytes = 0;
+    let networkRequests = 0;
+    let finalResponse: Record<string, any> | undefined;
+    let protocolWork = Promise.resolve();
     let stderr = "";
-    const timer = setTimeout(() => { child.kill("SIGKILL"); rejectCall(new Error("Integration timed out")); }, 20_000);
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      rejectCall(error);
+    };
+    const timer = setTimeout(() => fail(new Error("Integration timed out")), 20_000);
     timer.unref();
-    child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => { stdout = (stdout + String(chunk)).slice(-128 * 1024); });
+    child.stdout.on("data", (chunk) => {
+      protocolBytes += Buffer.byteLength(chunk);
+      if (protocolBytes > MAX_CONNECTOR_PROTOCOL_BYTES) fail(new Error("Integration protocol exceeded the byte limit"));
+    });
     child.stderr.on("data", (chunk) => { stderr = (stderr + String(chunk)).slice(-4 * 1024); });
-    child.once("error", (error) => { clearTimeout(timer); rejectCall(error); });
-    child.once("exit", () => {
-      clearTimeout(timer);
-      const line = stdout.split("\n").find((value) => value.trim() !== "");
-      if (line === undefined) { rejectCall(new Error(stderr.trim() || "Integration returned no response")); return; }
-      try {
-        if (Buffer.byteLength(line, "utf8") > MAX_CONNECTOR_RESPONSE_BYTES) {
-          rejectCall(new ConnectorCallError("response_too_large", "Integration response exceeded the byte limit"));
+    child.once("error", (error) => { clearTimeout(timer); fail(error); });
+    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+    lines.on("line", (line) => {
+      protocolWork = protocolWork.then(async () => {
+        if (settled || line.trim() === "") return;
+        if (Buffer.byteLength(line, "utf8") > MAX_CONNECTOR_RESPONSE_BYTES)
+          throw new ConnectorCallError("response_too_large", "Integration protocol message exceeded the byte limit");
+        let response: Record<string, any>;
+        try { response = JSON.parse(line) as Record<string, any>; }
+        catch { throw new Error("Integration returned an invalid response"); }
+        if (response.type === "network_request") {
+          if (finalResponse !== undefined) throw new Error("Integration emitted network work after its final response");
+          networkRequests += 1;
+          if (networkRequests > MAX_CONNECTOR_NETWORK_REQUESTS) throw new Error("Integration exceeded its network request limit");
+          try {
+            child.stdin.write(`${JSON.stringify(await proxyConnectorHttps(integration, request, response))}\n`);
+          } catch (error) {
+            child.stdin.write(`${JSON.stringify({
+              version: 1, type: "network_error", id: request.id, requestId: String(response.requestId || "").slice(0, 100),
+              code: "network_denied", message: boundEvidence(error instanceof Error ? error.message : undefined, "Network request denied")
+            })}\n`);
+          }
           return;
         }
-        const response = JSON.parse(line) as Record<string, any>;
-        if (response.type === "error") {
-          const code = validErrorCode(response.code) ? response.code : "connector_failed";
-          rejectCall(new ConnectorCallError(code, boundEvidence(response.message, "Integration failed")));
-        }
-        else resolveCall(response);
-      } catch { rejectCall(new Error("Integration returned an invalid response")); }
+        if (finalResponse !== undefined) throw new Error("Integration returned more than one final response");
+        if (response.version !== 1 || response.id !== request.id) throw new Error("Integration response did not match its request");
+        finalResponse = response;
+        child.stdin.end(`${JSON.stringify({ version: 1, type: "shutdown", id: randomUUID() })}\n`);
+      }).catch((error) => fail(error instanceof Error ? error : new Error("Integration protocol failed")));
     });
-    child.stdin.end(`${JSON.stringify(request)}\n${JSON.stringify({ version: 1, type: "shutdown", id: randomUUID() })}\n`);
+    child.once("exit", (code) => {
+      void protocolWork.then(() => {
+        clearTimeout(timer);
+        if (settled) return;
+        if (code !== 0) { fail(new Error(stderr.trim() || "Integration process failed")); return; }
+        if (finalResponse === undefined) { fail(new Error(stderr.trim() || "Integration returned no response")); return; }
+        settled = true;
+        if (finalResponse.type === "error") {
+          const errorCode = validErrorCode(finalResponse.code) ? finalResponse.code : "connector_failed";
+          rejectCall(new ConnectorCallError(errorCode, boundEvidence(finalResponse.message, "Integration failed")));
+        } else resolveCall(finalResponse);
+      }).catch((error) => fail(error instanceof Error ? error : new Error("Integration protocol failed")));
+    });
+    child.stdin.write(`${JSON.stringify(request)}\n`);
   });
 }
 
-function allowedConnectorCommand(command: string): string | undefined {
-  return command === "gh" ? "/usr/bin/gh" : undefined;
+async function prepareConnectorRequest(
+  integration: DiscoveredIntegration,
+  request: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (integration.source !== "bundled" || integration.manifest.id !== GITHUB_INTEGRATION_ID) return request;
+  if (request.type === "probe" || request.type === "setup") {
+    const login = (await executeGithubRead(["api", "user", "--jq", ".login"], 64 * 1024)).trim().slice(0, 100);
+    if (login === "") throw new ConnectorCallError("authentication_required", "GitHub CLI is not authenticated");
+    return { ...request, brokerData: { login } };
+  }
+  if (request.type === "sync") {
+    const limit = Math.max(1, Math.min(50, Number(request.limit) || 50));
+    const raw = await executeGithubRead(["api", `notifications?all=false&participating=false&per_page=${limit}`], MAX_GITHUB_RESPONSE_BYTES);
+    let notifications: unknown;
+    try { notifications = JSON.parse(raw); }
+    catch { throw new ConnectorCallError("source_invalid", "GitHub returned invalid notification data"); }
+    if (!Array.isArray(notifications) || notifications.length > 50)
+      throw new ConnectorCallError("source_invalid", "GitHub returned invalid notification data");
+    return { ...request, brokerData: { notifications } };
+  }
+  return request;
 }
 
-async function connectorCommandEnvironment(integration: DiscoveredIntegration): Promise<Record<string, string>> {
-  if (!integration.manifest.permissions.commands.includes("gh")) return {};
-  const token = await executeForSecret("/usr/bin/gh", ["auth", "token"]);
-  if (token === "") throw new Error("GitHub CLI is not authenticated");
-  return { GH_TOKEN: token, GH_PAGER: "cat", GH_PROMPT_DISABLED: "1" };
-}
-
-function executeForSecret(file: string, args: string[]): Promise<string> {
+function executeGithubRead(args: string[], maxBuffer: number): Promise<string> {
   return new Promise((resolveSecret, rejectSecret) => {
-    execFile(file, args, { encoding: "utf8", timeout: 10_000, maxBuffer: 64 * 1024 }, (error, stdout) => {
-      if (error !== null) rejectSecret(new Error("GitHub CLI authentication is unavailable"));
+    execFile("/usr/bin/gh", args, {
+      encoding: "utf8", timeout: 15_000, maxBuffer,
+      env: { PATH: "/usr/bin", HOME: process.env.HOME || "/nonexistent", GH_PAGER: "cat", GH_PROMPT_DISABLED: "1" }
+    }, (error, stdout) => {
+      if (error !== null) rejectSecret(new ConnectorCallError("authentication_required", "GitHub CLI authentication is unavailable"));
       else resolveSecret(stdout.trim());
     });
   });

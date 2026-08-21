@@ -7,6 +7,8 @@ import Quickshell.Io
 Scope {
   id: root
 
+  signal attentionRefreshed()
+
   readonly property int protocolVersion: 2
   readonly property string brokerPath: {
     var url = String(Qt.resolvedUrl("../runtime/dist/omadigest-broker.mjs"))
@@ -42,6 +44,8 @@ Scope {
   property string authoringSkillMessage: ""
   property string templateEditState: "idle"
   property string templateEditMessage: ""
+  property string handoffPreview: ""
+  property string handoffToken: ""
   property var digest: null
   property var digestHistory: []
   property string digestState: "idle"
@@ -83,6 +87,8 @@ Scope {
     draftPlanStep = 0
     draftPlanStatus = "working"
     draft = null
+    handoffPreview = ""
+    handoffToken = ""
     send({ type: "draft_start", id: "draft-" + nextId++, kind: draftKind, request: text })
   }
 
@@ -140,8 +146,23 @@ Scope {
     })
   }
 
-  function handoffDefaultAgent(prompt) {
-    send({ type: "handoff_default_agent", id: "handoff-" + nextId++, prompt: String(prompt || "") })
+  function prepareDefaultAgentHandoff(request) {
+    handoffPreview = ""
+    handoffToken = ""
+    send({ type: "handoff_prepare", id: "handoff-" + nextId++, request: String(request || "").slice(0, 10000) })
+  }
+
+  function confirmDefaultAgentHandoff() {
+    if (!handoffToken) return
+    var token = handoffToken
+    handoffPreview = ""
+    handoffToken = ""
+    send({ type: "handoff_default_agent", id: "handoff-" + nextId++, token: token })
+  }
+
+  function cancelDefaultAgentHandoff() {
+    handoffPreview = ""
+    handoffToken = ""
   }
 
   function handoffHerdr(kind, request, currentDraft) {
@@ -165,9 +186,6 @@ Scope {
   function openUpdate() { send({ type: "update_open", id: "update-" + nextId++ }) }
   function setPrivacyDefault(mode) {
     send({ type: "privacy_set_default", id: "privacy-" + nextId++, mode: String(mode) })
-  }
-  function setPrivacyRule(app, mode) {
-    send({ type: "privacy_set_rule", id: "privacy-" + nextId++, app: String(app || "").trim(), mode: String(mode) })
   }
   function beginAuth(methodId) {
     clearError()
@@ -202,6 +220,10 @@ Scope {
 
   function ingest(items) {
     send({ type: "attention_ingest", id: "attention-" + nextId++, items: items || [] })
+  }
+
+  function refreshNotificationHistory() {
+    send({ type: "attention_refresh_notifications", id: "attention-history-" + nextId++ })
   }
 
   function acknowledgeAttention(items) {
@@ -446,6 +468,7 @@ Scope {
       var ids = event.acknowledgedIds || []
       for (var index = 0; index < ids.length; index++) nextAcknowledged[String(ids[index])] = true
       acknowledgedAttention = nextAcknowledged
+      root.attentionRefreshed()
       return
     }
     if (event.type === "digest_state") {
@@ -491,6 +514,12 @@ Scope {
       status = dataDeleteMessage
       return
     }
+    if (event.type === "handoff_preview") {
+      handoffPreview = String(event.prompt || "").slice(0, 12000)
+      handoffToken = String(event.token || "")
+      status = "Review the exact agent prompt"
+      return
+    }
     if (event.type === "tts") {
       tts = { configured: event.configured === true, state: String(event.state || "idle"), config: event.config || null }
       if (tts.state === "playing") status = "Reading digest…"
@@ -498,6 +527,8 @@ Scope {
       return
     }
     if (event.type === "handoff") {
+      handoffPreview = ""
+      handoffToken = ""
       if (event.target === "authoring-agent") {
         authoringState = "launched"
         authoringMessage = "Authoring session opened. Return here after the agent installs the validated integration."

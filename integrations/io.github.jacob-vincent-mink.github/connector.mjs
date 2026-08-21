@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
 import { createInterface } from "node:readline";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const CONNECTOR_ID = "io.github.jacob-vincent-mink.github";
-const MAX_GH_BYTES = 512 * 1024;
 
 function emit(value) { process.stdout.write(`${JSON.stringify(value)}\n`); }
 
@@ -14,8 +12,9 @@ async function handle(request) {
     throw new ConnectorError("invalid_request", "Invalid connector request.");
   if (request.type === "shutdown") return false;
   if (request.type === "probe" || request.type === "setup") {
-    const raw = await gh(["api", "user", "--jq", ".login"]);
-    emit({ version: 1, type: "status", id: request.id, state: "ready", message: `GitHub connected as ${parseLogin(raw)}` });
+    const login = bounded(request?.brokerData?.login, 100);
+    if (!login) throw new ConnectorError("authentication_required", "GitHub CLI authentication is unavailable.");
+    emit({ version: 1, type: "status", id: request.id, state: "ready", message: `GitHub connected as ${login}` });
     return true;
   }
   if (request.type === "open") {
@@ -26,10 +25,7 @@ async function handle(request) {
     throw new ConnectorError("unsupported_operation", "This connector supports probe, setup, sync, and open.");
 
   const limit = Math.max(1, Math.min(50, Number(request.limit) || 50));
-  const raw = await gh(["api", `notifications?all=false&participating=false&per_page=${limit}`]);
-  let parsed;
-  try { parsed = JSON.parse(raw); }
-  catch { throw new ConnectorError("source_invalid", "GitHub returned invalid notification data."); }
+  const parsed = request?.brokerData?.notifications;
   if (!Array.isArray(parsed)) throw new ConnectorError("source_invalid", "GitHub returned invalid notification data.");
   const items = parseNotifications(parsed, request.since, request.until, limit, request.categories);
   emit({ version: 1, type: "items", id: request.id, items, nextCursor: null });
@@ -75,11 +71,6 @@ export function apiUrlToWebUrl(raw, repositoryUrl) {
   return repository;
 }
 
-function parseLogin(raw) {
-  const value = String(raw || "").trim();
-  try { return bounded(JSON.parse(value)?.login, 100) || "authenticated user"; }
-  catch { return bounded(value, 100) || "authenticated user"; }
-}
 function safeGithubUrl(raw) {
   try {
     const url = new URL(String(raw || ""));
@@ -119,15 +110,6 @@ function subjectType(value) {
   return labels[String(value || "")] || bounded(value, 80) || "Notification";
 }
 function bounded(value, length) { return String(value || "").replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ").trim().slice(0, length); }
-
-function gh(args) {
-  return new Promise((resolveCall, rejectCall) => {
-    execFile("gh", args, { encoding: "utf8", timeout: 15_000, maxBuffer: MAX_GH_BYTES }, (error, stdout) => {
-      if (error !== null) rejectCall(new ConnectorError("authentication_required", "GitHub CLI authentication is unavailable."));
-      else resolveCall(stdout);
-    });
-  });
-}
 
 class ConnectorError extends Error { constructor(code, message) { super(message); this.code = code; } }
 

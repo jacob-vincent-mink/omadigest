@@ -34,11 +34,6 @@ focus_events() {
     echo "Private focus events require DND to be on." >&2
     return 1
   fi
-  # These remain real Omarchy notifications, but their protected content is
-  # neither displayed nor admitted to digest evidence.
-  notify "Signal" normal "Jamie" \
-    "Private demo message: the launch code is 4821. This must never enter OmaDigest."
-
   if [[ "${OMADIGEST_DEMO_INCLUDE_CRASH:-1}" == "1" ]]; then
     set +e
     /tmp/crashing-sw >/tmp/crashing-sw.stdout 2>/tmp/crashing-sw.stderr

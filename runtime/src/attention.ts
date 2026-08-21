@@ -4,6 +4,10 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { AttentionItem } from "./types.js";
 
+const MAX_SEGMENT_BYTES = 2 * 1024 * 1024;
+const MAX_TOTAL_EVENT_BYTES = 8 * 1024 * 1024;
+const MAX_SEGMENTS = 7;
+
 export const attentionItemSchema = z.object({
   id: z.string().min(1).max(200),
   source: z.string().min(1).max(80),
@@ -41,17 +45,27 @@ export class AttentionStore {
     const items = z.array(attentionItemSchema).max(200).parse(rawItems).filter((item) =>
       item.source !== "notifications" || this.#notificationClearedAt === "" || item.occurredAt > this.#notificationClearedAt);
     if (items.length === 0) return this.#items.size;
-    mkdirSync(this.#eventsDir, { recursive: true, mode: 0o700 });
-    const day = new Date().toISOString().slice(0, 10);
-    const path = join(this.#eventsDir, `${day}.jsonl`);
+    const changed: AttentionItem[] = [];
     for (const item of items) {
+      const existing = this.#items.get(item.id);
+      if (existing !== undefined && JSON.stringify(existing) === JSON.stringify(item)) continue;
       if (!this.#items.has(item.id)) this.#seen.delete(item.id);
       this.#items.delete(item.id);
       this.#items.set(item.id, item);
-      appendFileSync(path, `${JSON.stringify(item)}\n`, { encoding: "utf8", mode: 0o600 });
+      changed.push(item);
     }
-    chmodSync(path, 0o600);
+    if (changed.length === 0) return this.#items.size;
     this.#trimMemory();
+    mkdirSync(this.#eventsDir, { recursive: true, mode: 0o700 });
+    const day = new Date().toISOString().slice(0, 10);
+    const path = join(this.#eventsDir, `${day}.jsonl`);
+    const payload = changed.map((item) => JSON.stringify(item)).join("\n") + "\n";
+    let existingBytes = 0;
+    try { existingBytes = statSync(path).size; } catch { existingBytes = 0; }
+    if (existingBytes + Buffer.byteLength(payload, "utf8") <= MAX_SEGMENT_BYTES)
+      appendFileSync(path, payload, { encoding: "utf8", mode: 0o600 });
+    else this.#writeBoundedSegment(path, [...this.#items.values()]);
+    chmodSync(path, 0o600);
     this.#pruneFiles();
     return this.#items.size;
   }
@@ -94,7 +108,7 @@ export class AttentionStore {
       for (const name of names) {
         const path = join(this.#eventsDir, name);
         try {
-          if (statSync(path).size > 10 * 1024 * 1024) throw new Error("oversized attention segment");
+          if (statSync(path).size > MAX_SEGMENT_BYTES) throw new Error("oversized attention segment");
           const retained = readFileSync(path, "utf8").split("\n").flatMap((line) => {
             if (line === "") return [];
             const item = attentionItemSchema.parse(JSON.parse(line));
@@ -135,7 +149,10 @@ export class AttentionStore {
       for (const name of names) {
         const path = join(this.#eventsDir, name);
         try {
-          if (statSync(path).size > 10 * 1024 * 1024) continue;
+          if (statSync(path).size > MAX_SEGMENT_BYTES) {
+            rmSync(path, { force: true });
+            continue;
+          }
           const filtered = readFileSync(path, "utf8").split("\n").flatMap((line) => {
             if (line === "") return [];
             const item = attentionItemSchema.parse(JSON.parse(line));
@@ -143,9 +160,10 @@ export class AttentionStore {
             return presented === undefined ? [] : [JSON.stringify(presented)];
           });
           const temporary = `${path}.${randomUUID()}.tmp`;
-          writeFileSync(temporary, filtered.length === 0 ? "" : `${filtered.join("\n")}\n`, { mode: 0o600 });
+          const bounded = this.#boundedLines(filtered.reverse()).reverse();
+          writeFileSync(temporary, bounded.length === 0 ? "" : `${bounded.join("\n")}\n`, { mode: 0o600 });
           renameSync(temporary, path);
-        } catch { /* Leave an unreadable segment untouched rather than corrupting it. */ }
+        } catch { rmSync(path, { force: true }); }
       }
     }
     const current = [...this.#items.values()];
@@ -154,6 +172,7 @@ export class AttentionStore {
       const presented = mapper(item);
       if (presented !== undefined) this.#items.set(presented.id, presented);
     }
+    this.#pruneFiles();
   }
 
   #load(): void {
@@ -164,7 +183,10 @@ export class AttentionStore {
     for (const name of names) {
       const path = join(this.#eventsDir, name);
       try {
-        if (statSync(path).size > 10 * 1024 * 1024) continue;
+        if (statSync(path).size > MAX_SEGMENT_BYTES) {
+          rmSync(path, { force: true });
+          continue;
+        }
         for (const line of readFileSync(path, "utf8").split("\n")) {
           if (line === "") continue;
           const item = attentionItemSchema.parse(JSON.parse(line));
@@ -172,9 +194,10 @@ export class AttentionStore {
           this.#items.delete(item.id);
           this.#items.set(item.id, item);
         }
-      } catch { /* Skip malformed segments without losing newer ones. */ }
+      } catch { rmSync(path, { force: true }); }
     }
     this.#trimMemory();
+    this.#pruneFiles();
   }
 
   #loadSeen(): void {
@@ -221,9 +244,43 @@ export class AttentionStore {
     let names: string[];
     try { names = readdirSync(this.#eventsDir).filter((name) => /^\d{4}-\d{2}-\d{2}\.jsonl$/u.test(name)).sort(); }
     catch { return; }
-    for (const name of names.slice(0, -7)) {
+    for (const name of names.slice(0, -MAX_SEGMENTS)) {
       try { rmSync(join(this.#eventsDir, name)); } catch { /* Retry on next ingest. */ }
     }
+    let totalBytes = 0;
+    const retained = names.slice(-MAX_SEGMENTS).reverse();
+    for (const name of retained) {
+      const path = join(this.#eventsDir, name);
+      try {
+        const size = statSync(path).size;
+        if (size > MAX_SEGMENT_BYTES || totalBytes + size > MAX_TOTAL_EVENT_BYTES) {
+          rmSync(path, { force: true });
+          continue;
+        }
+        totalBytes += size;
+      } catch { /* Ignore a concurrently removed segment. */ }
+    }
+  }
+
+  #writeBoundedSegment(path: string, items: AttentionItem[]): void {
+    const lines = this.#boundedLines(items
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+      .map((item) => JSON.stringify(item)));
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    writeFileSync(temporary, lines.length === 0 ? "" : `${lines.reverse().join("\n")}\n`, { mode: 0o600 });
+    renameSync(temporary, path);
+  }
+
+  #boundedLines(lines: string[]): string[] {
+    const retained: string[] = [];
+    let bytes = 0;
+    for (const line of lines) {
+      const lineBytes = Buffer.byteLength(line, "utf8") + 1;
+      if (lineBytes > MAX_SEGMENT_BYTES || bytes + lineBytes > MAX_SEGMENT_BYTES) continue;
+      retained.push(line);
+      bytes += lineBytes;
+    }
+    return retained;
   }
 }
 

@@ -56,7 +56,7 @@ A clean notification/re-entry take is:
 2. `Alt+Print` — start the normal Omarchy screen recorder.
 3. `Hyper+N` — emit the visible native notification storm.
 4. `Hyper+F` — enter DND/focus mode.
-5. `Hyper+H` — emit the protected Signal canary, crash, and additional focus events while DND is active.
+5. `Hyper+H` — emit the crash and additional focus events while DND is active.
 6. `Hyper+R` — leave DND and trigger automatic re-entry generation.
 7. `Hyper+V` — open the newest digest after it finishes; opening marks it read.
 
@@ -72,9 +72,9 @@ Installation adds one marked `dofile(...)` block to `~/.config/hypr/bindings.lua
 
 ## Privacy behavior in the take
 
-Safe GitHub, Calendar, and Omarchy notifications are emitted with DND off so their native Omarchy popups appear on screen. The Signal canary is emitted while DND is active and has an explicit `ignore` rule, so its content is neither displayed nor retained.
+Safe GitHub, Calendar, and Omarchy fixtures are emitted as real native notifications. Demo preparation explicitly enables the global native-notification digest policy and transient demo IPC before restarting the shell; restore clears both by restoring the user's policy and unsetting demo IPC.
 
-Unknown `count-only` applications retain only app/time/urgency for deterministic aggregate routing. Their title and body are erased before persistence, and individual count-only records are rejected again before model context, citation validation, and handoff evidence.
+Outside the isolated take, the default global native policy is `count-only`: app/time/urgency remain available for deterministic aggregate routing, title/body are erased before persistence, and individual contentless records are rejected again before model context, citation validation, and handoff evidence.
 
 ## Safety and recovery
 

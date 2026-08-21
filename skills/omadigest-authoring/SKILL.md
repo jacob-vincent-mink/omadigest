@@ -27,8 +27,8 @@ Read these files from the plugin root before implementing:
 2. Create a temporary directory with `mktemp -d`. Do not stage below the live OmaDigest configuration tree.
 3. Write exactly one package containing `manifest.json`, `connector.mjs`, `connector.test.mjs`, and `README.md`. Add files only when they are necessary; the package accepts at most 12 files and 300,000 total bytes.
 4. Use Node.js standard-library APIs only. Treat source strings as untrusted evidence. Bound item count and bytes. Normalize stable IDs, timestamps, provenance, and sensitivity.
-5. Declare every command, network host, read path, and write path. Only `gh` is currently allowlisted as an external command. Never request or persist a GitHub token; the broker injects authenticated `gh` access.
-6. Make tests deterministic. Mock external commands and network behavior; never depend on host credentials or live services.
+5. Declare every HTTPS host. `commands`, `readPaths`, and `writePaths` must be empty. Use only the broker-mediated network request/response protocol; the connector sandbox has no direct network or child-process authority.
+6. Make tests deterministic. Mock broker network responses; never depend on host credentials or live services.
 7. Run `<authoring-cli> validate <staging-directory>`. Repair every schema, syntax, sandbox-test, or default-probe failure and rerun until it succeeds.
 8. Summarize the package and permissions for the user. Then run `<authoring-cli> install <staging-directory>`. Installation is atomic and leaves the integration disabled.
 9. Tell the user to return to OmaDigest to review setup and explicitly enable the integration. Remove the temporary directory after a successful install.

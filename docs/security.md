@@ -39,24 +39,25 @@ Generated source can be dangerous. OmaDigest therefore:
 - launches integration authoring only after **Build in default agent** is clicked, with a dedicated skill that requires temporary staging and the broker-owned validator/installer;
 - links that skill into supported agent directories only after **Install agent skill** is clicked and never overwrites a non-symlink skill owned by the user;
 - launches a digest action in the default Omarchy agent only after **Send to agent** is clicked, framing cited notification and connector fields as untrusted evidence rather than instructions;
+- derives an out-of-scope authoring handoff only from the user's original request, displays the exact broker-built prompt, and consumes a five-minute one-use confirmation token before launch;
 - starts broader template follow-up in a dedicated Herdr workspace only after **Continue in Herdr** is clicked, passing the authoring request and a bounded draft snapshot while explicitly excluding credentials and unrelated files;
 - accepts only allowlisted relative files and bounded sizes;
 - validates the manifest and JavaScript syntax, runs package tests inside the connector sandbox, and performs a mocked default protocol probe where possible;
 - installs atomically;
 - keeps it disabled until setup and an explicit enable action;
-- launches it outside Quickshell in Bubblewrap with a read-only system view, no home mount, a private temporary directory, minimal environment, timeout, output limit, and Node permission flags.
+- launches it outside Quickshell in Bubblewrap with a read-only system view, no home mount, a private temporary directory, minimal environment, timeout, output limit, and no direct network or child-process permission.
 
-Bubblewrap and Node permissions are defense in depth, and `--allow-net` is still not hostname-specific when an integration declares network access. Human review remains mandatory. A future broker proxy can enforce exact-host egress.
+Connector HTTPS is broker-mediated over the bounded NDJSON protocol. The broker enforces exact declared scheme/host/port, resolves and rejects private or non-routable addresses, does not follow redirects, restricts methods and headers, and caps requests, body/response bytes, and time. External connector commands are unsupported. The bundled GitHub source uses fixed read-only broker `gh api` calls and passes only bounded response data—not a token or executable—to its connector. Human review remains mandatory because connector parsing code and declared remote hosts are still trusted after installation.
 
 ## Persistence
 
-Notification privacy is deterministic and enforced before persistence. Protected private applications—including Signal—default to `ignore`; unknown applications default to `count-only`, which erases title and body before storage. Count-only and otherwise contentless records are rejected both when digest evidence is assembled and again at the model boundary, and they cannot become citations or action handoffs. A handoff is also refused when every cited source is missing or disallowed, which protects legacy digests generated under older policy behavior. Per-application policy can allow digest generation separately from full evidence in an explicit default-agent handoff. Tightening policy retroactively rewrites retained notification segments; relaxing it cannot recover erased content.
+Notification privacy is deterministic and enforced before persistence. Because native notification app labels are sender-controlled, they never grant content authority. One global native-notification policy defaults to `count-only`, which erases title and body before storage; broader modes require explicit consent for all native notifications. Count-only and otherwise contentless records are rejected both when digest evidence is assembled and again at the model boundary, and they cannot become citations or action handoffs. A handoff is also refused when every cited source is missing or disallowed, which protects legacy digests generated under older policy behavior. Tightening policy retroactively rewrites retained notification segments; relaxing it cannot recover erased content.
 
 Attention events that pass policy are schema- and item-bounded, mode `0600`,
-segmented daily, retained for seven files, and deduplicated in memory. The
-current persistence format does not yet impose a hard per-segment byte ceiling;
-the [threat model](threat-model.md#stride-assessment) tracks that gap and the
-required compaction behavior. Successful generation marks its input items seen,
+segmented daily, retained for at most seven files, deduplicated before append,
+and compacted under a 2-MiB per-segment and 8-MiB total budget. Oversized or
+unreadable segments are removed rather than skipped during policy tightening.
+Successful generation marks its input items seen,
 and the panel also provides an explicit mark-seen action. Seen state suppresses
 inbox counts but does not delete policy-permitted retained evidence, so an
 explicit default-agent handoff can still resolve citations for correlation.

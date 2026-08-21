@@ -30,7 +30,7 @@ The manifest declares:
 - one `.mjs` entry point;
 - `sync`, `resolve`, and/or `open` capabilities;
 - setup fields rendered by OmaDigest settings;
-- every static network host, validated URL setup field used as a dynamic host, external command, read path, and write path.
+- every static HTTPS host and validated URL setup field used as a dynamic host; command and filesystem permissions must be empty.
 
 Secret setup fields go to Secret Service. Ordinary fields are written mode `0600` below the OmaDigest configuration root. Neither is stored in the package.
 
@@ -44,12 +44,12 @@ The runtime supplies:
 - minimal environment variables;
 - no ordinary home directory;
 - a Bubblewrap filesystem/process boundary with no mounted home directory;
-- Node permission flags derived from the manifest;
+- no connector network namespace or child-process permission;
 - 20-second timeout;
-- 128 KiB output limit;
+- 64-KiB final-response and 1-MiB total-protocol limits;
 - schema validation of returned context.
 
-Bubblewrap and Node's permission model are defense in depth, not a complete malicious-code proof. Network permission is currently process-wide once declared; the runtime independently reviews URLs and connector schemas but cannot enforce a hostname-only kernel policy. A connector with a user-configured public HTTPS endpoint declares the corresponding URL field in `networkSetupFields` and must reject credentials, redirects, and private or local addresses before fetching. Generated code therefore still requires human review. `gh` is the only supported external command and receives broker-controlled authentication; declared host-path mounts remain unsupported.
+Connectors request HTTPS through broker-mediated protocol messages. The broker permits only `GET`/`POST`, exact manifest/setup-derived HTTPS hosts and ports, public DNS results, selected headers, 64-KiB request bodies, 512-KiB responses, eight requests, and a 15-second per-request/20-second operation deadline. Redirects are returned but never followed automatically. External commands and host-path mounts are unsupported. Bubblewrap and Node permissions remain defense in depth, and generated parsing code plus declared remote hosts still require human review.
 
 ## Setup
 
@@ -57,7 +57,7 @@ Settings renders fields and source categories from the manifest. A category has 
 
 ## GitHub
 
-The bundled GitHub connector uses the existing authenticated `gh` session. The broker retrieves the token only to inject it into the sandboxed process; it never persists or sends the token to a model. The connector imports at most 50 unread notification records within the requested time window and retains only repository name, subject, reason, type, update time, stable provenance, and a credential-free GitHub URL. Bodies, comments, diffs, repository files, and API URLs are excluded.
+The bundled GitHub connector uses the existing authenticated `gh` session. The trusted broker executes only fixed read-only `gh api user` and `gh api notifications` calls, bounds/parses their output, and supplies that data to the connector. The connector receives no token, `gh` executable, child-process permission, or network access. It imports at most 50 unread notification records within the requested time window and retains only repository name, subject, reason, type, update time, stable provenance, and a credential-free GitHub URL. Bodies, comments, diffs, repository files, and API URLs are excluded.
 
 Its status probe calls the authenticated user endpoint and reports the active login. It starts disabled, and templates can invoke it only when they explicitly list `io.github.jacob-vincent-mink.github` in their context policy.
 
@@ -71,7 +71,7 @@ The v0.1 release ships no other external-service connector. Prototypes are not p
 - Gmail requires a complete OAuth authorization and refresh-token lifecycle;
 - RSS/Atom needs a broker-level repeatable-instance contract and broader real-feed compatibility before it can honestly represent multiple subscriptions.
 
-Native notifications from those applications can still be classified and summarized under the user's privacy rules. The integration-authoring skill remains available for reviewed local connectors, but successful mocked validation is not represented as an official live-tested integration.
+Native notifications from those applications can still be classified and summarized after the user explicitly enables native content globally. The integration-authoring skill remains available for reviewed local connectors, but successful mocked validation is not represented as an official live-tested integration.
 
 Repeatable sources are a future broker contract, not duplicated package IDs. A proper implementation needs bounded instance records, per-instance setup/secrets/status/categories, deterministic routing across instances, and explicit add/remove UI.
 

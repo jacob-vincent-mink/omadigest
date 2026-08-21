@@ -62,6 +62,16 @@ describe("integrations", () => {
     }).success).toBe(false);
   });
 
+  it("rejects every connector host-command declaration", () => {
+    const manifest = {
+      schemaVersion: 1, id: "local.command", name: "Command", version: "1.0.0", author: "Test",
+      description: "Attempts a host command.", entryPoint: "connector.mjs", capabilities: ["sync"],
+      setup: { summary: "No setup", actionLabel: "Ready", fields: [] },
+      permissions: { networkHosts: [], commands: ["gh"], readPaths: [], writePaths: [] }
+    };
+    expect(integrationManifestSchema.safeParse(manifest).success).toBe(false);
+  });
+
   it("discovers a valid disabled package", () => {
     const root = temporaryRoot();
     const bundled = join(root, "bundled");

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,6 +23,35 @@ describe("AttentionStore", () => {
     attention.ingest([{ ...base, title: "First" }, { ...base, title: "Updated" }]);
     expect(attention.recent(10)).toHaveLength(1);
     expect(attention.recent(10)[0]?.title).toBe("Updated");
+  });
+
+  it("does not append identical snapshot records repeatedly", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-attention-disk-dedupe-"));
+    roots.push(root);
+    const attention = new AttentionStore({ XDG_STATE_HOME: root, HOME: root });
+    const item = {
+      id: "notification:stable", source: "notifications", app: "GitHub", title: "Stable", body: "",
+      urgency: "normal" as const, occurredAt: "2026-08-20T10:00:00.000Z"
+    };
+    for (let index = 0; index < 20; index += 1) attention.ingest([item]);
+    const events = join(root, "omadigest", "events");
+    const segment = join(events, readdirSync(events)[0]!);
+    expect(readFileSync(segment, "utf8").trim().split("\n")).toHaveLength(1);
+  });
+
+  it("compacts attention persistence below the hard segment byte limit", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-attention-budget-"));
+    roots.push(root);
+    const attention = new AttentionStore({ XDG_STATE_HOME: root, HOME: root });
+    for (let batch = 0; batch < 3; batch += 1) {
+      attention.ingest(Array.from({ length: 200 }, (_, index) => ({
+        id: `source:${batch}:${index}`, source: "source", app: "Source", title: `Item ${batch}-${index}`,
+        body: "x".repeat(8_000), urgency: "normal" as const,
+        occurredAt: new Date(Date.UTC(2026, 7, 20, 10, batch, index % 60)).toISOString()
+      })));
+    }
+    const events = join(root, "omadigest", "events");
+    for (const name of readdirSync(events)) expect(statSync(join(events, name)).size).toBeLessThanOrEqual(2 * 1024 * 1024);
   });
 
   it("returns newest items first", () => {

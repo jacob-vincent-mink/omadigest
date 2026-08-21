@@ -451,7 +451,7 @@ Column {
   }
 
   Rectangle {
-    visible: root.currentDraft && root.currentDraft.kind === "out-of-scope"
+    visible: root.currentDraft && root.currentDraft.kind === "out-of-scope" && !OmaDigestStore.handoffToken
     width: parent.width
     height: visible ? Style.space(36) : 0
     radius: Style.cornerRadius
@@ -459,7 +459,7 @@ Column {
     Text {
       textFormat: Text.PlainText
       anchors.centerIn: parent
-      text: "Open in default agent"
+      text: "Review agent handoff"
       color: root.foreground
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
@@ -467,7 +467,72 @@ Column {
     MouseArea {
       anchors.fill: parent
       cursorShape: Qt.PointingHandCursor
-      onClicked: OmaDigestStore.handoffDefaultAgent(root.currentDraft.suggestedPrompt)
+      onClicked: OmaDigestStore.prepareDefaultAgentHandoff(request.text)
+    }
+  }
+
+  Text {
+    textFormat: Text.PlainText
+    visible: root.currentDraft && root.currentDraft.kind === "out-of-scope" && OmaDigestStore.handoffToken !== ""
+    width: parent.width
+    text: "EXACT DEFAULT-AGENT PROMPT"
+    color: root.accent
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    font.bold: true
+    font.letterSpacing: 1
+  }
+
+  QQC.TextArea {
+    textFormat: TextEdit.PlainText
+    visible: root.currentDraft && root.currentDraft.kind === "out-of-scope" && OmaDigestStore.handoffToken !== ""
+    width: parent.width
+    height: visible ? Style.space(180) : 0
+    readOnly: true
+    text: visible ? OmaDigestStore.handoffPreview : ""
+    color: root.foreground
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    wrapMode: TextEdit.Wrap
+    background: Rectangle {
+      radius: Style.cornerRadius
+      color: Style.normalFillFor(root.foreground, root.accent)
+      border.width: Style.spacing.hairline
+      border.color: root.accent
+    }
+  }
+
+  Row {
+    visible: root.currentDraft && root.currentDraft.kind === "out-of-scope" && OmaDigestStore.handoffToken !== ""
+    height: visible ? Style.space(36) : 0
+    x: Math.max(0, (parent.width - implicitWidth) / 2)
+    spacing: Style.space(8)
+
+    Repeater {
+      model: [{ label: "Open agent", confirm: true }, { label: "Cancel", confirm: false }]
+      Rectangle {
+        required property var modelData
+        width: Style.space(130)
+        height: parent.height
+        radius: Style.cornerRadius
+        color: modelData.confirm ? root.accent : Style.normalFillFor(root.foreground, root.accent)
+        Text {
+          textFormat: Text.PlainText
+          anchors.centerIn: parent
+          text: String(modelData.label)
+          color: modelData.confirm ? Color.background : root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.bold: modelData.confirm
+        }
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: modelData.confirm
+            ? OmaDigestStore.confirmDefaultAgentHandoff()
+            : OmaDigestStore.cancelDefaultAgentHandoff()
+        }
+      }
     }
   }
 }

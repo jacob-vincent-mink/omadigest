@@ -35,16 +35,8 @@ chmod 700 "$config_root"
 privacy_tmp="$config_root/privacy.json.demo-tmp"
 cat > "$privacy_tmp" <<'JSON'
 {
-  "version": 1,
-  "defaultMode": "count-only",
-  "applications": {
-    "signal": "ignore",
-    "github": "digest-and-handoff",
-    "calendar": "digest-and-handoff",
-    "omarchy": "digest-and-handoff",
-    "omadigest demo": "ignore",
-    "omarchy-action": "ignore"
-  }
+  "version": 2,
+  "nativeMode": "digest-and-handoff"
 }
 JSON
 chmod 600 "$privacy_tmp"
@@ -62,6 +54,7 @@ sleep 1
 # Mako service. It then keeps org.freedesktop.Notifications, leaving Omarchy's
 # notification model—and therefore OmaDigest—blind to the demo storm.
 systemctl --user stop mako.service >/dev/null 2>&1 || true
+systemctl --user set-environment OMADIGEST_DEMO_IPC=1
 omarchy restart shell
 
 

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.jacob-vincent-mink.github",
   "name": "GitHub",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Jacob Vincent-Mink",
   "description": "Adds bounded unread GitHub notification context through your existing GitHub CLI session.",
   "entryPoint": "connector.mjs",
@@ -21,8 +21,8 @@
     "actionLabel": "Check GitHub"
   },
   "permissions": {
-    "networkHosts": ["api.github.com", "github.com"],
-    "commands": ["gh"],
+    "networkHosts": [],
+    "commands": [],
     "readPaths": [],
     "writePaths": []
   }

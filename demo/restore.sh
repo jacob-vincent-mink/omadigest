@@ -52,6 +52,7 @@ rm -f "$marker" /tmp/crashing-sw
 # the shell restart gap. The restore completion notice is only safe after
 # Quickshell owns org.freedesktop.Notifications again.
 systemctl --user stop mako.service >/dev/null 2>&1 || true
+systemctl --user unset-environment OMADIGEST_DEMO_IPC
 omarchy restart shell
 
 

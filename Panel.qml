@@ -23,12 +23,11 @@ Panel {
     ? hostShell.firstPartyServiceFor("omarchy.idle") : null
   readonly property int liveCount: notificationService && notificationService.popupModel
     ? notificationService.popupModel.count : 0
-  readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
-    ? String(notificationService.historyDir) : ""
   readonly property int attentionAvailableCount: OmaDigest.OmaDigestStore.attentionCount
   readonly property var releaseUpdate: OmaDigest.OmaDigestStore.updateStatus || ({})
   readonly property bool updateAvailable: String(releaseUpdate.state || "") === "available"
     && releaseUpdate.dismissed !== true
+  readonly property bool demoIpcEnabled: Quickshell.env("OMADIGEST_DEMO_IPC") === "1"
 
   property string page: "list"
   property string digestTab: "unread"
@@ -41,7 +40,6 @@ Panel {
   property string authPromptValue: ""
   property string selectedAuthMethod: ""
   property string connectionView: "overview"
-  property string privacyRuleMode: "digest"
   property string ttsProvider: "openai-compatible"
   readonly property var privacyOptions: [
     { value: "ignore", label: "Ignore" },
@@ -52,7 +50,6 @@ Panel {
   readonly property var authOptions: (OmaDigest.OmaDigestStore.authMethods || []).map(function(method) {
     return { value: String(method.id), label: String(method.label), description: String(method.description || "") }
   })
-  property var historyItems: []
   property double dndStartedAt: 0
   property string lastScheduledDay: ""
   property var pendingAutomaticGeneration: null
@@ -77,7 +74,7 @@ Panel {
   }
 
   function open() {
-    refreshNotificationHistory()
+    OmaDigest.OmaDigestStore.refreshNotificationHistory()
     OmaDigest.OmaDigestStore.requestDigestHistory()
     root.controller.show()
     root.markCurrentDigestRead()
@@ -94,7 +91,7 @@ Panel {
     if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
     if (target === "integrations") return "Delete custom integrations, integration setup, enablement, and known integration secrets? Bundled integrations will be reset, not removed."
     if (target === "templates") return "Delete every custom template? Bundled templates will remain available."
-    return "Delete all OmaDigest digest and notification history, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and privacy rules will remain."
+    return "Delete all OmaDigest digest and notification history, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
   }
 
   function requestDataDeletion(target) {
@@ -172,37 +169,6 @@ Panel {
     return false
   }
 
-  function refreshNotificationHistory() {
-    if (!root.notificationHistoryDir || historyReader.running) return
-    historyReader.command = ["bash", "-c", "awk 1 \"$1\"/*.json 2>/dev/null || true", "--", root.notificationHistoryDir]
-    historyReader.running = true
-  }
-
-  function parseNotificationHistory(raw) {
-    var parsed = []
-    var lines = String(raw || "").split("\n")
-    for (var index = 0; index < lines.length && parsed.length < 50; index++) {
-      var line = lines[index].trim()
-      if (!line) continue
-      try {
-        var row = JSON.parse(line)
-        var timestamp = Number(row.timestamp || Date.now())
-        var app = String(row.app || row.appName || "unknown").slice(0, 120)
-        var title = String(row.summary || "").slice(0, 2000)
-        var stable = root.notificationStableId(row, timestamp, app, title)
-        parsed.push({
-          id: "notification:" + stable.slice(0, 180), source: "notifications", app: app,
-          title: title, body: String(row.body || "").slice(0, 8000),
-          urgency: Number(row.urgency || 1) >= 2 ? "critical" : (Number(row.urgency || 1) <= 0 ? "low" : "normal"),
-          occurredAt: new Date(timestamp).toISOString()
-        })
-      } catch (error) { /* Skip malformed history rows. */ }
-    }
-    root.historyItems = parsed
-    OmaDigest.OmaDigestStore.ingest(root.currentAttentionItems())
-    if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
-  }
-
   function notificationStableId(row, timestamp, app, title) {
     var nativeId = String(row.originalId || row.id || "").slice(0, 40)
     var occurred = Number(timestamp || 0)
@@ -212,7 +178,7 @@ Panel {
   }
 
   function currentAttentionItems() {
-    var result = root.historyItems.slice()
+    var result = []
     var model = notificationService ? notificationService.popupModel : null
     if (model) {
       for (var index = 0; index < model.count && index < 200; index++) {
@@ -363,8 +329,7 @@ Panel {
 
   function requestAutomaticGeneration(trigger, focusMinutes) {
     root.pendingAutomaticGeneration = { trigger: trigger, focusMinutes: focusMinutes }
-    if (root.notificationHistoryDir) root.refreshNotificationHistory()
-    else root.completeAutomaticGeneration()
+    OmaDigest.OmaDigestStore.refreshNotificationHistory()
   }
 
   function completeAutomaticGeneration() {
@@ -427,17 +392,7 @@ Panel {
 
     function onDataDeleteRevisionChanged() {
       var target = OmaDigest.OmaDigestStore.dataDeleteTarget
-      if (target === "notification-history" || target === "all") root.historyItems = []
       if (target === "digest-history" || target === "all") root.page = "settings"
-    }
-  }
-
-  Process {
-    id: historyReader
-    running: false
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.parseNotificationHistory(text)
     }
   }
 
@@ -450,15 +405,18 @@ Panel {
 
   Connections {
     target: OmaDigest.OmaDigestStore
-    function onAttentionCountChanged() {
+    function onAttentionRefreshed() {
       if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
     }
   }
 
-  // Narrow semantic controls make demos and integration tests deterministic
-  // without exposing arbitrary input, filesystem, or shell execution.
+  // Navigation and content-free status remain public. Demo mutations are
+  // available only when the shell was explicitly started in demo IPC mode.
   IpcHandler {
     target: "omadigest"
+
+    function demoGuard(): string { return root.demoIpcEnabled ? "" : "disabled" }
+    function bounded(value, maximum): string { return String(value || "").slice(0, maximum) }
 
     function open(): string { root.open(); return "ok" }
     function close(): string { root.close(); return "ok" }
@@ -505,7 +463,7 @@ Panel {
     }
 
     function showSource(integrationId: string): string {
-      var wanted = String(integrationId)
+      var wanted = bounded(integrationId, 128)
       var available = root.omarchySources().concat(root.connectedServiceSources())
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id || "") !== wanted) continue
@@ -519,7 +477,8 @@ Panel {
     }
 
     function previewDataDeletion(target: string): string {
-      var requested = String(target)
+      if (demoGuard()) return demoGuard()
+      var requested = bounded(target, 32)
       if (["digest-history", "notification-history", "integrations", "templates", "all"].indexOf(requested) < 0)
         return "invalid"
       root.settingsPage = "data"
@@ -530,50 +489,56 @@ Panel {
     }
 
     function startDraft(kind: string, request: string): string {
-      var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      if (demoGuard()) return demoGuard()
+      var requestedKind = bounded(kind, 20) === "integration" ? "integration" : "template"
+      var boundedRequest = bounded(request, 20000)
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
       root.open()
       if (requestedKind === "integration") {
         root.sourcesView = "authoring"
-        integrationDraftEditor.setRequest(request)
+        integrationDraftEditor.setRequest(boundedRequest)
       }
       else {
         root.selectedTemplate = null
         root.templateEditMode = "view"
-        templateDraftEditor.setRequest(request)
+        templateDraftEditor.setRequest(boundedRequest)
       }
       root.scrollToBottom()
-      OmaDigest.OmaDigestStore.startDraft(requestedKind, request)
+      OmaDigest.OmaDigestStore.startDraft(requestedKind, boundedRequest)
       return "ok"
     }
 
     function prepareDraft(kind: string, request: string): string {
-      var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      if (demoGuard()) return demoGuard()
+      var requestedKind = bounded(kind, 20) === "integration" ? "integration" : "template"
+      var boundedRequest = bounded(request, 20000)
       root.preparedDraftKind = requestedKind
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
       root.open()
       if (requestedKind === "integration") {
         root.sourcesView = "authoring"
-        integrationDraftEditor.setRequest(request)
+        integrationDraftEditor.setRequest(boundedRequest)
       }
       else {
         root.selectedTemplate = null
         root.templateEditMode = "view"
-        templateDraftEditor.setRequest(request)
+        templateDraftEditor.setRequest(boundedRequest)
       }
       root.scrollToBottom()
       return "ok"
     }
 
     function submitDraft(kind: string): string {
-      if (String(kind) === "integration") integrationDraftEditor.submit()
+      if (demoGuard()) return demoGuard()
+      if (bounded(kind, 20) === "integration") integrationDraftEditor.submit()
       else templateDraftEditor.submit()
       return "ok"
     }
 
     function submitPreparedDraft(): string {
+      if (demoGuard()) return demoGuard()
       if (root.preparedDraftKind === "integration") integrationDraftEditor.submit()
       else if (root.preparedDraftKind === "template") templateDraftEditor.submit()
       else return "empty"
@@ -581,7 +546,8 @@ Panel {
     }
 
     function showDraft(kind: string): string {
-      var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      if (demoGuard()) return demoGuard()
+      var requestedKind = bounded(kind, 20) === "integration" ? "integration" : "template"
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       if (requestedKind === "integration") root.sourcesView = "authoring"
       else {
@@ -595,13 +561,14 @@ Panel {
     }
 
     function acceptDraft(): string {
+      if (demoGuard()) return demoGuard()
       if (!OmaDigest.OmaDigestStore.draftId) return "empty"
       OmaDigest.OmaDigestStore.acceptDraft()
       return "ok"
     }
 
     function showTemplate(templateId: string): string {
-      var wanted = String(templateId)
+      var wanted = bounded(templateId, 64)
       var available = OmaDigest.OmaDigestStore.templates || []
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id) !== wanted) continue
@@ -617,6 +584,7 @@ Panel {
     }
 
     function editTemplate(templateId: string, mode: string): string {
+      if (demoGuard()) return demoGuard()
       if (showTemplate(templateId) !== "ok") return "missing"
       if (String(mode) === "manual") root.beginManualTemplateEdit()
       else if (String(mode) === "agent") root.templateEditMode = "agent"
@@ -626,14 +594,17 @@ Panel {
     }
 
     function setupIntegration(integrationId: string, valuesJson: string): string {
+      if (demoGuard()) return demoGuard()
       try {
-        OmaDigest.OmaDigestStore.setupIntegration(String(integrationId), JSON.parse(String(valuesJson || "{}")))
+        var rawValues = bounded(valuesJson || "{}", 65536)
+        OmaDigest.OmaDigestStore.setupIntegration(bounded(integrationId, 128), JSON.parse(rawValues))
         return "ok"
       } catch (error) { return "invalid-json" }
     }
 
     function setupIntegrationDefaults(integrationId: string): string {
-      var wanted = String(integrationId)
+      if (demoGuard()) return demoGuard()
+      var wanted = bounded(integrationId, 128)
       var available = OmaDigest.OmaDigestStore.integrations || []
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id) !== wanted) continue
@@ -652,17 +623,20 @@ Panel {
     }
 
     function enableIntegration(integrationId: string): string {
-      OmaDigest.OmaDigestStore.setIntegrationEnabled(String(integrationId), true)
+      if (demoGuard()) return demoGuard()
+      OmaDigest.OmaDigestStore.setIntegrationEnabled(bounded(integrationId, 128), true)
       return "ok"
     }
 
     function checkIntegration(integrationId: string): string {
-      OmaDigest.OmaDigestStore.checkIntegrationStatus(String(integrationId))
+      if (demoGuard()) return demoGuard()
+      OmaDigest.OmaDigestStore.checkIntegrationStatus(bounded(integrationId, 128))
       return "ok"
     }
 
     function previewRoute(application: string): string {
-      var app = String(application).trim()
+      if (demoGuard()) return demoGuard()
+      var app = bounded(application, 120).trim()
       if (!app) return "invalid"
       var counts = {}
       counts[app] = 1
@@ -671,28 +645,42 @@ Panel {
     }
 
     function installAuthoringSkill(): string {
+      if (demoGuard()) return demoGuard()
       OmaDigest.OmaDigestStore.installAuthoringSkill()
       return "ok"
     }
 
     function generate(): string {
+      if (demoGuard()) return demoGuard()
       if (root.attentionAvailableCount <= 0 || OmaDigest.OmaDigestStore.digestState === "working") return "unavailable"
       root.generateDigest("manual", 0)
       return "ok"
     }
 
     function beginFocus(): string {
+      if (demoGuard()) return demoGuard()
       root.dndStartedAt = Date.now()
       return "ok"
     }
 
     function triggerFocusReentry(focusMinutes: int): string {
+      if (demoGuard()) return demoGuard()
       if (OmaDigest.OmaDigestStore.digestState === "working") return "working"
       root.requestAutomaticGeneration("dnd-ended", Math.max(0, Number(focusMinutes) || 0))
       return "ok"
     }
 
     function state(): string {
+      if (!root.demoIpcEnabled) return JSON.stringify({
+        ready: OmaDigest.OmaDigestStore.ready,
+        opened: root.opened,
+        page: root.page,
+        digestState: OmaDigest.OmaDigestStore.digestState,
+        draftState: OmaDigest.OmaDigestStore.draftState,
+        attentionCount: root.attentionAvailableCount,
+        unreadCount: root.digestsForTab("unread").length,
+        readCount: root.digestsForTab("read").length
+      })
       return JSON.stringify({
         ready: OmaDigest.OmaDigestStore.ready,
         opened: root.opened,
@@ -2031,7 +2019,7 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                text: "Policy is enforced before notification content is retained or sent to an AI. Protected applications start at Ignore; unknown applications start at Count only."
+                text: "Native notification app names are sender-provided, not authenticated identities. One global policy is therefore enforced before any native notification content is retained or sent to an AI. Connected sources use their validated integration IDs separately."
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -2050,7 +2038,7 @@ Panel {
                   spacing: Style.space(7)
                   Text {
                     textFormat: Text.PlainText
-                    text: "UNKNOWN APPLICATIONS"
+                    text: "ALL NATIVE NOTIFICATIONS"
                     color: root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -2064,122 +2052,6 @@ Panel {
                     foreground: root.foreground
                     background: Color.background
                     onChanged: function(value) { OmaDigest.OmaDigestStore.setPrivacyDefault(value) }
-                  }
-                }
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                text: "APPLICATION RULES"
-                color: Qt.darker(root.foreground, 1.35)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 1
-              }
-
-              Repeater {
-                model: OmaDigest.OmaDigestStore.privacy.rules || []
-                Rectangle {
-                  required property var modelData
-                  width: parent.width
-                  height: privacyRuleRow.implicitHeight + Style.space(18)
-                  radius: Style.cornerRadius
-                  color: Style.normalFillFor(root.foreground, Color.accent)
-
-                  Row {
-                    id: privacyRuleRow
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.margins: Style.space(9)
-                    spacing: Style.space(10)
-                    Column {
-                      anchors.verticalCenter: parent.verticalCenter
-                      width: parent.width - privacyRulePicker.width - Style.space(10)
-                      Text {
-                        textFormat: Text.PlainText
-                        width: parent.width
-                        text: String(modelData.app)
-                        color: root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.bodySmall
-                        font.bold: true
-                        elide: Text.ElideRight
-                      }
-                      Text {
-                        textFormat: Text.PlainText
-                        width: parent.width
-                        text: modelData.source === "protected-default" ? "Protected default" : "User rule"
-                        color: Qt.darker(root.foreground, 1.45)
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.caption
-                      }
-                    }
-                    Dropdown {
-                      id: privacyRulePicker
-                      anchors.verticalCenter: parent.verticalCenter
-                      width: Style.space(170)
-                      showLabel: false
-                      options: root.privacyOptions
-                      value: String(modelData.mode)
-                      foreground: root.foreground
-                      background: Color.background
-                      onChanged: function(value) { OmaDigest.OmaDigestStore.setPrivacyRule(modelData.app, value) }
-                    }
-                  }
-                }
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                text: "ADD OR OVERRIDE A RULE"
-                color: Qt.darker(root.foreground, 1.35)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 1
-              }
-              QQC.TextField {
-                id: privacyAppInput
-                width: parent.width
-                placeholderText: "Application name exactly as shown by notifications"
-                color: root.foreground
-                font.family: root.fontFamily
-              }
-              Dropdown {
-                id: newPrivacyMode
-                width: parent.width
-                showLabel: false
-                options: root.privacyOptions
-                value: root.privacyRuleMode
-                foreground: root.foreground
-                background: Color.background
-                onChanged: function(value) { root.privacyRuleMode = String(value) }
-              }
-              Rectangle {
-                x: Math.max(0, (parent.width - width) / 2)
-                width: Style.space(150)
-                height: Style.space(36)
-                radius: Style.cornerRadius
-                color: Color.accent
-                opacity: privacyAppInput.text.trim() ? 1 : 0.5
-                Text {
-                  textFormat: Text.PlainText
-                  anchors.centerIn: parent
-                  text: "Save rule"
-                  color: Color.background
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: true
-                }
-                MouseArea {
-                  anchors.fill: parent
-                  enabled: privacyAppInput.text.trim() !== ""
-                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                  onClicked: {
-                    OmaDigest.OmaDigestStore.setPrivacyRule(privacyAppInput.text, newPrivacyMode.value)
-                    privacyAppInput.text = ""
                   }
                 }
               }
@@ -2316,7 +2188,7 @@ Panel {
                     Text {
                       textFormat: Text.PlainText
                       width: parent.width
-                      text: "Delete every category above. Model connections and privacy rules remain."
+                      text: "Delete every category above. Model connections and the privacy policy remain."
                       color: root.foreground
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption

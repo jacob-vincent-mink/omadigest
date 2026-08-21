@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -45,12 +45,11 @@ function validateDefaultProbe(directory: string, environment: NodeJS.ProcessEnv)
   const fields = manifest.setup?.fields || [];
   if (fields.some((field) => field.required === true && field.type !== "boolean")) return;
   const commands = manifest.permissions?.commands || [];
-  if (commands.some((command) => command !== "gh")) throw new Error("default probe failed: unsupported connector command");
-  if ((manifest.permissions?.networkHosts || []).length > 0 && !commands.includes("gh")) return;
+  if (commands.length > 0) throw new Error("default probe failed: connector host commands are unsupported");
+  if ((manifest.permissions?.networkHosts || []).length > 0) return;
 
   const config = Object.fromEntries(fields.map((field) => [String(field.key || ""), field.type === "boolean" ? true : ""]));
   const requestId = "validation-probe";
-  const commandRoot = mkdtempSync(join(tmpdir(), "omadigest-command-check-"));
   try {
     const args = [
       "--die-with-parent", "--unshare-all",
@@ -58,22 +57,10 @@ function validateDefaultProbe(directory: string, environment: NodeJS.ProcessEnv)
       "--ro-bind", "/lib", "/lib",
       "--ro-bind", "/lib64", "/lib64",
       "--ro-bind", directory, "/integration",
-      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/commands",
-      "--setenv", "HOME", "/nonexistent", "--setenv", "PATH", "/commands"
+      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
+      "--setenv", "HOME", "/nonexistent", "--setenv", "PATH", "/nonexistent"
     ];
-    if (commands.includes("gh")) {
-      const mock = join(commandRoot, "gh");
-      writeFileSync(mock, `#!/usr/bin/node
-const args = process.argv.slice(2);
-if (args[0] === "api" && args.includes("user")) console.log(JSON.stringify({ login: "omadigest-validation" }));
-else if (args[0] === "api" && args.some((value) => value.includes("notifications"))) console.log("[]");
-else { console.error("Unexpected gh arguments: " + args.join(" ")); process.exit(2); }
-`, { mode: 0o700 });
-      chmodSync(mock, 0o700);
-      args.push("--ro-bind", mock, "/commands/gh", "--setenv", "GH_TOKEN", "validation-token", "--setenv", "GH_PROMPT_DISABLED", "1");
-    }
     args.push("/usr/bin/node", "--permission", "--allow-fs-read=/integration");
-    if (commands.length > 0) args.push("--allow-child-process");
     args.push(`/integration/${String(manifest.entryPoint || "connector.mjs")}`);
     const input = `${JSON.stringify({ version: 1, type: "probe", id: requestId, config })}\n${JSON.stringify({ version: 1, type: "shutdown", id: "validation-shutdown" })}\n`;
     const stdout = execFileSync("bwrap", args, {
@@ -89,8 +76,6 @@ else { console.error("Unexpected gh arguments: " + args.join(" ")); process.exit
       ? String((error as { stderr?: string | Buffer }).stderr || "").trim().slice(0, 1_200)
       : error instanceof Error ? error.message : "";
     throw new Error(`default probe failed${details ? `: ${details}` : ""}`);
-  } finally {
-    rmSync(commandRoot, { recursive: true, force: true });
   }
 }
 

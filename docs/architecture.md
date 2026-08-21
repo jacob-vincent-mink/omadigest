@@ -9,7 +9,8 @@ QML owns presentation, focus, theme bindings, and bounded snapshots of public sh
 ## Data path
 
 ```text
-notification popupModel ─► QML snapshot ─► attention_ingest
+live popupModel ─► bounded QML snapshot ─► attention_ingest
+Omarchy history ─► bounded broker reader ─► attention store
                                               │
 enabled connector ─► normalized context ──────┤
                                               ▼
@@ -23,7 +24,7 @@ enabled connector ─► normalized context ──────┤
                                       structured cited digest
 ```
 
-Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. The broker keeps at most 500 in memory and seven daily mode-`0600` JSONL segments. Deterministic routing may use aggregate application counts from count-only records, but generation excludes individual contentless evidence before model context assembly and again at the model boundary, then applies the selected template's stricter item budget.
+Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. QML submits only the bounded live popup snapshot; the broker independently reads at most 50 regular non-symlink Omarchy history files under 64-KiB/file and 512-KiB total limits. The broker keeps at most 500 items in memory and seven daily mode-`0600` JSONL segments, deduplicates identical snapshots before append, and enforces 2-MiB segment and 8-MiB total budgets. Deterministic routing may use aggregate application counts from count-only records, but generation excludes individual contentless evidence before model context assembly and again at the model boundary, then applies the selected template's stricter item budget.
 
 ## Pi runtime
 
@@ -54,7 +55,7 @@ Templates have readable `SKILL.md` instructions and a schema-validated compiled 
 
 An integration is discovered only when its directory, strict manifest, and regular `.mjs` entry point validate. Default-agent authoring occurs in a temporary staging directory; a standalone broker-owned command enforces file, byte, path, schema, syntax, sandbox-test, and protocol-probe gates before atomic installation. The packaged authoring skill can be explicitly linked into shared Codex, Claude, and Pi-compatible skill directories; plugin installation itself still runs no hook. Enablement is separate state from live probe status. Setup fields are manifest-driven; secrets go to Secret Service and ordinary values to private JSON.
 
-Connectors run as child processes with a minimal environment and versioned NDJSON request. Node permissions are derived from declared filesystem/network/command needs. Results are bounded and validated before becoming attention items. Manifests may declare bounded source categories; legacy manifests receive an implicit enabled `default` category. Sync receives the deterministic intersection of template-requested and user-enabled categories, and undeclared or disabled results are discarded before persistence. Generation runs only connector IDs explicitly named by the selected template. Connector failure is isolated and does not fail notification intake.
+Connectors run as child processes with a minimal environment, versioned NDJSON, no home mount, no direct network namespace, and no child-process permission. HTTPS is a typed broker service with exact declared host/port enforcement, public-address validation, no automatic redirects, and request/byte/time caps. External commands and connector filesystem permissions are rejected. The bundled GitHub source is special-cased as audited trusted code: the broker performs fixed read-only `gh api` calls and passes only bounded data to its unprivileged connector. Results are bounded and validated before becoming attention items. Manifests may declare bounded source categories; legacy manifests receive an implicit enabled `default` category. Sync receives the deterministic intersection of template-requested and user-enabled categories, and undeclared or disabled results are discarded before persistence. Generation runs only connector IDs explicitly named by the selected template. Connector failure is isolated and does not fail notification intake.
 
 Public source status is a structured object with `unknown`, `checking`, `ready`, `authentication-required`, `setup-required`, or `error` state, plus bounded message, completion timestamp, and stable connector error code when available. Authentication/setup actions are derived only from concrete manifest setup fields, never connector-controlled strings or URLs.
 
@@ -79,6 +80,7 @@ Protocol 2 currently includes:
 - attention ingestion and digest generation;
 - template drafting, acceptance, rejection, and handoff;
 - default-agent integration-authoring handoff;
+- one-use, broker-derived default-agent prompt preview and confirmation;
 - integration setup, structured status refresh, source enablement, and category enablement;
 - deletion of OmaDigest digest history, retained notification evidence, custom integrations, and custom templates;
 - bounded release-update check, per-version dismissal, and fixed release-page launch;
@@ -86,6 +88,11 @@ Protocol 2 currently includes:
 - TTS status/configure/speak/pause/stop.
 
 Unknown or malformed commands fail closed with a bounded error event.
+
+Quickshell IPC exposes navigation and content-free status in normal operation.
+Costful or mutating demo methods are disabled unless the shell was explicitly
+started with `OMADIGEST_DEMO_IPC=1`; demo preparation sets that transient user
+environment value and restore clears it before restarting the shell.
 
 ## Distribution
 
