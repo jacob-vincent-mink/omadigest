@@ -7,7 +7,7 @@
 
 <h1 align="center">OmaDigest</h1>
 
-<p align="center"><strong>Turn interruptions into cited, skill-shaped briefings for Omarchy.</strong></p>
+<p align="center"><strong>Your brain on Omarchy.</strong></p>
 
 <p align="center">
   <a href="https://github.com/jacob-vincent-mink/omadigest/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jacob-vincent-mink/omadigest/actions/workflows/ci.yml/badge.svg"></a>

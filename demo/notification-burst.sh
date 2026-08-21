@@ -18,15 +18,15 @@ visible_storm() {
     return 1
   fi
   notify "GitHub" critical "Release workflow failed" \
-    "voxtype/main · Deploy to GitHub Pages failed after packaging completed."
-  notify "GitHub" normal "Review requested before launch" \
-    "Two authentication changes are waiting for review in omarchy-omapilot."
-  notify "Calendar" normal "Go/no-go moved to 2:00 PM" \
-    "Release room · bring CI status and unresolved blockers."
+    "voxtype/main · Pages deploy failed during packaging."
+  notify "GitHub" normal "Review requested" \
+    "Two authentication changes are waiting in omarchy-omapilot."
+  notify "Calendar" normal "Release check-in moved to 2:00 PM" \
+    "Bring CI status and open blockers."
   notify "GitHub" normal "PR #482 review requested" \
-    "The release parser fix is ready for a final review."
-  notify "GitHub" low "Documentation build completed" \
-    "The API reference is ready for publication."
+    "The parser fix is ready for final review."
+  notify "GitHub" low "API docs built" \
+    "Ready to publish."
 }
 
 focus_events() {
@@ -49,18 +49,18 @@ focus_events() {
   fi
   sleep 2
   notify "Omarchy" critical "Process crashed: crashing-sw" \
-    "A release parser process dumped core. Diagnose the matching report."
-  notify "GitHub" normal "Contributor workflow needs attention" \
-    "The attribution check failed on a Wayland overlay branch in trycua/cua."
-  notify "Calendar" low "Release notes checkpoint in 30 minutes" \
-    "Confirm owners for remaining launch tasks."
+    "The parser dumped core."
+  notify "GitHub" normal "Attribution check failed" \
+    "Wayland overlay branch in trycua/cua."
+  notify "Calendar" low "Release notes in 30 minutes" \
+    "Confirm owners for open items."
   printf 'Private focus events complete; crashing-sw exited %d.\n' "$crash_status"
 }
 
 finish_focus() {
   omarchy-shell notifications setDnd off >/dev/null
   notify "Omarchy" low "Focus session complete" \
-    "OmaDigest is preparing a concise release briefing."
+    "OmaDigest is preparing a digest."
 }
 
 case "${1:-all}" in

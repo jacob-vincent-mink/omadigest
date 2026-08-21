@@ -11,6 +11,18 @@ clip_root="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/omadigest-demo-clips.XXXXXX")"
 prepared=false
 recording=false
 clips=()
+scene_labels=(
+  $'OMADIGEST\tYour brain on Omarchy'
+  $'FOCUS ENDS\tOmaDigest decides whether to run'
+  $'DIGEST\tOpening it marks it read'
+  $'SOURCES\tStatus, categories, and on/off controls'
+  $'TEMPLATES\tSuggested from repeated GitHub reviews'
+  $'NEW TEMPLATE\tThe request stays visible'
+  $'DRAFTING\tThe agent reports its plan'
+  $'REVIEW\tValidate before installing'
+  $'ROUTING\tPR #482 uses GitHub Triage'
+  $'PR #482 REPORT\tStatus, sources, and next action'
+)
 clip_pid=""
 clip_path=""
 clip_index=0
@@ -155,14 +167,14 @@ log "Scene 2/10: focus re-entry"
 start_clip
 omarchy-shell notifications setDnd off >/dev/null
 notify-send --app-name="Omarchy" --urgency=low --expire-time=4500 \
-  "Focus session complete" "OmaDigest is preparing a concise release briefing."
+  "Focus session complete" "OmaDigest is preparing a digest."
 wait_for '.digestState == "working" or (.digestState == "ready" and .unreadCount > 0)' 'focus re-entry generation to start' 20
 sleep 0.8
 stop_clip
 wait_for '.digestState == "ready" and .unreadCount > 0 and (.digestTitle | length) > 0 and .digestTitle != "Today’s digest" and .digestTitle != "Today\u0027s digest"' 'the automatic digest'
 
-# 00:05 — Open the specific briefing, then prove reading moved it to Read.
-log "Scene 3/10: actionable briefing and automatic read state"
+# 00:05 — Open the digest, then show that reading moved it to Read.
+log "Scene 3/10: digest and automatic read state"
 start_clip
 omarchy-shell omadigest showDigests unread >/dev/null
 sleep 1.2
@@ -173,7 +185,7 @@ omarchy-shell omadigest showDigests read >/dev/null
 sleep 1.2
 stop_clip
 
-# 00:11 — Scan the broad source catalog, then punch into live GitHub categories.
+# 00:11 — Scan the source catalog, then open GitHub categories.
 log "Scene 4/10: source catalog and GitHub controls"
 start_clip
 omarchy-shell omadigest showSettings integrations >/dev/null
@@ -184,8 +196,8 @@ sleep 3.4
 stop_clip
 
 # 00:18 — Show learned pattern suggestion, then both packaged-template editors.
-wait_for '(.templateSuggestions | length) > 0' 'an evidence-backed template suggestion' 15
-log "Scene 5/10: smart suggestion and two template editing modes"
+wait_for '(.templateSuggestions | length) > 0' 'a template suggestion' 15
+log "Scene 5/10: template suggestion and editing modes"
 start_clip
 omarchy-shell omadigest showSettings templates >/dev/null
 sleep 1.8
@@ -217,7 +229,7 @@ sleep 3.4
 stop_clip
 wait_for '.draftState == "ready" and .draftKind == "template"' 'the template draft'
 
-# 00:30 — Review, accept, and immediately inspect the deterministic result.
+# 00:30 — Review, accept, and inspect the result.
 log "Scene 8/10: review and install the template"
 start_clip
 omarchy-shell omadigest showDraft template >/dev/null
@@ -250,7 +262,7 @@ jq -e '.digestTemplateId == "github-triage" and (.digestTitle | test("482|PR"; "
   || { echo "The final digest did not expose the expected PR-specific title/template." >&2; exit 1; }
 
 # 00:41 — Payoff: a specifically named report with citations and agent action.
-log "Scene 10/10: PR-specific report payoff"
+log "Scene 10/10: PR-specific report"
 start_clip
 omarchy-shell omadigest openCurrent >/dev/null
 sleep 5.0
@@ -259,13 +271,27 @@ stop_clip
 mkdir -p "$output_dir"
 concat_file="$clip_root/concat.txt"
 for clip in "${clips[@]}"; do printf "file '%s'\n" "$clip" >> "$concat_file"; done
-output="$output_dir/omadigest-demo-$(date +%Y%m%d-%H%M%S).mp4"
-ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i "$concat_file" -c copy "$output"
-duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$output")"
-if ! awk -v seconds="$duration" 'BEGIN { exit !(seconds < 60) }'; then
-  echo "The finished cut is ${duration}s; the sizzle reel must remain under 60 seconds." >&2
+take_id="$(date +%Y%m%d-%H%M%S)"
+raw_output="$output_dir/omadigest-demo-${take_id}-raw.mp4"
+output="$output_dir/omadigest-demo-${take_id}.mp4"
+timeline="$output_dir/omadigest-demo-${take_id}.timeline.tsv"
+ffmpeg -hide_banner -loglevel error -f concat -safe 0 -i "$concat_file" -c copy "$raw_output"
+raw_duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$raw_output")"
+if ! awk -v seconds="$raw_duration" 'BEGIN { exit !(seconds < 48) }'; then
+  echo "The raw cut is ${raw_duration}s; slowing it to 0.8x would exceed one minute." >&2
   exit 1
 fi
+
+scene_start=0
+for index in "${!clips[@]}"; do
+  IFS=$'\t' read -r kicker headline <<<"${scene_labels[$index]}"
+  printf '%.6f\t%s\t%s\n' "$scene_start" "$kicker" "$headline" >> "$timeline"
+  clip_duration="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "${clips[$index]}")"
+  scene_start="$(awk -v start="$scene_start" -v length="$clip_duration" 'BEGIN { printf "%.6f", start + length }')"
+done
+
+"$repo_root/demo/polish-demo.sh" "$raw_output" "$timeline" "$output"
+duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$output")"
 
 "$repo_root/demo/restore.sh" >/dev/null
 prepared=false

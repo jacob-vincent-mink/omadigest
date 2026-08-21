@@ -529,7 +529,11 @@ Panel {
         root.sourcesView = "authoring"
         integrationDraftEditor.setRequest(request)
       }
-      else templateDraftEditor.setRequest(request)
+      else {
+        root.selectedTemplate = null
+        root.templateEditMode = "view"
+        templateDraftEditor.setRequest(request)
+      }
       root.scrollToBottom()
       OmaDigest.OmaDigestStore.startDraft(requestedKind, request)
       return "ok"
@@ -545,7 +549,11 @@ Panel {
         root.sourcesView = "authoring"
         integrationDraftEditor.setRequest(request)
       }
-      else templateDraftEditor.setRequest(request)
+      else {
+        root.selectedTemplate = null
+        root.templateEditMode = "view"
+        templateDraftEditor.setRequest(request)
+      }
       root.scrollToBottom()
       return "ok"
     }
@@ -564,8 +572,13 @@ Panel {
     }
 
     function showDraft(kind: string): string {
-      root.settingsPage = String(kind) === "integration" ? "integrations" : "templates"
-      if (String(kind) === "integration") root.sourcesView = "authoring"
+      var requestedKind = String(kind) === "integration" ? "integration" : "template"
+      root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
+      if (requestedKind === "integration") root.sourcesView = "authoring"
+      else {
+        root.selectedTemplate = null
+        root.templateEditMode = "view"
+      }
       root.page = "settings"
       root.open()
       root.scrollToBottom()

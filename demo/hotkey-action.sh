@@ -72,7 +72,7 @@ case "${1:-help}" in
   reentry)
     omarchy-shell notifications setDnd off >/dev/null
     notify-send --app-name="Omarchy" --urgency=low --expire-time=4500 \
-      "Focus session complete" "OmaDigest is preparing a concise release briefing."
+      "Focus session complete" "OmaDigest is preparing a digest."
     panel_call triggerFocusReentry 0 >/dev/null
     ;;
   pr-update)

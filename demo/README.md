@@ -1,6 +1,6 @@
 # OmaDigest demo production
 
-The primary demo is a sub-minute sizzle reel: fast, repeatable, and free of terminal windows. It uses real Omarchy notifications, a live authenticated GitHub CLI connector, the real privacy policy, the scoped template agent, deterministic template routing, and the configured digest model.
+The primary demo is a sub-minute sizzle reel: fast, repeatable, and free of terminal windows. It uses real Omarchy notifications, a live authenticated GitHub CLI connector, the real privacy policy, the scoped template agent, deterministic template routing, and the configured digest model. The finished cut runs at 0.8× speed with brief feature cards and a checksummed CC0 lo-fi track; see [`MUSIC.md`](MUSIC.md) for provenance.
 
 ## Record the polished take
 
@@ -11,7 +11,7 @@ npm run check
 ./demo/run-demo.sh 9
 ```
 
-The runner records ten short shots and joins them with hard cuts:
+The runner records ten short shots, joins them, and renders the polished cut:
 
 1. backs up and prepares isolated OmaDigest state;
 2. hooks with a burst of real native notifications;
@@ -24,7 +24,7 @@ The runner records ten short shots and joins them with hard cuts:
 9. routes a fresh PR #482 notification and connector evidence through it; and
 10. lands on the specifically named report with citations and an agent handoff.
 
-Model operations are not mocked. Recording stops during long model waits and private DND-only events, then resumes on meaningful UI state. The runner measures the concatenated output and fails the take if it reaches 60 seconds. The final path and duration are printed on success.
+Model operations are not mocked. Recording stops during long model waits and private DND-only events, then resumes on meaningful UI state. The natural-language template request remains visible as drafting starts. The runner rejects a raw cut at 48 seconds or longer, then slows it to 0.8×, adds timed feature cards and CC0 music, and verifies that the polished result remains under one minute. It keeps the raw cut and scene timeline beside the final video for later editing; the polished path and duration are printed on success.
 
 ## Cut map
 
