@@ -56,7 +56,7 @@ The root `preview.png` is a frame from the end-to-end release demo. It shows the
 
 ```bash
 printf '%s\n' \
-  '{"type":"initialize","protocolVersion":1}' \
+  '{"type":"initialize","protocolVersion":2}' \
   '{"type":"dictation_status","id":"voice"}' \
   '{"type":"tts_status","id":"speech"}' \
   '{"type":"shutdown"}' \
