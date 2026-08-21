@@ -21,7 +21,8 @@ omadigest/
 │   ├── connector.mjs
 │   ├── connector.test.mjs
 │   └── README.md
-├── integration-state.json          # enabled/disabled state
+├── integration-state.json          # bounded source and category enablement
+├── native-source-state.json        # bounded local transition snapshots/events
 ├── integration-config/<id>.json    # non-secret connector setup
 ├── speech.json                     # TTS provider settings, never the key
 ├── agent.json                      # selected generation provider

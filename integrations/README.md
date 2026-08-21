@@ -12,6 +12,6 @@ Reviewed first-party integrations live in one self-contained directory per manif
 
 An integration owns no global registry entry, dependency install, or shell configuration. Removing its directory removes its code; stale enablement state is inert. Integrations are discovered disabled unless the user enables them in OmaDigest settings.
 
-Bundled packages currently cover GitHub notifications through authenticated `gh` and Google Calendar through a private iCal URL. Omarchy Notifications and Focus/DND transitions are first-party broker inputs rather than connector packages. Every connector exposes a non-mutating status probe, and templates invoke only the enabled connector IDs named in their compiled context policy.
+Bundled packages cover GitHub, Google Calendar, X, Linear, Slack, Todoist, and RSS/Atom. Omarchy Notifications and Focus/DND transitions remain first-party inputs; Crash Reports, Omarchy Updates, System Telemetry, and Herdr Agents are bounded broker-native sources. Every connector exposes a non-mutating status probe, and templates invoke only enabled connector IDs and user-enabled categories named in their compiled context policy.
 
 See [`../skills/integration-authoring/references/connector-protocol.md`](../skills/integration-authoring/references/connector-protocol.md) and [`../docs/integrations.md`](../docs/integrations.md).

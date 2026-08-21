@@ -6,7 +6,7 @@ The bar's quill opens a deliberately small digest list. The header actions are:
 
 - **+** — generate from currently available attention items;
 - **✓** — mark the current backlog seen without deleting policy-permitted retained evidence;
-- **Settings** — open integrations, templates, privacy, connections, and retained data controls.
+- **Settings** — open sources, templates, privacy, connections, and retained data controls.
 
 Select a digest to open its focused reader. Each entry includes source citations and, where policy allows, **Send to agent**.
 
@@ -59,11 +59,11 @@ Open any installed template to choose **Edit manually** or **Revise with agent**
 
 The scoped drafting session cannot edit files or browse the system. If the request is unrelated it can only propose an explicit default-agent handoff. If legitimate authoring needs broader follow-up, **Continue in Herdr** transfers the request and a bounded draft snapshot to a dedicated workspace after confirmation.
 
-## Integrations
+## Sources
 
-Open **Settings → Integrations** to inspect, configure, enable, disable, or remove connector packages.
+Open **Settings → Sources** for a compact status list. Omarchy-native inputs and connected services are separated; each row shows health, enablement, and a category count. Open a row for status refresh, setup/authentication, the overall on/off control, category switches, and quiet permission details.
 
-Describe a new connector and press **Build in default agent**. OmaDigest opens the user's default coding agent with a dedicated integration-authoring skill and exact local validator commands. The agent builds in a temporary directory; the validator bounds the package, checks its manifest and syntax, runs its tests inside the connector sandbox, performs a mocked protocol probe where possible, and only then installs it atomically. A successful install remains disabled. Configuration and enablement are separate user actions back in OmaDigest.
+Choose **Add source**, describe a new connector, and press **Build in default agent**. OmaDigest opens the user's default coding agent with a dedicated integration-authoring skill and exact local validator commands. The agent builds in a temporary directory; the validator bounds the package, checks its manifest and syntax, runs its tests inside the connector sandbox, performs a mocked protocol probe where possible, and only then installs it atomically. A successful install remains disabled. Configuration, category selection, and enablement are separate user actions back in OmaDigest.
 
 The bundled GitHub connector uses the active authenticated `gh` session and imports bounded unread-notification metadata. The bundled Google Calendar connector asks for a Secret iCal URL and stores it in Secret Service. **Check status** runs each connector's non-mutating live probe—GitHub reports the active CLI identity, while Calendar reports connected or actionable setup failure—without enabling it.
 

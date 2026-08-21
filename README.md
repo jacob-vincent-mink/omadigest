@@ -31,6 +31,8 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
 - **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
+- **Useful sources out of the box** — GitHub, Google Calendar, X, Linear, Slack, Todoist, RSS/Atom, local crash and update state, system telemetry, and Herdr agent activity.
+- **Category-level control** — keep a source enabled while turning off noisy streams such as completed tasks, network transitions, or account activity.
 - **Explicit action handoff** — send one cited digest item to the default Omarchy agent, or continue broader authoring work in Herdr.
 - **Focus re-entry** — automatically generate after DND ends, at an optional daily time, or manually from the panel.
 - **Voice both ways** — dictate authoring requests with Voxtype and optionally read completed digests aloud.
@@ -73,7 +75,7 @@ Normal installation uses the checked-in broker bundle. It does not run npm, inst
 2. Open **Settings → Connections** and connect the model account OmaDigest should use.
 3. Review **Settings → Privacy** before allowing notification content into digests.
 4. Let attention items accumulate, then press **+** to generate the first digest.
-5. Optionally configure integrations, draft a custom template, or set the widget's daily schedule in Omarchy's bar settings.
+5. Optionally configure sources and their categories, draft a custom template, or set the widget's daily schedule in Omarchy's bar settings.
 
 Read the [usage guide](docs/usage.md) for the complete workflow.
 
@@ -146,7 +148,7 @@ integrations/<integration-id>/
 └── README.md
 ```
 
-The bundled GitHub integration uses the existing `gh` login and emits bounded unread-notification metadata—not issue bodies, comments, patches, repository contents, or tokens. The bundled Google Calendar integration uses a calendar's **Secret address in iCal format**, stored in Secret Service, and excludes the secret URL, descriptions, attendees, and attachments. Both expose a non-mutating live status check before enablement.
+Bundled service integrations cover GitHub, Google Calendar, X, Linear, Slack, Todoist, and RSS/Atom. Broker-native Omarchy sources cover bounded crash metadata, update availability, system telemetry, and Herdr agent transitions. Every source exposes category controls and a non-mutating status check; all start disabled except the existing Notifications and Focus/DND inputs. See the [integration guide](docs/integrations.md) for credentials, bounds, and deliberate omissions such as Gmail OAuth.
 
 ## Documentation
 

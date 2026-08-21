@@ -73,3 +73,17 @@ The bundled connector deliberately starts with Google's private iCal feed rather
 - descriptions, attendees, attachments, and the feed URL are excluded.
 
 This offers direct in-panel setup without pretending that OAuth is simple or embedding a shared client secret.
+
+## Bundled source catalog
+
+- **X** uses an app-only bearer token for public mentions and selected public-account activity. It does not claim private-account or user-OAuth access.
+- **Linear** covers assigned issues, mentions/comments, workflow changes, and due work through a personal API key.
+- **Slack** covers visible direct messages, mentions, and thread replies, bounded by the supplied token's scopes and memberships.
+- **Todoist** covers overdue, upcoming, assigned, and optionally completed task activity through a personal API token.
+- **RSS and Atom** reads one public credential-free HTTPS feed, with separate new-entry and priority-keyword categories and private-network protections.
+
+Gmail is intentionally not bundled yet. A durable implementation needs a complete OAuth authorization and refresh-token lifecycle; the current connector setup contract cannot bootstrap that honestly without shipping and operating a Google OAuth client.
+
+## Omarchy-native sources
+
+The broker also exposes local sources for application crash metadata, Omarchy update availability, charger and battery transitions, storage pressure, network transitions, failed user services, and Herdr agent completion/blocker state. These sources never read core contents, arbitrary journal bodies, network names, agent transcripts, or agent working-directory paths. Transition history is capped at 256 items and seven days, and collection begins only after its source and category are enabled.

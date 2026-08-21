@@ -22,7 +22,7 @@ Build one self-contained integration package that turns an external source into 
 
 ## Permissions
 
-Declare every network host, external command, read path, and write path in the manifest. Empty is better than speculative. Declarations are reviewed disclosures and future sandbox inputs; they are not permission to exceed the connector operation.
+Declare every network host, external command, read path, and write path in the manifest. Empty is better than speculative. If a public HTTPS host comes from user configuration, declare the corresponding `url` setup key in `permissions.networkSetupFields`; validate it against credentials, redirects, and private/local addresses in connector code. Declarations are reviewed disclosures and future sandbox inputs; they are not permission to exceed the connector operation.
 
 Integrations are generated into staging, validated, tested in a restricted subprocess, reviewed as a complete diff, installed only after acceptance, and remain disabled until separately enabled. Do not weaken any stage.
 
