@@ -8,6 +8,8 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/omadigest/
 
 This is deliberate: the user's default Omarchy agent can review or edit policy, templates, integrations, and declared permissions without automating the panel. OmaDigest fingerprints this tree every two seconds and reloads valid external changes into the running UI and broker.
 
+Bounded runtime state lives separately under `${XDG_STATE_HOME:-$HOME/.local/state}/omadigest/`. That directory includes attention segments, seen IDs, digest history, dismissed template suggestions, and one release-update cache record. It is product state, not an agent-editable control plane.
+
 ## Layout
 
 ```text

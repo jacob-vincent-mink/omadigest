@@ -65,7 +65,7 @@ Open **Settings → Sources** for a compact status list. Omarchy-native inputs a
 
 Choose **Add source**, describe a new connector, and press **Build in default agent**. OmaDigest opens the user's default coding agent with a dedicated integration-authoring skill and exact local validator commands. The agent builds in a temporary directory; the validator bounds the package, checks its manifest and syntax, runs its tests inside the connector sandbox, performs a mocked protocol probe where possible, and only then installs it atomically. A successful install remains disabled. Configuration, category selection, and enablement are separate user actions back in OmaDigest.
 
-The bundled GitHub connector uses the active authenticated `gh` session and imports bounded unread-notification metadata. The bundled Google Calendar connector asks for a Secret iCal URL and stores it in Secret Service. **Check status** runs each connector's non-mutating live probe—GitHub reports the active CLI identity, while Calendar reports connected or actionable setup failure—without enabling it.
+The bundled GitHub connector uses the active authenticated `gh` session and imports bounded unread-notification metadata. **Check status** runs its non-mutating live probe and reports the active GitHub identity without enabling it. Other applications participate through native notifications unless the user installs a separately reviewed custom connector.
 
 **Install agent skill** links the packaged integration-authoring skill into Omarchy's shared and supported agent skill directories. This is an explicit user action rather than a plugin-install hook; handoffs retain an absolute-path fallback if the skill is not linked.
 
@@ -97,6 +97,8 @@ ${XDG_STATE_HOME:-~/.local/state}/omadigest/ attention segments and digest histo
 ```
 
 Provider authentication and secrets are intentionally not part of the editable configuration tree. See [configuration](configuration.md) for the complete file contract.
+
+OmaDigest checks its latest stable GitHub release in the background no more than once per day. When a newer semantic version exists, the settings icon gains an accent dot and Settings shows a dismissible release banner. Dismissal applies only to that version, so a later release can notify again. OmaDigest never installs an update itself; **View release** opens the fixed GitHub release page and the user updates through Omarchy.
 
 ## Delete retained data
 

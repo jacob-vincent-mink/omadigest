@@ -61,28 +61,19 @@ The bundled GitHub connector uses the existing authenticated `gh` session. The b
 
 Its status probe calls the authenticated user endpoint and reports the active login. It starts disabled, and templates can invoke it only when they explicitly list `io.github.jacob-vincent-mink.github` in their context policy.
 
-## Google Calendar
+## Deliberately unbundled connectors
 
-The bundled connector deliberately starts with Google's private iCal feed rather than a shipped OAuth client:
+The v0.1 release ships no other external-service connector. Prototypes are not product promises:
 
-- the user pastes the Secret address from Google Calendar settings;
-- Secret Service stores it;
-- only the connector receives it;
-- the connector fetches from `calendar.google.com`;
-- emitted context contains event ID, title, start/end, safe URL, and provenance;
-- descriptions, attendees, attachments, and the feed URL are excluded.
+- Google Calendar, Linear, and Todoist were not connected and synced during release validation;
+- Slack requires the user to create and install a Slack app with workspace-approved scopes;
+- X requires a developer account and app, and its API endpoints are pay-per-use;
+- Gmail requires a complete OAuth authorization and refresh-token lifecycle;
+- RSS/Atom needs a broker-level repeatable-instance contract and broader real-feed compatibility before it can honestly represent multiple subscriptions.
 
-This offers direct in-panel setup without pretending that OAuth is simple or embedding a shared client secret.
+Native notifications from those applications can still be classified and summarized under the user's privacy rules. The integration-authoring skill remains available for reviewed local connectors, but successful mocked validation is not represented as an official live-tested integration.
 
-## Bundled source catalog
-
-- **X** uses an app-only bearer token for public mentions and selected public-account activity. It does not claim private-account or user-OAuth access.
-- **Linear** covers assigned issues, mentions/comments, workflow changes, and due work through a personal API key.
-- **Slack** covers visible direct messages, mentions, and thread replies, bounded by the supplied token's scopes and memberships.
-- **Todoist** covers overdue, upcoming, assigned, and optionally completed task activity through a personal API token.
-- **RSS and Atom** reads one public credential-free HTTPS feed, with separate new-entry and priority-keyword categories and private-network protections.
-
-Gmail is intentionally not bundled yet. A durable implementation needs a complete OAuth authorization and refresh-token lifecycle; the current connector setup contract cannot bootstrap that honestly without shipping and operating a Google OAuth client.
+Repeatable sources are a future broker contract, not duplicated package IDs. A proper implementation needs bounded instance records, per-instance setup/secrets/status/categories, deterministic routing across instances, and explicit add/remove UI.
 
 ## Omarchy-native sources
 

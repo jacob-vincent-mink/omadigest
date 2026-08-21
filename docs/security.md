@@ -43,6 +43,8 @@ Notification privacy is deterministic and enforced before persistence. Protected
 
 Attention events that pass policy are bounded, mode `0600`, segmented daily, retained for seven files, and deduplicated in memory. Successful generation marks its input items seen, and the panel also provides an explicit mark-seen action. Seen state suppresses inbox counts but does not delete policy-permitted retained evidence, so an explicit default-agent handoff can still resolve citations for correlation. Connector enrichment is persisted only when normalized into the attention store. Completed digest history is capped at the newest 30 records and supports individual deletion and clear-all through the broker protocol.
 
+The release checker has no model or connector authority. It contacts one compiled-in GitHub API URL, rejects redirects and non-stable tags, caps the response and single-record cache at 64 KiB, and constructs the browser URL from the validated release tag rather than accepting a remote action URL.
+
 ## Read mode
 
 Read mode removes URLs, Markdown punctuation, and code blocks before synthesis. Audio is capped at 50 MiB, stored mode `0600` below the runtime directory, played through `mpv`, and deleted on exit. Remote speech is separately configured and is not implied by model-provider consent.

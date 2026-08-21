@@ -44,6 +44,8 @@ User policy, templates, integrations, declared permissions, enablement, category
 
 Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable.
 
+Release discovery is also broker-owned. It checks only GitHub's fixed `releases/latest` endpoint for this repository, at most once per 24 hours unless the user explicitly retries. Requests time out after five seconds; response and persisted state are each capped at 64 KiB. QML receives only the normalized current/latest versions, fixed release URL, check time, and per-version dismissal state.
+
 ## Templates
 
 Templates have readable `SKILL.md` instructions and a schema-validated compiled policy. TypeScript evaluates all triggers and displays reasons. Manual Quickshell edits and constrained-agent revisions both cross typed broker commands, preserve the template ID, and install atomically. Accepted user templates overlay bundled IDs from the XDG configuration directory; deleting custom templates resets edited defaults by removing those overlays.
@@ -70,7 +72,7 @@ Read mode is a separate provider boundary. It supports OpenAI-compatible speech 
 
 ## Runtime protocol
 
-Protocol 1 currently includes:
+Protocol 2 currently includes:
 
 - initialize and shutdown;
 - template selection;
@@ -79,6 +81,7 @@ Protocol 1 currently includes:
 - default-agent integration-authoring handoff;
 - integration setup, structured status refresh, source enablement, and category enablement;
 - deletion of OmaDigest digest history, retained notification evidence, custom integrations, and custom templates;
+- bounded release-update check, per-version dismissal, and fixed release-page launch;
 - dictation status/start/stop/cancel;
 - TTS status/configure/speak/pause/stop.
 

@@ -58,7 +58,7 @@ A brief DND toggle with only low-signal updates is skipped with a normal status 
 
 ## Template suggestions
 
-OmaDigest examines at most 200 retained items from the last seven days and compares them with a fixed catalog of safe recipes. Repeated GitHub review activity, calendar churn, failures, task commitments, or direct mentions can produce a suggestion. Known count-only GitHub frequency can suggest connecting the bundled GitHub source without reading masked text.
+OmaDigest examines at most 200 retained items from the last seven days and compares them with a fixed catalog of safe recipes. Repeated GitHub review activity, calendar-application notifications, failures, task notifications, or direct mentions can produce a suggestion. Known count-only GitHub frequency can suggest connecting the bundled GitHub source without reading masked text.
 
 Suggestions never auto-install policy. The user can draft one through the constrained template agent or dismiss it for 30 days. Suggestion prompts are fixed product recipes; raw notification strings are never promoted into model instructions. At most three suggestions are published and only one is shown prominently in the panel.
 

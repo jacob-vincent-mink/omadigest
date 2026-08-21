@@ -1,7 +1,9 @@
 {
   "name": "omadigest",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
+  "repository": "github:jacob-vincent-mink/omadigest",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {

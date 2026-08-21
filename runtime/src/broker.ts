@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline";
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -32,6 +32,7 @@ import {
   type HerdrAgentSnapshot,
   type TelemetrySnapshot
 } from "./native-sources.js";
+import { ReleaseUpdateService } from "./release-update.js";
 import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration, type SourceStatus } from "./types.js";
 
 const contextSchema = z.object({
@@ -48,6 +49,9 @@ const contextSchema = z.object({
 
 const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("initialize"), protocolVersion: z.number().int() }).strict(),
+  z.object({ type: z.literal("update_check"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("update_dismiss"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("update_open"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("select_template"), id: z.string().min(1).max(100), context: contextSchema }).strict(),
   z.object({
     type: z.literal("integration_set_enabled"),
@@ -153,6 +157,7 @@ const pluginRoot = process.env.OMADIGEST_PLUGIN_DIR?.startsWith("/")
   ? process.env.OMADIGEST_PLUGIN_DIR
   : resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const configRoot = integrationConfigRoot();
+const releaseUpdates = new ReleaseUpdateService(currentPluginVersion());
 function loadAllTemplates() {
   const byId = new Map(loadTemplates(resolve(pluginRoot, "templates")).map((template) => [template.manifest.id, template]));
   for (const template of loadTemplates(resolve(configRoot, "templates"))) byId.set(template.manifest.id, template);
@@ -308,6 +313,11 @@ function emit(event: BrokerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
+async function checkReleaseUpdate(id: string, force: boolean): Promise<void> {
+  emit({ type: "update_status", id, status: releaseUpdates.checkingStatus() });
+  emit({ type: "update_status", id, status: await releaseUpdates.check(force) });
+}
+
 function emitAttention(id: string): void {
   const pending = attention.pending(500);
   const digestibleCount = privacy.evidenceForDigest(pending).length;
@@ -370,6 +380,13 @@ function configurationFingerprint(root: string): string {
   return parts.join("|");
 }
 
+function currentPluginVersion(): string {
+  const manifestPath = resolve(pluginRoot, "manifest.json");
+  if (statSync(manifestPath).size > 64 * 1024) throw new Error("OmaDigest manifest is too large");
+  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+  return z.object({ version: z.string().min(1).max(80) }).passthrough().parse(parsed).version;
+}
+
 async function handle(raw: string): Promise<boolean> {
   let command: z.infer<typeof commandSchema>;
   try {
@@ -392,9 +409,25 @@ async function handle(raw: string): Promise<boolean> {
       integrations: publicIntegrations(),
       authMethods: await discoverAgentAuthMethods(),
       privacy: privacy.status(),
-      templateSuggestions: currentTemplateSuggestions()
+      templateSuggestions: currentTemplateSuggestions(),
+      update: releaseUpdates.status()
     });
     emitAttention("initialize");
+    void checkReleaseUpdate("initialize", false);
+    return true;
+  }
+
+  if (command.type === "update_check") {
+    void checkReleaseUpdate(command.id, true);
+    return true;
+  }
+  if (command.type === "update_dismiss") {
+    emit({ type: "update_status", id: command.id, status: releaseUpdates.dismiss() });
+    return true;
+  }
+  if (command.type === "update_open") {
+    const url = releaseUpdates.releaseUrl();
+    if (url !== undefined) void launchExternalUrl(url);
     return true;
   }
 
@@ -674,7 +707,8 @@ async function handle(raw: string): Promise<boolean> {
         integrations: publicIntegrations(),
         authMethods: await discoverAgentAuthMethods(),
         privacy: privacy.status(),
-        templateSuggestions: currentTemplateSuggestions()
+        templateSuggestions: currentTemplateSuggestions(),
+        update: releaseUpdates.status()
       });
     } catch (error) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error instanceof Error ? error.message : "The draft could not be installed." });

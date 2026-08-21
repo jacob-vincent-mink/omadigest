@@ -19,7 +19,7 @@ Read these files from the plugin root before implementing:
 
 - `skills/integration-authoring/references/connector-protocol.md` for NDJSON protocol v1;
 - `runtime/src/integration-schema.ts` for the manifest contract;
-- `integrations/io.github.jacob-vincent-mink.google-calendar/` for a complete package example.
+- `integrations/io.github.jacob-vincent-mink.github/` for the shipped, end-to-end-tested package example.
 
 ## Workflow
 

@@ -26,6 +26,9 @@ Panel {
   readonly property string notificationHistoryDir: notificationService && notificationService.historyDir
     ? String(notificationService.historyDir) : ""
   readonly property int attentionAvailableCount: OmaDigest.OmaDigestStore.attentionCount
+  readonly property var releaseUpdate: OmaDigest.OmaDigestStore.updateStatus || ({})
+  readonly property bool updateAvailable: String(releaseUpdate.state || "") === "available"
+    && releaseUpdate.dismissed !== true
 
   property string page: "list"
   property string digestTab: "unread"
@@ -719,6 +722,7 @@ Panel {
         integrations: OmaDigest.OmaDigestStore.integrations,
         integrationSetup: OmaDigest.OmaDigestStore.integrationSetup,
         integrationStatus: OmaDigest.OmaDigestStore.integrationStatus,
+        updateStatus: OmaDigest.OmaDigestStore.updateStatus,
         sourcesView: root.sourcesView,
         selectedSourceId: root.selectedSource ? String(root.selectedSource.id || "") : "",
         routeTemplateId: OmaDigest.OmaDigestStore.selection
@@ -872,13 +876,34 @@ Panel {
                 onClicked: OmaDigest.OmaDigestStore.acknowledgeAllAttention()
               }
 
-              PanelActionButton {
+              Item {
                 visible: root.page === "list"
-                iconText: "󰒓"
-                tooltipText: "Settings"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.page = "settings"
+                width: settingsAction.implicitWidth
+                height: settingsAction.implicitHeight
+
+                PanelActionButton {
+                  id: settingsAction
+                  anchors.fill: parent
+                  iconText: "󰒓"
+                  tooltipText: root.updateAvailable ? "Settings · update available" : "Settings"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onClicked: root.page = "settings"
+                }
+
+                Rectangle {
+                  visible: root.updateAvailable
+                  width: Style.space(8)
+                  height: width
+                  radius: width / 2
+                  color: Color.accent
+                  border.width: Style.spacing.hairline
+                  border.color: Color.background
+                  anchors.right: parent.right
+                  anchors.top: parent.top
+                  anchors.rightMargin: -Style.space(1)
+                  anchors.topMargin: -Style.space(1)
+                }
               }
             }
           }
@@ -1253,6 +1278,77 @@ Panel {
                       if (root.settingsPage === "connections") root.connectionView = "overview"
                       if (root.settingsPage === "integrations") root.showSourceList()
                     }
+                  }
+                }
+              }
+            }
+
+            Rectangle {
+              visible: root.updateAvailable
+              width: parent.width
+              height: visible ? releaseUpdateContent.implicitHeight + Style.space(20) : 0
+              radius: Style.cornerRadius
+              color: Style.selectedFillFor(root.foreground, Color.accent)
+              border.width: Style.spacing.hairline
+              border.color: Color.accent
+
+              Column {
+                id: releaseUpdateContent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.margins: Style.space(10)
+                spacing: Style.space(7)
+
+                Text {
+                  width: parent.width
+                  text: "OMADIGEST " + String(root.releaseUpdate.latestVersion || "") + " IS AVAILABLE"
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  font.letterSpacing: 1
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  width: parent.width
+                  text: "You’re on " + String(root.releaseUpdate.currentVersion || "this version")
+                    + ". Review the release, then update with Omarchy when you’re ready."
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.WordWrap
+                }
+
+                Row {
+                  width: parent.width
+                  height: Style.space(34)
+                  spacing: Style.space(8)
+
+                  Button {
+                    width: (parent.width - parent.spacing) * 0.62
+                    height: parent.height
+                    text: "View release"
+                    foreground: root.foreground
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.bodySmall
+                    bordered: true
+                    focusable: true
+                    onClicked: OmaDigest.OmaDigestStore.openUpdate()
+                  }
+
+                  Button {
+                    width: parent.width - parent.spacing - (parent.width - parent.spacing) * 0.62
+                    height: parent.height
+                    text: "Dismiss"
+                    foreground: root.foreground
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.bodySmall
+                    focusable: true
+                    onClicked: OmaDigest.OmaDigestStore.dismissUpdate()
                   }
                 }
               }

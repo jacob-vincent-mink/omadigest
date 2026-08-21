@@ -171,8 +171,21 @@ export type PublicPrivacyPolicy = {
 
 export type DataDeletionTarget = "digest-history" | "notification-history" | "integrations" | "templates" | "all";
 
+export type ReleaseUpdateStatus = {
+  state: "unknown" | "checking" | "current" | "available";
+  currentVersion: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  checkedAt?: string;
+  dismissed: boolean;
+  message?: string;
+};
+
 export type BrokerCommand =
   | { type: "initialize"; protocolVersion: number }
+  | { type: "update_check"; id: string }
+  | { type: "update_dismiss"; id: string }
+  | { type: "update_open"; id: string }
   | { type: "select_template"; id: string; context: GenerationContext }
   | { type: "integration_set_enabled"; id: string; integrationId: string; enabled: boolean }
   | { type: "integration_set_category_enabled"; id: string; integrationId: string; categoryId: string; enabled: boolean }
@@ -218,7 +231,8 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; templateSuggestions: TemplateSuggestion[] }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; templateSuggestions: TemplateSuggestion[]; update: ReleaseUpdateStatus }
+  | { type: "update_status"; id: string; status: ReleaseUpdateStatus }
   | { type: "templates"; id: string; templates: PublicTemplate[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
   | { type: "integrations"; id: string; integrations: PublicIntegration[] }

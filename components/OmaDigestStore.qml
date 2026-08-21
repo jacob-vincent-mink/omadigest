@@ -26,6 +26,7 @@ Scope {
   property var integrationStatus: ({})
   property var privacy: ({ defaultMode: "count-only", rules: [] })
   property var integrationSetup: ({})
+  property var updateStatus: ({ state: "unknown", currentVersion: "", dismissed: false, message: "" })
   property var selection: null
   property var draft: null
   property string draftId: ""
@@ -159,6 +160,9 @@ Scope {
   }
 
   function requestAgentStatus() { send({ type: "agent_status", id: "agent-" + nextId++ }) }
+  function checkForUpdates() { send({ type: "update_check", id: "update-" + nextId++ }) }
+  function dismissUpdate() { send({ type: "update_dismiss", id: "update-" + nextId++ }) }
+  function openUpdate() { send({ type: "update_open", id: "update-" + nextId++ }) }
   function setPrivacyDefault(mode) {
     send({ type: "privacy_set_default", id: "privacy-" + nextId++, mode: String(mode) })
   }
@@ -337,11 +341,16 @@ Scope {
       templateSuggestions = event.templateSuggestions || []
       integrations = event.integrations || []
       privacy = event.privacy || ({ defaultMode: "count-only", rules: [] })
+      updateStatus = event.update || updateStatus
       authMethods = event.authMethods || []
       root.requestAgentStatus()
       root.requestDictationStatus()
       root.requestTtsStatus()
       root.requestDigestHistory()
+      return
+    }
+    if (event.type === "update_status") {
+      updateStatus = event.status || updateStatus
       return
     }
     if (event.type === "templates") {

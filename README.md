@@ -32,7 +32,7 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
 - **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
-- **Useful sources out of the box** — GitHub, Google Calendar, X, Linear, Slack, Todoist, RSS/Atom, local crash and update state, system telemetry, and Herdr agent activity.
+- **Useful sources out of the box** — native Omarchy notifications and focus state, live-tested GitHub metadata, local crash and update state, system telemetry, and Herdr agent activity.
 - **Category-level control** — keep a source enabled while turning off noisy streams such as completed tasks, network transitions, or account activity.
 - **Explicit action handoff** — send one cited digest item to the default Omarchy agent, or continue broader authoring work in Herdr.
 - **Focus re-entry** — automatically generate after DND ends, at an optional daily time, or manually from the panel.
@@ -55,6 +55,8 @@ Optional features:
 - `mpv` for read-aloud playback
 - `herdr` for explicit extended authoring handoff
 - `gh` for the bundled, read-only GitHub notification integration
+
+The complete lockfile-derived dependency license inventory and demo-media credits are documented in [Third-party materials](THIRD_PARTY_NOTICES.md).
 
 ### Add the plugin
 
@@ -149,7 +151,7 @@ integrations/<integration-id>/
 └── README.md
 ```
 
-Bundled service integrations cover GitHub, Google Calendar, X, Linear, Slack, Todoist, and RSS/Atom. Broker-native Omarchy sources cover bounded crash metadata, update availability, system telemetry, and Herdr agent transitions. Every source exposes category controls and a non-mutating status check; all start disabled except the existing Notifications and Focus/DND inputs. See the [integration guide](docs/integrations.md) for credentials, bounds, and deliberate omissions such as Gmail OAuth.
+The bundled GitHub integration uses the user's authenticated `gh` session and is exercised end to end in the demo. Broker-native Omarchy sources cover bounded crash metadata, update availability, system telemetry, and Herdr agent transitions. Every source exposes category controls and a non-mutating status check; all start disabled except the existing Notifications and Focus/DND inputs. Calendar, chat, task, and social applications still participate through native notifications and per-application privacy rules. See the [integration guide](docs/integrations.md) for the verified release scope and deliberately unbundled connectors.
 
 ## Documentation
 
@@ -175,7 +177,8 @@ The notification stream is a useful place to start because it already contains c
 
 - Just-in-time briefs, such as gathering relevant project context before an upcoming meeting.
 - Deeper correlation across notifications, connectors, local system state, and agent activity.
-- More useful integrations enabled by default.
+- More live-tested integrations with ordinary-user authentication.
+- Repeatable connector instances for sources such as multiple RSS feeds or calendars.
 - A way for integrations to ship independently, potentially by building on Omarchy's existing plugin system.
 
 ## Development
@@ -200,6 +203,6 @@ omarchy plugin validate "$PWD"
 
 See [Contributing](CONTRIBUTING.md), [Development](docs/development.md), and [`AGENTS.md`](AGENTS.md).
 
-## License
+## License and third-party materials
 
-[MIT](LICENSE) © 2026 Jacob Mink
+[MIT](LICENSE) © 2026 Jacob Mink. See [Third-party materials](THIRD_PARTY_NOTICES.md) for dependency licenses and demo-media credits.
