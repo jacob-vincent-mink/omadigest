@@ -52,6 +52,7 @@ Music: “Study and Relax” by Kevin MacLeod, from the [FreePD archive](https:/
 
 - Omarchy Quattro with shell plugin support
 - Node.js 22 or newer available as `node`
+- Bubblewrap available as `bwrap` for the connector sandbox (included with Omarchy)
 - an AI account connected in OmaDigest: Codex/ChatGPT, OpenAI, or Grok/xAI
 
 Optional features:

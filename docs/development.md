@@ -19,6 +19,7 @@ assets/                      monochrome runtime and README marks
 
 ```bash
 npm ci
+sudo apt-get install bubblewrap # non-Omarchy Linux development hosts only
 npm run check
 npm audit
 node --test integrations/*/connector.test.mjs

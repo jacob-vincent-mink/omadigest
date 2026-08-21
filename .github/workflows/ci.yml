@@ -18,6 +18,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Install connector sandbox
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap
       - run: npm ci
       - run: npm run check
       - name: Verify checked-in broker bundle
