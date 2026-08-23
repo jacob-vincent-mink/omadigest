@@ -12,7 +12,7 @@ OmaDigest processes private notification, calendar, model, and speech data. Its 
 
 ## Prompt injection
 
-Notification and connector strings are framed as untrusted evidence. They never become system instructions or add tools. Attention sessions expose only the action variants currently permitted by broker policy and may select only a broker-eligible template; digest sessions expose only `emit_digest`; drafting sessions expose one matching emitter and `out_of_scope`.
+Notification and connector strings are framed as untrusted evidence. They never become system instructions or add tools. Attention sessions expose only the action variants currently permitted by broker policy and may select only a broker-eligible template; digest sessions expose only `emit_digest`; standing-policy compilation exposes only `emit_attention_policy`; drafting sessions expose one matching emitter and `out_of_scope`.
 
 Structured output does not prove that model classification is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, and unsupported actions cannot execute.
 
@@ -68,6 +68,8 @@ individual deletion and clear-all through the broker protocol.
 Attention memory is a separate derived store capped at 512 episodes, 512 KiB, and 90 days. Episodes retain bounded source provenance and cover only policy-permitted evidence, broker-validated decisions, completed digests, and observable user outcomes; hidden reasoning is never stored. Temporal summary nodes are rebuilt from episodes rather than treated as canonical facts. Search/zoom results are capped at four reads and 48 KiB per attention session, remain labeled as untrusted evidence, and cannot support an action without at least one current cited source. Privacy tightening and history deletion cascade through affected episodes before summaries are rebuilt.
 
 The attention agent cannot create a timer or execute an alert. It submits one cited `hold`, `digest`, or `notify` proposal. A hold may request only fixed wake conditions—related evidence, cited-source change, or deadline—and the broker owns subject matching, scheduling, template eligibility, interruption and digest thresholds, source-ID validation, execution, acknowledgement, and cancellation. Automatic deliberations have a 60-second minimum interval and a 24-per-day budget; watches are capped at 16, three attempts, 24 hours per follow-up, 48 hours of life, and a 256-KiB ledger.
+
+Standing policies do not grant new evidence or execution authority. Their compiler receives one bounded user request, has one typed output tool, and cannot access notification history. The broker caps, validates, stores, deterministically matches, enables, disables, and deletes policies. Broad notify policies fail validation. Outcome-derived preference hints come only from observable UI actions and remain soft evidence; they cannot override privacy, standing policy, urgency gates, or current-source citation requirements.
 
 The release checker has no model or connector authority. It contacts one compiled-in GitHub API URL, rejects redirects and non-stable tags, caps the response and single-record cache at 64 KiB, and constructs the browser URL from the validated release tag rather than accepting a remote action URL.
 

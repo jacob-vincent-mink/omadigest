@@ -53,6 +53,12 @@ Scope {
   property var attentionActivity: ({ state: "observing", message: "Watching enabled sources", heldCount: 0, dailyDeliberations: 0, dailyLimit: 24 })
   property var attentionWatches: []
   property var attentionMemory: ({ episodeCount: 0, summaryCount: 0 })
+  property var attentionPolicies: []
+  property string attentionPolicyState: "idle"
+  property string attentionPolicyMessage: ""
+  property string attentionMemoryQuery: ""
+  property var attentionMemoryResults: []
+  property var attentionExplanation: null
   readonly property bool attentionBusy: ["checking", "deliberating", "generating", "notifying"].indexOf(String(attentionActivity.state || "")) >= 0
   property var acknowledgedAttention: ({})
   property var agentConnection: ({ connected: false, provider: "", model: "" })
@@ -260,6 +266,38 @@ Scope {
     send({ type: "attention_watch_cancel", id: "attention-watch-" + nextId++, watchId: target })
   }
 
+  function searchAttentionMemory(query) {
+    var text = String(query || "").trim().slice(0, 200)
+    if (!text) return
+    attentionMemoryQuery = text
+    send({ type: "attention_memory_search", id: "attention-memory-" + nextId++, query: text })
+  }
+
+  function explainDigestEntry(digestId, sectionIndex, entryIndex) {
+    attentionExplanation = null
+    send({
+      type: "attention_explain", id: "attention-explain-" + nextId++, digestId: String(digestId),
+      sectionIndex: Math.max(0, Number(sectionIndex) || 0), entryIndex: Math.max(0, Number(entryIndex) || 0)
+    })
+  }
+
+  function createAttentionPolicy(request) {
+    var text = String(request || "").trim().slice(0, 2000)
+    if (!text || attentionPolicyState === "working") return
+    clearError()
+    attentionPolicyState = "working"
+    attentionPolicyMessage = "Drafting a bounded standing policy"
+    send({ type: "attention_policy_create", id: "attention-policy-" + nextId++, request: text })
+  }
+
+  function setAttentionPolicyEnabled(policyId, enabled) {
+    send({ type: "attention_policy_set_enabled", id: "attention-policy-" + nextId++, policyId: String(policyId), enabled: enabled === true })
+  }
+
+  function deleteAttentionPolicy(policyId) {
+    send({ type: "attention_policy_delete", id: "attention-policy-" + nextId++, policyId: String(policyId) })
+  }
+
   function wakeAttention(reason, focusMinutes, minimumItems) {
     clearError()
     send({
@@ -272,6 +310,9 @@ Scope {
 
   function requestDigestHistory() { send({ type: "digest_history", id: "history-" + nextId++ }) }
   function markDigestRead(digestId) { send({ type: "digest_mark_read", id: "history-" + nextId++, digestId: String(digestId) }) }
+  function setDigestFeedback(digestId, feedback) {
+    send({ type: "digest_feedback", id: "digest-feedback-" + nextId++, digestId: String(digestId), feedback: String(feedback) })
+  }
   function deleteDigest(digestId) { send({ type: "digest_delete", id: "history-" + nextId++, digestId: String(digestId) }) }
   function clearDigests() { send({ type: "digest_clear", id: "history-" + nextId++ }) }
   function dismissTemplateSuggestion(suggestionId) {
@@ -398,6 +439,7 @@ Scope {
       templateSuggestions = event.templateSuggestions || []
       integrations = event.integrations || []
       privacy = event.privacy || ({ defaultMode: "count-only", rules: [] })
+      attentionPolicies = (event.policies || []).slice(0, 32)
       updateStatus = event.update || updateStatus
       authMethods = event.authMethods || []
       root.requestAgentStatus()
@@ -519,6 +561,25 @@ Scope {
       attentionMemory = event.memory || ({ episodeCount: 0, summaryCount: 0 })
       return
     }
+    if (event.type === "attention_memory_results") {
+      attentionMemoryQuery = String(event.query || "")
+      attentionMemoryResults = (event.results || []).slice(0, 12)
+      return
+    }
+    if (event.type === "attention_explanation") {
+      attentionExplanation = event.explanation || null
+      return
+    }
+    if (event.type === "attention_policies") {
+      attentionPolicies = (event.policies || []).slice(0, 32)
+      return
+    }
+    if (event.type === "attention_policy_state") {
+      attentionPolicyState = String(event.state || "idle")
+      attentionPolicyMessage = String(event.message || "").slice(0, 300)
+      status = attentionPolicyMessage || status
+      return
+    }
     if (event.type === "digest_state") {
       digestState = "working"
       status = "Building your digest…"
@@ -538,6 +599,10 @@ Scope {
     }
     if (event.type === "digest_history") {
       digestHistory = event.digests || []
+      if (digest) {
+        for (var digestIndex = 0; digestIndex < digestHistory.length; digestIndex++)
+          if (String(digestHistory[digestIndex].id || "") === String(digest.id || "")) digest = digestHistory[digestIndex]
+      }
       return
     }
     if (event.type === "data_deleted") {

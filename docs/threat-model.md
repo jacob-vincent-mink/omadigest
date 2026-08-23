@@ -1,8 +1,8 @@
 # Threat model
 
-**Review date:** 2026-08-21
+**Review date:** 2026-08-23
 
-**Reviewed implementation:** v0.1.4 release candidate
+**Reviewed implementation:** current `main`
 
 **Method:** architecture decomposition, STRIDE, white-box source review, and
 isolated black-box boundary tests
@@ -17,8 +17,8 @@ isolated black-box boundary tests
   and template suggestions.
 - **A3 — credentials:** model authentication, integration secrets, GitHub CLI
   authority, and TTS API keys.
-- **A4 — policy and state:** privacy policy, source enablement, category choices,
-  acknowledgements, and retained history.
+- **A4 — policy and state:** privacy and standing attention policy, source enablement, category choices,
+  acknowledgements, outcome feedback, and retained history.
 - **A5 — delegated authority:** connector subprocess permissions, default-agent
   and Herdr handoffs, browser launches, voice capture, and playback.
 - **A6 — availability and budget:** the Quickshell process, broker, storage,

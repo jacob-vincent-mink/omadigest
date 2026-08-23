@@ -15,6 +15,7 @@ Bounded runtime state lives separately under `${XDG_STATE_HOME:-$HOME/.local/sta
 ```text
 omadigest/
 ├── privacy.json                    # notification intake/model/handoff policy
+├── attention-policies.json         # up to 32 typed standing attention policies
 ├── templates/<id>/
 │   ├── SKILL.md                    # readable generation instructions
 │   └── template.compiled.json      # eligibility and output policy
@@ -60,6 +61,8 @@ Modes are:
 Signal, WhatsApp, Telegram, common password managers, and Authy have protected `ignore` defaults unless the user explicitly overrides them. Unknown applications default to `count-only`. Rules match the application name carried by the native notification; they are content filters, not authenticated application identities.
 
 Policy is enforced before broker persistence. Tightening a rule rewrites retained notification segments to remove or sanitize content. Relaxing it affects future notifications; erased content is not recoverable.
+
+Standing attention policies are compiled only from an explicit request under **Settings → Attention**, then validated and matched by the broker. They may narrow timing or choose ignore, hold, digest, or notify for matching permitted evidence; they cannot broaden privacy or connector access.
 
 ## External edits
 

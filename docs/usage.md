@@ -77,6 +77,8 @@ The bundled GitHub connector uses the active authenticated `gh` session and impo
 
 ## Agent actions
 
+Open **Settings → Attention** to add, pause, or delete plain-language standing policies and search retained attention history. Policies are shown as compact typed actions rather than a chat transcript. On any digest entry, **Why this?** opens its broker-derived citation, correlation, policy, and history explanation. Mark a digest useful or not useful to provide an explicit bounded outcome signal.
+
 **Send to agent** passes the selected digest headline and explanation plus bounded source application/timestamp metadata and explicit safety framing to the default Omarchy agent. Original notification titles and bodies are omitted. The payload is claimed once from the broker rather than placed in process arguments, and all digest strings remain untrusted observations rather than instructions.
 
 Crash entries ask the default agent to use the `diagnose-crash` workflow and correlate the application and timestamp with systemd-coredump.
@@ -110,9 +112,9 @@ OmaDigest checks its latest stable GitHub release in the background no more than
 
 App rules and templates can be deleted inline after a compact confirmation. Removing an app rule restores the global default (or the protected-app default). Removing a custom template deletes it; removing a packaged template hides it without changing plugin files.
 
-Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, or templates, or to delete all four categories. Every action requires confirmation. Template deletion here also restores packaged defaults hidden inline.
+Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, or templates, or to delete all stored OmaDigest data. Every action requires confirmation. Template deletion here also restores packaged defaults hidden inline.
 
-Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or privacy rules.
+Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** also removes standing attention policies, but does not remove model authentication or privacy rules.
 
 ## Troubleshooting
 

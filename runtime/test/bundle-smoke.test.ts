@@ -65,6 +65,7 @@ describe("checked-in broker bundle", () => {
       JSON.stringify({ type: "privacy_set_rule", id: "privacy-set", app: "Test App", mode: "digest" }),
       JSON.stringify({ type: "privacy_delete_rule", id: "privacy-delete", app: "Test App" }),
       JSON.stringify({ type: "attention_focus", id: "focus-on", active: true }),
+      JSON.stringify({ type: "attention_memory_search", id: "memory-search", query: "PR #184" }),
       JSON.stringify({ type: "attention_watch_cancel", id: "watch-cancel", watchId }),
       JSON.stringify({ type: "template_delete", id: "template-delete", templateId: "general" }),
       JSON.stringify({ type: "shutdown" }),
@@ -90,7 +91,8 @@ describe("checked-in broker bundle", () => {
     expect(events.find((event) => event.type === "ready")).toMatchObject({
       type: "ready",
       protocolVersion: 2,
-      privacy: { defaultMode: "count-only" }
+      privacy: { defaultMode: "count-only" },
+      policies: []
     });
     expect(events.find((event) => event.id === "focus-on")).toMatchObject({
       type: "attention_activity",
@@ -101,6 +103,9 @@ describe("checked-in broker bundle", () => {
     });
     expect(events.find((event) => event.type === "attention_state" && event.id === "watch-cancel")).toMatchObject({
       watches: []
+    });
+    expect(events.find((event) => event.type === "attention_memory_results" && event.id === "memory-search")).toMatchObject({
+      query: "PR #184", results: [expect.objectContaining({ subject: "PR #184" })]
     });
     expect(events.find((event) => event.id === "privacy-delete")).toMatchObject({
       type: "privacy",

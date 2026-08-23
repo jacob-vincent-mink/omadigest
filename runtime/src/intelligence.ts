@@ -29,31 +29,89 @@ export function classifyAttentionItem(item: AttentionItem): AttentionItem {
 }
 
 export function groupAttentionItems(items: AttentionItem[]): EvidenceGroup[] {
-  const groups = new Map<string, { reason: EvidenceGroup["reason"]; subject: string; items: AttentionItem[] }>();
+  const groups: Array<{
+    key: string;
+    reason: EvidenceGroup["reason"];
+    subject: string;
+    items: AttentionItem[];
+    entities: Set<string>;
+  }> = [];
   for (const item of items.filter(isActionableEvidence).slice(0, 200)) {
     const classified = classifyAttentionItem(item);
     const app = normalizeApplication(classified.app);
+    const entityKeys = attentionEntityKeys(classified);
+    const strongEntities = entityKeys.filter((entity) => entity.startsWith("work:") || entity.startsWith("cve:"));
+    const correlationKeys = new Set(strongEntities.length > 0
+      ? strongEntities
+      : entityKeys.filter((entity) => entity.startsWith("ref:")));
     const reference = subjectReference(`${classified.title}\n${classified.body}`, app);
     const normalizedTitle = normalizeTitle(classified.title);
     const exactTitle = isSpecificTitle(normalizedTitle) ? normalizedTitle : "";
-    const groupingKey = reference !== "" ? `reference:${app}:${reference}`
+    const groupingKey = correlationKeys.size > 0 ? [...correlationKeys].sort()[0]!
+      : reference !== "" ? `reference:${app}:${reference}`
       : exactTitle !== "" ? `title:${app}:${exactTitle}` : `item:${classified.id}`;
-    const reason: EvidenceGroup["reason"] = reference !== "" ? "shared-reference"
+    const reason: EvidenceGroup["reason"] = correlationKeys.size > 0 ? "shared-entity"
+      : reference !== "" ? "shared-reference"
       : exactTitle !== "" ? "same-title" : "single";
-    const subject = (reference !== "" ? reference : classified.title.trim() || classified.app).slice(0, 120);
-    const current = groups.get(groupingKey);
-    if (current === undefined) groups.set(groupingKey, { reason, subject, items: [classified] });
-    else if (current.items.length < 20) current.items.push(classified);
+    const subject = entitySubject(entityKeys, classified, reference);
+    const matches = groups.filter((group) => correlationKeys.size > 0
+      ? [...correlationKeys].some((key) => group.entities.has(key))
+      : group.key === groupingKey);
+    if (matches.length === 0) {
+      groups.push({ key: groupingKey, reason, subject, items: [classified], entities: correlationKeys });
+      continue;
+    }
+    const current = matches[0]!;
+    if (current.items.length < 20) current.items.push(classified);
+    for (const key of correlationKeys) current.entities.add(key);
+    for (const duplicate of matches.slice(1)) {
+      current.items.push(...duplicate.items.slice(0, Math.max(0, 20 - current.items.length)));
+      for (const key of duplicate.entities) current.entities.add(key);
+      groups.splice(groups.indexOf(duplicate), 1);
+    }
   }
 
-  return [...groups.entries()].slice(0, 80).map(([key, value]) => ({
-    id: `group-${createHash("sha256").update(key).digest("hex").slice(0, 12)}`,
+  return groups.slice(0, 80).map((value) => ({
+    id: `group-${createHash("sha256").update(`${value.key}\u0000${[...value.entities].sort().join("\u0000")}`).digest("hex").slice(0, 12)}`,
     intent: dominantIntent(value.items),
     subject: value.subject,
     reason: value.items.length > 1 ? value.reason : "single",
     sourceIds: value.items.map((item) => item.id),
     items: value.items
   }));
+}
+
+export function attentionEntityKeys(item: AttentionItem): string[] {
+  const text = `${item.title}\n${item.body}`.toLowerCase().slice(0, 10_000);
+  const entities = new Set<string>();
+  const repositories = [...text.matchAll(/\b([a-z0-9_.-]{1,60}\/[a-z0-9_.-]{1,80})\b/gu)]
+    .map((match) => match[1]!).slice(0, 4);
+  for (const repository of repositories) entities.add(`repo:${repository}`);
+
+  const references = [...text.matchAll(/\b(pr|pull request|issue|ticket|task)\s*#?\s*(\d{1,9})\b/gu)]
+    .map((match) => ({ kind: match[1] === "pull request" ? "pr" : match[1]!, number: match[2]! })).slice(0, 8);
+  const genericHashes = /github|gitlab|linear|todoist|ci\b/u.test(`${item.source} ${item.app}`.toLowerCase())
+    ? [...text.matchAll(/(?:^|\s)#(\d{1,9})\b/gu)].map((match) => ({ kind: "item", number: match[1]! })).slice(0, 8)
+    : [];
+  for (const reference of [...references, ...genericHashes]) {
+    entities.add(`ref:${reference.kind}:${reference.number}`);
+    for (const repository of repositories) entities.add(`work:${repository}:${reference.kind}:${reference.number}`);
+  }
+  for (const match of text.matchAll(/\bcve-(\d{4})-(\d{4,8})\b/gu)) entities.add(`cve:cve-${match[1]}-${match[2]}`);
+  for (const match of text.matchAll(/https?:\/\/(?:www\.)?(github\.com|gitlab\.com)\/([a-z0-9_.-]{1,60})\/([a-z0-9_.-]{1,80})\/(pull|issues|merge_requests)\/(\d{1,9})/gu)) {
+    const kind = match[4] === "issues" ? "issue" : "pr";
+    entities.add(`work:${match[2]}/${match[3]}:${kind}:${match[5]}`);
+  }
+  return [...entities].slice(0, 24);
+}
+
+export function explicitAttentionRecallQuery(items: AttentionItem[]): string | undefined {
+  const recurrent = items.filter(isActionableEvidence).slice(0, 100).find((item) =>
+    /\b(?:again|still|recurred|returned|changed since|same (?:failure|problem|issue|error))\b/iu
+      .test(`${item.title}\n${item.body}`.slice(0, 10_000)));
+  if (recurrent === undefined) return undefined;
+  const subject = groupAttentionItems([recurrent])[0]?.subject.trim();
+  return subject === undefined || subject.length < 3 ? undefined : subject.slice(0, 200);
 }
 
 export function enrichedGenerationContext(context: GenerationContext, items: AttentionItem[]): GenerationContext {
@@ -154,14 +212,53 @@ export function suggestTemplates(
     const occurred = Date.parse(item.occurredAt);
     return Number.isFinite(occurred) && occurred >= since && occurred <= now.getTime() + 300_000;
   }).slice(0, 200).map(classifyAttentionItem);
-  return SUGGESTION_RECIPES.flatMap((recipe) => {
+  const fixed = SUGGESTION_RECIPES.flatMap((recipe) => {
     if (dismissed.has(recipe.id) || templateCoversRecipe(templates, recipe.coveredBy)) return [];
     const count = recent.filter(recipe.matches).length;
     return count < recipe.minimum ? [] : [{
       id: recipe.id, title: recipe.title, description: recipe.description, prompt: recipe.prompt,
       applications: recipe.applications, intents: recipe.intents, itemCount: count
     } satisfies TemplateSuggestion];
-  }).sort((left, right) => right.itemCount - left.itemCount || left.id.localeCompare(right.id)).slice(0, 3);
+  });
+  return [...fixed, ...dynamicTemplateSuggestions(recent, templates, dismissed)]
+    .sort((left, right) => right.itemCount - left.itemCount || left.id.localeCompare(right.id)).slice(0, 3);
+}
+
+function dynamicTemplateSuggestions(
+  items: AttentionItem[], templates: DigestTemplate[], dismissed: ReadonlySet<string>
+): TemplateSuggestion[] {
+  const clusters = new Map<string, AttentionItem[]>();
+  for (const item of items.filter(isActionableEvidence)) {
+    const app = normalizeApplication(item.app).slice(0, 120);
+    const intent = item.intent ?? "update";
+    const key = `${app}\u0000${intent}`;
+    const current = clusters.get(key) ?? [];
+    if (current.length < 50) current.push(item);
+    clusters.set(key, current);
+  }
+  return [...clusters.entries()].flatMap(([key, cluster]) => {
+    if (cluster.length < 4) return [];
+    const [application = "Application", intentValue = "update"] = key.split("\u0000");
+    const intent = INTENTS.includes(intentValue as AttentionIntent) ? intentValue as AttentionIntent : "update";
+    const days = new Set(cluster.map((item) => item.occurredAt.slice(0, 10)));
+    if (days.size < 2) return [];
+    const id = `pattern-${createHash("sha256").update(key).digest("hex").slice(0, 12)}`;
+    if (dismissed.has(id) || templateCoversPattern(templates, application, intent)) return [];
+    const examples = [...new Set(cluster.map((item) => item.title.trim()).filter(Boolean))].slice(0, 3);
+    const example = examples.length === 0 ? `${cluster.length} ${intent} updates from ${application}`
+      : examples.map((title) => `• ${title.slice(0, 100)}`).join("\n").slice(0, 360);
+    return [{
+      id,
+      title: `Shape ${application} ${intent} updates`,
+      description: `${cluster.length} related updates appeared across ${days.size} days. Turn the pattern into a focused briefing.`,
+      prompt: [
+        `Create a ${application} ${intent} template based on a recurring privacy-permitted notification pattern.`,
+        `Route ${application} evidence with ${intent} intent to it, correlate shared entities, cite every claim, and keep unrelated updates out.`,
+        `Use concise sections Needs you, Changed, and Can wait. Example observed titles: ${examples.join("; ").slice(0, 300) || "none supplied"}.`
+      ].join(" ").slice(0, 1_000),
+      applications: [application], intents: [intent], itemCount: cluster.length, example
+    } satisfies TemplateSuggestion];
+  });
 }
 
 function intentFromCategory(category: string, text: string): AttentionIntent | undefined {
@@ -201,6 +298,24 @@ function subjectReference(value: string, app: string): string {
   return [repository?.[0] ?? "", numbered, cve?.[0] ?? ""].filter(Boolean).join(":").slice(0, 120);
 }
 
+function entitySubject(entities: string[], item: AttentionItem, fallback: string): string {
+  const work = entities.find((entity) => entity.startsWith("work:"));
+  if (work !== undefined) {
+    const parts = work.split(":");
+    if (parts.length === 4) return `${parts[1]} ${parts[2] === "pr" ? "PR" : titleCase(parts[2] || "item")} #${parts[3]}`.slice(0, 120);
+  }
+  const cve = entities.find((entity) => entity.startsWith("cve:"));
+  if (cve !== undefined) return cve.slice(4).toUpperCase().slice(0, 120);
+  const reference = entities.find((entity) => entity.startsWith("ref:"));
+  if (reference !== undefined) {
+    const parts = reference.split(":");
+    return `${parts[1] === "pr" ? "PR" : titleCase(parts[1] || "item")} #${parts[2]}`.slice(0, 120);
+  }
+  return (fallback !== "" ? fallback : item.title.trim() || item.app).slice(0, 120);
+}
+
+function titleCase(value: string): string { return value.charAt(0).toUpperCase() + value.slice(1); }
+
 function normalizeTitle(value: string): string {
   return value.toLowerCase().replaceAll(/[^a-z0-9]+/gu, " ").trim().replaceAll(/\s+/gu, " ").slice(0, 160);
 }
@@ -225,5 +340,16 @@ function templateCoversRecipe(templates: DigestTemplate[], needles: string[]): b
   return templates.some((template) => {
     const haystack = `${template.manifest.id} ${template.manifest.name} ${template.manifest.description}`.toLowerCase();
     return needles.some((needle) => haystack.includes(needle));
+  });
+}
+
+function templateCoversPattern(templates: DigestTemplate[], application: string, intent: AttentionIntent): boolean {
+  const app = normalizeApplication(application);
+  return templates.some((template) => {
+    const configuredApps = template.manifest.match.applications?.map(normalizeApplication) ?? [];
+    const configuredIntents = template.manifest.match.intents ?? [];
+    if (configuredApps.includes(app) && configuredIntents.includes(intent)) return true;
+    const haystack = `${template.manifest.id} ${template.manifest.name} ${template.manifest.description}`.toLowerCase();
+    return haystack.includes(app) && haystack.includes(intent);
   });
 }

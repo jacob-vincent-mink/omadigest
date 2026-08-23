@@ -95,4 +95,23 @@ describe("AttentionMemory", () => {
     expect(memory.search({ query: "PR #9" }, now)).toEqual([]);
     expect(memory.search({ query: "Planning event" }, now)).toHaveLength(1);
   });
+
+  it("derives bounded soft preferences only from observable outcomes", () => {
+    const { memory } = store();
+    const now = new Date("2026-08-23T12:00:00.000Z");
+    const evidence = [item("pr-184", "Review jacob/omadigest PR #184", now.toISOString(), "github", "GitHub")];
+    memory.recordEvidence(evidence, now);
+    memory.recordOutcome("useful", "PR #184 report", ["pr-184"], undefined, new Date(now.getTime() + 60_000));
+    memory.recordOutcome("handoff", "Review PR #184", ["pr-184"], undefined, new Date(now.getTime() + 120_000));
+    expect(memory.preferenceHints(evidence, new Date(now.getTime() + 180_000))[0]).toMatchObject({
+      signal: "surface", sampleSize: 2
+    });
+
+    memory.recordOutcome("not-useful", "PR #184 report", ["pr-184"], undefined, new Date(now.getTime() + 240_000));
+    memory.recordOutcome("not-useful", "PR #184 report", ["pr-184"], undefined, new Date(now.getTime() + 300_000));
+    memory.recordOutcome("not-useful", "PR #184 report", ["pr-184"], undefined, new Date(now.getTime() + 360_000));
+    expect(memory.preferenceHints(evidence, new Date(now.getTime() + 420_000))[0]).toMatchObject({
+      signal: "defer", sampleSize: 5
+    });
+  });
 });

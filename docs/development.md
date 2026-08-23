@@ -21,6 +21,8 @@ assets/                      monochrome runtime and README marks
 npm ci
 sudo apt-get install bubblewrap # non-Omarchy Linux development hosts only
 npm run check
+npm run eval:replay
+npm run eval:attention
 npm audit
 node --test integrations/*/connector.test.mjs
 qmllint -I "$OMARCHY_PATH/shell" BarWidget.qml Panel.qml components/*.qml
@@ -37,6 +39,13 @@ OmaDigest builds against a deliberately scoped Pi surface: the low-level Agent,
 the structured tools supplied by OmaDigest, and the OpenAI/Codex and xAI model
 providers shown in settings. It does not bundle Pi's terminal UI or general
 filesystem and shell tools.
+
+`npm run eval:replay -- [fixture.json]` performs a deterministic, bounded
+attention-policy replay and reports grouping, interruption, critical-miss, and
+model-call metrics. `npm run eval:attention` starts isolated brokers with the
+configured real model and exercises PR correlation, a JIT context pack,
+low-signal holding, historical recall, and standing-policy compilation. It
+does not read or write the installed plugin's state.
 
 The two tests that execute Bubblewrap require network-namespace support. They
 run during local release validation on Omarchy. GitHub-hosted runners block that

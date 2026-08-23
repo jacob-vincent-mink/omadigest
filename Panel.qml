@@ -111,7 +111,7 @@ Panel {
     if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
     if (target === "integrations") return "Delete custom integrations, integration setup, enablement, and known integration secrets? Bundled integrations will be reset, not removed."
     if (target === "templates") return "Delete every custom template and restore packaged defaults?"
-    return "Delete all OmaDigest digest and notification history, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
+    return "Delete all OmaDigest digest and notification history, standing policies, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
   }
 
   function requestDataDeletion(target) {
@@ -459,7 +459,7 @@ Panel {
 
     function showSettings(section: string): string {
       var requested = String(section)
-      root.settingsPage = ["integrations", "templates", "privacy", "connections", "data"].indexOf(requested) >= 0
+      root.settingsPage = ["integrations", "templates", "attention", "privacy", "connections", "data"].indexOf(requested) >= 0
         ? requested : "integrations"
       root.selectedTemplate = null
       root.selectedSource = null
@@ -1333,35 +1333,156 @@ Panel {
                         wrapMode: Text.WordWrap
                       }
 
-                      Rectangle {
+                      Row {
                         x: parent.width - width
-                        width: Style.space(138)
+                        width: Style.space(280)
                         height: Style.space(30)
-                        radius: Style.cornerRadius
-                        color: agentMouse.containsMouse
-                          ? Style.hoverFillFor(root.foreground, Color.accent)
-                          : Style.normalFillFor(root.foreground, Color.accent)
-                        Text {
-                          textFormat: Text.PlainText
-                          anchors.centerIn: parent
-                          text: "Send to agent  →"
-                          color: Color.accent
-                          font.family: root.fontFamily
-                          font.pixelSize: Style.font.caption
-                          font.bold: true
+                        spacing: Style.space(6)
+
+                        Rectangle {
+                          width: (parent.width - parent.spacing) * 0.38
+                          height: parent.height
+                          radius: Style.cornerRadius
+                          color: explainMouse.containsMouse
+                            ? Style.hoverFillFor(root.foreground, Color.accent)
+                            : Style.normalFillFor(root.foreground, Color.accent)
+                          Text {
+                            textFormat: Text.PlainText
+                            anchors.centerIn: parent
+                            text: "Why this?"
+                            color: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                          }
+                          MouseArea {
+                            id: explainMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: OmaDigest.OmaDigestStore.explainDigestEntry(
+                              OmaDigest.OmaDigestStore.digest.id, sectionDelegate.index, index)
+                          }
                         }
-                        MouseArea {
-                          id: agentMouse
+
+                        Rectangle {
+                          width: parent.width - parent.spacing - (parent.width - parent.spacing) * 0.38
+                          height: parent.height
+                          radius: Style.cornerRadius
+                          color: agentMouse.containsMouse
+                            ? Style.hoverFillFor(root.foreground, Color.accent)
+                            : Style.normalFillFor(root.foreground, Color.accent)
+                          Text {
+                            textFormat: Text.PlainText
+                            anchors.centerIn: parent
+                            text: "Send to agent  →"
+                            color: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                          }
+                          MouseArea {
+                            id: agentMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: OmaDigest.OmaDigestStore.handoffDigestEntry(
+                              OmaDigest.OmaDigestStore.digest.id, sectionDelegate.index, index)
+                          }
+                        }
+                      }
+
+                      Rectangle {
+                        visible: OmaDigest.OmaDigestStore.attentionExplanation !== null
+                          && String(OmaDigest.OmaDigestStore.attentionExplanation.title || "") === String(modelData.headline || "")
+                        width: parent.width
+                        height: visible ? explanationContent.implicitHeight + Style.space(16) : 0
+                        radius: Style.cornerRadius
+                        color: Style.selectedFillFor(root.foreground, Color.accent)
+                        border.width: Style.spacing.hairline
+                        border.color: Color.accent
+                        Column {
+                          id: explanationContent
                           anchors.fill: parent
-                          hoverEnabled: true
-                          cursorShape: Qt.PointingHandCursor
-                          onClicked: OmaDigest.OmaDigestStore.handoffDigestEntry(
-                            OmaDigest.OmaDigestStore.digest.id, sectionDelegate.index, index)
+                          anchors.margins: Style.space(8)
+                          spacing: Style.space(4)
+                          Text {
+                            textFormat: Text.PlainText
+                            width: parent.width
+                            text: "WHY THIS SURFACED"
+                            color: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            font.letterSpacing: 1
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            width: parent.width
+                            text: OmaDigest.OmaDigestStore.attentionExplanation
+                              ? String(OmaDigest.OmaDigestStore.attentionExplanation.summary || "") : ""
+                            color: root.foreground
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.bodySmall
+                            wrapMode: Text.WordWrap
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            width: parent.width
+                            text: OmaDigest.OmaDigestStore.attentionExplanation
+                              ? (OmaDigest.OmaDigestStore.attentionExplanation.applications || []).join(" · ") : ""
+                            color: Qt.darker(root.foreground, 1.35)
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                          }
                         }
                       }
                     }
                   }
                 }
+              }
+            }
+
+            Row {
+              width: parent.width
+              height: Style.space(32)
+              spacing: Style.space(8)
+              Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - usefulDigest.width - notUsefulDigest.width - parent.spacing * 2
+                text: "Was this useful?"
+                color: Qt.darker(root.foreground, 1.25)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideRight
+              }
+              Button {
+                id: usefulDigest
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(72)
+                height: parent.height
+                text: OmaDigest.OmaDigestStore.digest && OmaDigest.OmaDigestStore.digest.feedback === "useful" ? "✓ Yes" : "Yes"
+                selected: OmaDigest.OmaDigestStore.digest && OmaDigest.OmaDigestStore.digest.feedback === "useful"
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                onClicked: OmaDigest.OmaDigestStore.setDigestFeedback(OmaDigest.OmaDigestStore.digest.id, "useful")
+              }
+              Button {
+                id: notUsefulDigest
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(96)
+                height: parent.height
+                text: OmaDigest.OmaDigestStore.digest && OmaDigest.OmaDigestStore.digest.feedback === "not-useful" ? "✓ Not really" : "Not really"
+                selected: OmaDigest.OmaDigestStore.digest && OmaDigest.OmaDigestStore.digest.feedback === "not-useful"
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                onClicked: OmaDigest.OmaDigestStore.setDigestFeedback(OmaDigest.OmaDigestStore.digest.id, "not-useful")
               }
             }
           }
@@ -1380,13 +1501,14 @@ Panel {
                 model: [
                   { id: "integrations", label: "Sources" },
                   { id: "templates", label: "Templates" },
+                  { id: "attention", label: "Attention" },
                   { id: "privacy", label: "Privacy" },
                   { id: "connections", label: "Connections" },
                   { id: "data", label: "Data" }
                 ]
                 Rectangle {
                   required property var modelData
-                  width: (content.width - Style.space(24)) / 5
+                  width: (content.width - Style.space(30)) / 6
                   height: Style.space(34)
                   radius: Style.cornerRadius
                   color: root.settingsPage === modelData.id
@@ -1713,6 +1835,16 @@ Panel {
                       color: Qt.darker(root.foreground, 1.3)
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.bodySmall
+                      wrapMode: Text.WordWrap
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      visible: String(modelData.example || "") !== ""
+                      width: parent.width
+                      text: String(modelData.example || "")
+                      color: Qt.darker(root.foreground, 1.4)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
                       wrapMode: Text.WordWrap
                     }
                     Row {
@@ -2153,6 +2285,245 @@ Panel {
                     anchors.margins: -Style.space(6)
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.templateEditMode = "view"
+                  }
+                }
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "attention"
+              spacing: Style.space(10)
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "ATTENTION AGENT"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: Number(OmaDigest.OmaDigestStore.attentionMemory.episodeCount || 0) + " remembered moments · "
+                  + Number(OmaDigest.OmaDigestStore.attentionPolicies.length || 0) + " standing policies · "
+                  + Number(OmaDigest.OmaDigestStore.attentionActivity.dailyDeliberations || 0) + "/"
+                  + Number(OmaDigest.OmaDigestStore.attentionActivity.dailyLimit || 0) + " reviews today"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "ADD A STANDING POLICY"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              QQC.TextArea {
+                textFormat: TextEdit.PlainText
+                id: attentionPolicyInput
+                width: parent.width
+                height: Style.space(82)
+                placeholderText: "Interrupt me for production failures, but bundle dependency updates."
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: TextEdit.Wrap
+                background: Rectangle {
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: Style.spacing.hairline
+                  border.color: OmaDigest.OmaDigestStore.attentionPolicyState === "working"
+                    ? Color.accent : Style.normalBorderFor(root.foreground, Color.accent)
+                }
+              }
+
+              Button {
+                width: parent.width
+                height: Style.space(38)
+                text: OmaDigest.OmaDigestStore.attentionPolicyState === "working" ? "Building policy…" : "Add policy"
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                bordered: true
+                enabled: attentionPolicyInput.text.trim() !== "" && OmaDigest.OmaDigestStore.attentionPolicyState !== "working"
+                opacity: enabled ? 1 : 0.5
+                onClicked: {
+                  OmaDigest.OmaDigestStore.createAttentionPolicy(attentionPolicyInput.text)
+                  attentionPolicyInput.text = ""
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                visible: OmaDigest.OmaDigestStore.attentionPolicyMessage !== ""
+                width: parent.width
+                text: OmaDigest.OmaDigestStore.attentionPolicyMessage
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.attentionPolicies || []
+                Rectangle {
+                  required property var modelData
+                  property bool confirmingDelete: false
+                  width: parent.width
+                  height: policyContent.implicitHeight + Style.space(18)
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  opacity: modelData.enabled === true ? 1 : 0.58
+
+                  Column {
+                    id: policyContent
+                    anchors.fill: parent
+                    anchors.margins: Style.space(9)
+                    spacing: Style.space(6)
+                    Row {
+                      width: parent.width
+                      height: Style.space(30)
+                      spacing: Style.space(8)
+                      Text {
+                        textFormat: Text.PlainText
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - policyToggle.width - policyDelete.width - parent.spacing * 2
+                        text: String(modelData.name || "Standing policy")
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.bold: true
+                        elide: Text.ElideRight
+                      }
+                      Button {
+                        id: policyToggle
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Style.space(62)
+                        height: parent.height
+                        text: modelData.enabled === true ? "On" : "Off"
+                        selected: modelData.enabled === true
+                        foreground: root.foreground
+                        accent: Color.accent
+                        fontFamily: root.fontFamily
+                        fontSize: Style.font.caption
+                        onClicked: OmaDigest.OmaDigestStore.setAttentionPolicyEnabled(String(modelData.id || ""), modelData.enabled !== true)
+                      }
+                      OmaDigest.InlineDeleteControl {
+                        id: policyDelete
+                        anchors.verticalCenter: parent.verticalCenter
+                        confirming: confirmingDelete
+                        foreground: root.foreground
+                        accent: Color.urgent
+                        fontFamily: root.fontFamily
+                        onConfirmationRequested: confirmingDelete = true
+                        onCancelled: confirmingDelete = false
+                        onConfirmed: {
+                          confirmingDelete = false
+                          OmaDigest.OmaDigestStore.deleteAttentionPolicy(String(modelData.id || ""))
+                        }
+                      }
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(modelData.action || "hold").toUpperCase() + " · " + String(modelData.description || "")
+                      color: Qt.darker(root.foreground, 1.3)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.WordWrap
+                    }
+                  }
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                topPadding: Style.space(4)
+                text: "SEARCH ATTENTION HISTORY"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Row {
+                width: parent.width
+                height: Style.space(38)
+                spacing: Style.space(8)
+                QQC.TextField {
+                  id: attentionMemorySearch
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - searchMemoryButton.width - parent.spacing
+                  height: parent.height
+                  placeholderText: "PR #184, meeting, project…"
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  onAccepted: OmaDigest.OmaDigestStore.searchAttentionMemory(text)
+                }
+                Button {
+                  id: searchMemoryButton
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(86)
+                  height: parent.height
+                  text: "Search"
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  bordered: true
+                  enabled: attentionMemorySearch.text.trim() !== ""
+                  onClicked: OmaDigest.OmaDigestStore.searchAttentionMemory(attentionMemorySearch.text)
+                }
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.attentionMemoryResults || []
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: memoryResult.implicitHeight + Style.space(16)
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  Column {
+                    id: memoryResult
+                    anchors.fill: parent
+                    anchors.margins: Style.space(8)
+                    spacing: Style.space(3)
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(modelData.subject || "Remembered attention")
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(modelData.summary || "")
+                      color: Qt.darker(root.foreground, 1.3)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.WordWrap
+                    }
                   }
                 }
               }

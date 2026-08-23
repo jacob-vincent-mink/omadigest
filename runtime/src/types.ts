@@ -32,6 +32,7 @@ export type Digest = {
   title: string;
   generatedAt: string;
   readAt?: string;
+  feedback?: "useful" | "not-useful";
   sections: Array<{ title: string; entries: DigestEntry[] }>;
 };
 
@@ -63,7 +64,7 @@ export type EvidenceGroup = {
   id: string;
   intent: AttentionIntent;
   subject: string;
-  reason: "shared-reference" | "same-title" | "single";
+  reason: "shared-reference" | "shared-entity" | "same-title" | "single";
   sourceIds: string[];
   items: AttentionItem[];
 };
@@ -76,6 +77,52 @@ export type TemplateSuggestion = {
   applications: string[];
   intents: AttentionIntent[];
   itemCount: number;
+  example?: string;
+};
+
+export type AttentionPolicyAction = "ignore" | "hold" | "digest" | "notify";
+export type AttentionPolicy = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  priority: number;
+  action: AttentionPolicyAction;
+  match: {
+    applications?: string[];
+    sources?: string[];
+    intents?: AttentionIntent[];
+    urgencies?: Array<"low" | "normal" | "critical">;
+    entities?: string[];
+    contains?: string[];
+  };
+  templateId?: string;
+  followUpMinutes?: number;
+  createdAt: string;
+};
+
+export type AttentionPreferenceHint = {
+  subject: string;
+  signal: "surface" | "defer";
+  reason: string;
+  sampleSize: number;
+};
+
+export type JitAttentionContext = {
+  sourceId: string;
+  subject: string;
+  dueAt: string;
+  minutesUntil: number;
+};
+
+export type AttentionExplanation = {
+  title: string;
+  summary: string;
+  sourceCount: number;
+  applications: string[];
+  entities: string[];
+  policy?: { id: string; name: string; action: AttentionPolicyAction };
+  history: AttentionMemoryNode[];
 };
 
 export type AttentionProposal =
@@ -276,11 +323,17 @@ export type BrokerCommand =
   | { type: "attention_acknowledge_all"; id: string }
   | { type: "attention_focus"; id: string; active: boolean }
   | { type: "attention_watch_cancel"; id: string; watchId: string }
+  | { type: "attention_memory_search"; id: string; query: string }
+  | { type: "attention_explain"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
+  | { type: "attention_policy_create"; id: string; request: string }
+  | { type: "attention_policy_set_enabled"; id: string; policyId: string; enabled: boolean }
+  | { type: "attention_policy_delete"; id: string; policyId: string }
   | { type: "attention_wake"; id: string; reason: GenerationTrigger; focusMinutes: number; minimumItems: number }
   | { type: "template_suggestion_dismiss"; id: string; suggestionId: string }
   | { type: "digest_generate"; id: string; templateId?: string; context: GenerationContext }
   | { type: "digest_history"; id: string }
   | { type: "digest_mark_read"; id: string; digestId: string }
+  | { type: "digest_feedback"; id: string; digestId: string; feedback: "useful" | "not-useful" }
   | { type: "digest_delete"; id: string; digestId: string }
   | { type: "digest_clear"; id: string }
   | { type: "template_delete"; id: string; templateId: string }
@@ -288,7 +341,7 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; templateSuggestions: TemplateSuggestion[]; update: ReleaseUpdateStatus }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; policies: AttentionPolicy[]; templateSuggestions: TemplateSuggestion[]; update: ReleaseUpdateStatus }
   | { type: "update_status"; id: string; status: ReleaseUpdateStatus }
   | { type: "templates"; id: string; templates: PublicTemplate[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }
@@ -313,6 +366,10 @@ export type BrokerEvent =
   | { type: "attention"; id: string; digestibleCount: number; acknowledgedIds: string[] }
   | { type: "attention_activity"; id: string; activity: AttentionActivity }
   | { type: "attention_state"; id: string; watches: AttentionWatch[]; memory: AttentionMemoryStatus }
+  | { type: "attention_memory_results"; id: string; query: string; results: AttentionMemoryNode[] }
+  | { type: "attention_explanation"; id: string; explanation: AttentionExplanation }
+  | { type: "attention_policies"; id: string; policies: AttentionPolicy[] }
+  | { type: "attention_policy_state"; id: string; state: "working" | "saved"; message: string }
   | { type: "template_suggestions"; id: string; suggestions: TemplateSuggestion[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest_skipped"; id: string; reason: string }

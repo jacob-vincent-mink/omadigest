@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "context-pack",
+  "name": "Just-in-time Context Pack",
+  "description": "A concise briefing assembled around an approaching meeting, deadline, or handoff.",
+  "priority": 100,
+  "match": {
+    "intents": ["meeting", "deadline"],
+    "minimumIntentShare": 0.25
+  },
+  "context": {
+    "connectors": [
+      "notifications",
+      "io.github.jacob-vincent-mink.github",
+      "io.omarchy.crash-reports",
+      "io.omarchy.updates",
+      "io.omarchy.system-telemetry",
+      "io.omarchy.herdr"
+    ],
+    "maximumItems": 50,
+    "maximumBytes": 60000
+  },
+  "output": {
+    "sections": ["Before it starts", "Bring forward", "Can wait"],
+    "maximumEntries": 10
+  }
+}

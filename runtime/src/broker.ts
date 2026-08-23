@@ -13,12 +13,14 @@ import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/p
 import { AttentionStore, attentionItemSchema } from "./attention.js";
 import { AttentionLedger } from "./attention-loop.js";
 import { AttentionMemory } from "./attention-memory.js";
+import { AttentionPolicyStore } from "./attention-policy.js";
+import { detectJitContext, isJitActionWindow } from "./jit-context.js";
 import { installDraft, installTemplateEdit } from "./drafts.js";
 import { DictationService } from "./dictation.js";
 import { SpeechService, speechConfigSchema } from "./tts.js";
 import { DigestHistory } from "./digest-history.js";
 import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
-import { automaticDigestDecision, classifyAttentionItem, enrichedGenerationContext, groupAttentionItems, suggestTemplates } from "./intelligence.js";
+import { attentionEntityKeys, automaticDigestDecision, classifyAttentionItem, enrichedGenerationContext, explicitAttentionRecallQuery, groupAttentionItems, suggestTemplates } from "./intelligence.js";
 import { TemplateSuggestionStore } from "./template-suggestion-store.js";
 import { launchHerdrHandoff } from "./herdr.js";
 import { clearUserIntegrations, clearUserTemplates, removeUserTemplate } from "./data-management.js";
@@ -160,6 +162,20 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attention_acknowledge_all"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("attention_focus"), id: z.string().min(1).max(100), active: z.boolean() }).strict(),
   z.object({ type: z.literal("attention_watch_cancel"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("attention_memory_search"), id: z.string().min(1).max(100), query: z.string().min(1).max(200) }).strict(),
+  z.object({
+    type: z.literal("attention_explain"), id: z.string().min(1).max(100), digestId: z.string().uuid(),
+    sectionIndex: z.number().int().min(0).max(50), entryIndex: z.number().int().min(0).max(200)
+  }).strict(),
+  z.object({ type: z.literal("attention_policy_create"), id: z.string().min(1).max(100), request: z.string().min(1).max(2_000) }).strict(),
+  z.object({
+    type: z.literal("attention_policy_set_enabled"), id: z.string().min(1).max(100),
+    policyId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/), enabled: z.boolean()
+  }).strict(),
+  z.object({
+    type: z.literal("attention_policy_delete"), id: z.string().min(1).max(100),
+    policyId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/)
+  }).strict(),
   z.object({
     type: z.literal("attention_wake"), id: z.string().min(1).max(100),
     reason: z.enum(["manual", "dnd-ended", "scheduled"]),
@@ -177,6 +193,10 @@ const commandSchema = z.discriminatedUnion("type", [
   }).strict(),
   z.object({ type: z.literal("digest_history"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("digest_mark_read"), id: z.string().min(1).max(100), digestId: z.string().uuid() }).strict(),
+  z.object({
+    type: z.literal("digest_feedback"), id: z.string().min(1).max(100), digestId: z.string().uuid(),
+    feedback: z.enum(["useful", "not-useful"])
+  }).strict(),
   z.object({ type: z.literal("digest_delete"), id: z.string().min(1).max(100), digestId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("digest_clear"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("template_delete"), id: z.string().min(1).max(100), templateId: templateIdSchema }).strict(),
@@ -206,6 +226,7 @@ const pendingHandoffs = new Map<string, { prompt: string; expiresAt: number }>()
 const attention = new AttentionStore();
 const attentionLedger = new AttentionLedger();
 const attentionMemory = new AttentionMemory();
+const attentionPolicies = new AttentionPolicyStore();
 const privacy = new PrivacyPolicy(configRoot);
 attention.applyPolicy((item) => {
   const filtered = privacy.filter(item);
@@ -478,6 +499,27 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
       emitAttention(request.id);
       return;
     }
+    const policyMatches = automatic ? attentionPolicies.evaluate(items) : [];
+    const ignored = policyMatches.filter((match) => match.policy.action === "ignore");
+    const ignoredIds = new Set(ignored.flatMap((match) => match.items.map((item) => item.id)));
+    if (ignoredIds.size > 0) {
+      attention.acknowledge([...ignoredIds]);
+      for (const match of ignored)
+        attentionMemory.recordDecision("ignore", `Standing policy: ${match.policy.name}`, match.items, match.policy.name, now);
+    }
+    const reviewable = items.filter((item) => !ignoredIds.has(item.id));
+    const activePolicyMatch = automatic
+      ? attentionPolicies.evaluate(reviewable).find((match) => match.policy.action !== "ignore")
+      : undefined;
+    const activePolicy = activePolicyMatch?.policy;
+    const reviewItems = activePolicyMatch?.items ?? reviewable;
+    if (reviewItems.length === 0) {
+      emitAttention(request.id);
+      emitAttentionState(request.id);
+      setAttentionActivity(attentionLedger.active(now).length > 0 ? "holding" : "observing",
+        attentionLedger.active(now).length > 0 ? "Waiting for related updates" : "Watching enabled sources", request.id);
+      return;
+    }
     const permit = attentionLedger.permit(request.reason, now);
     if (!permit.allowed) {
       if (dueWatch !== undefined && permit.retryAfterMs !== undefined)
@@ -492,36 +534,64 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
       : request.reason === "dnd-ended" ? "dnd-ended" : "scheduled";
     const routingContext = enrichedGenerationContext({
       trigger: routingTrigger,
-      itemCount: items.length,
+      itemCount: reviewItems.length,
       focusMinutes: request.focusMinutes,
       automaticMinimumItems: request.minimumItems,
       appCounts: {},
       availableConnectors: ["notifications", ...publicIntegrations().filter((source) => source.enabled).map((source) => source.id)].slice(0, 64),
       now: now.toISOString()
-    }, items);
-    const eligibleTemplates = templates.filter((candidate) => {
+    }, reviewItems);
+    const jitContext = detectJitContext(reviewItems, now);
+    let eligibleTemplates = templates.filter((candidate) => {
+      if (activePolicy?.templateId !== undefined && candidate.manifest.id !== activePolicy.templateId) return false;
       try { selectTemplate([candidate], routingContext); return true; }
       catch { return false; }
     });
+    if (activePolicy === undefined && jitContext !== undefined && jitContext.minutesUntil <= 30) {
+      const contextPack = eligibleTemplates.find((candidate) => candidate.manifest.id === "context-pack");
+      if (contextPack !== undefined) eligibleTemplates = [contextPack];
+    }
     if (eligibleTemplates.length === 0) throw new Error("No digest template matches this attention review");
-    const highSignal = items.some((item) => [
+    const highSignal = reviewItems.some((item) => [
       "failure", "review", "deadline", "meeting", "assignment", "mention", "request"
     ].includes(String(item.intent || "")));
-    const allowHold = dueWatch === undefined || dueWatch.attempts < 3;
+    const baseAllowHold = dueWatch === undefined || dueWatch.attempts < 3;
+    const policyForAgent = activePolicy?.action === "hold" && !baseAllowHold ? undefined : activePolicy;
+    const allowHold = baseAllowHold
+      && (policyForAgent === undefined || policyForAgent.action === "hold")
+      && (policyForAgent !== undefined || !isJitActionWindow(jitContext));
+    const allowDigest = policyForAgent === undefined
+      ? (!automatic || !baseAllowHold || reviewItems.length >= request.minimumItems || highSignal
+        || (jitContext !== undefined && jitContext.minutesUntil <= 30))
+      : policyForAgent.action === "digest";
+    const allowNotify = policyForAgent === undefined
+      ? reviewItems.some((item) => item.urgency === "critical")
+        || (jitContext !== undefined && jitContext.minutesUntil <= 10)
+      : policyForAgent.action === "notify";
+    const memoryCover = attentionMemory.cover(24);
+    const recallQuery = explicitAttentionRecallQuery(reviewItems);
+    if (recallQuery !== undefined)
+      setAttentionActivity("deliberating", "Recalling related attention history", request.id);
+    const recalled = recallQuery === undefined ? [] : attentionMemory.search({ query: recallQuery, limit: 8 }, now);
+    const boundedMemory = [...recalled, ...memoryCover]
+      .filter((node, index, all) => all.findIndex((candidate) => candidate.id === node.id) === index)
+      .slice(0, 32);
     const proposal = await (await agentModule()).runAttentionAgent({
       reason: request.reason,
       focusMinutes: request.focusMinutes,
       minimumItems: request.minimumItems,
-      items,
+      items: reviewItems,
       templates: eligibleTemplates,
       watches: attentionLedger.active(now),
       manual: !automatic,
       allowHold,
-      allowDigest: !automatic || !allowHold || items.length >= request.minimumItems || highSignal,
-      allowNotify: items.some((item) => item.urgency === "critical"
-        || ["deadline", "meeting"].includes(String(item.intent || ""))),
+      allowDigest,
+      allowNotify,
+      ...(policyForAgent === undefined ? {} : { activePolicy: policyForAgent }),
+      preferenceHints: attentionMemory.preferenceHints(reviewItems, now),
+      ...(jitContext === undefined ? {} : { jitContext }),
       memory: {
-        cover: attentionMemory.cover(24),
+        cover: boundedMemory,
         search: (memoryRequest) => attentionMemory.search(memoryRequest),
         zoom: (nodeId) => attentionMemory.zoom(nodeId)
       }
@@ -530,7 +600,17 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     const proposalItems = evidenceForIds(proposal.sourceIds);
 
     if (proposal.action === "hold") {
-      const watch = attentionLedger.schedule(proposal, now, dueWatch);
+      const policyBounded = policyForAgent?.followUpMinutes === undefined
+        ? proposal
+        : { ...proposal, followUpMinutes: policyForAgent.followUpMinutes };
+      const boundedProposal = jitContext === undefined || policyForAgent?.followUpMinutes !== undefined
+        ? policyBounded
+        : {
+          ...policyBounded,
+          followUpMinutes: Math.max(5, Math.min(1440, jitContext.minutesUntil - 15)),
+          wakeOn: [...new Set([...policyBounded.wakeOn, "deadline" as const])].slice(0, 3)
+        };
+      const watch = attentionLedger.schedule(boundedProposal, now, dueWatch);
       attentionMemory.recordDecision("hold", proposal.reason, proposalItems, proposal.subject, now);
       emitAttentionState(request.id);
       setAttentionActivity("holding", `Watching ${watch.subject}`, request.id);
@@ -728,6 +808,7 @@ async function handle(raw: string): Promise<boolean> {
       integrations: publicIntegrations(),
       authMethods: await (await agentModule()).discoverAgentAuthMethods(),
       privacy: privacy.status(),
+      policies: attentionPolicies.list(),
       templateSuggestions: currentTemplateSuggestions(),
       update: releaseUpdates.status()
     });
@@ -916,6 +997,81 @@ async function handle(raw: string): Promise<boolean> {
     return true;
   }
 
+  if (command.type === "attention_memory_search") {
+    emit({
+      type: "attention_memory_results", id: command.id, query: command.query,
+      results: attentionMemory.search({ query: command.query, limit: 12 })
+    });
+    return true;
+  }
+
+  if (command.type === "attention_explain") {
+    const digest = digestHistory.get(command.digestId);
+    const entry = digest?.sections[command.sectionIndex]?.entries[command.entryIndex];
+    if (digest === undefined || entry === undefined) {
+      emit({ type: "error", id: command.id, code: "explanation_unavailable", message: "That digest item is no longer available." });
+      return true;
+    }
+    const evidence = evidenceForIds(entry.sourceIds);
+    const group = groupAttentionItems(evidence)[0];
+    const applications = [...new Set(evidence.map((item) => item.app))].slice(0, 12);
+    const entities = [...new Set(evidence.flatMap(attentionEntityKeys))].slice(0, 16);
+    const matchedPolicy = attentionPolicies.evaluate(evidence)[0]?.policy;
+    const historyQuery = [group?.subject, entry.headline, ...applications].filter(Boolean).join(" ").slice(0, 200);
+    const history = historyQuery === "" ? [] : attentionMemory.search({ query: historyQuery, limit: 6 });
+    const policySummary = matchedPolicy === undefined ? ""
+      : ` Standing policy “${matchedPolicy.name}” matched with action ${matchedPolicy.action}.`;
+    emit({
+      type: "attention_explanation", id: command.id,
+      explanation: {
+        title: entry.headline,
+        summary: `${entry.sourceIds.length} cited source${entry.sourceIds.length === 1 ? "" : "s"}`
+          + `${group === undefined ? "" : ` were correlated as ${group.subject}`}.${policySummary}`,
+        sourceCount: entry.sourceIds.length,
+        applications,
+        entities,
+        ...(matchedPolicy === undefined ? {} : {
+          policy: { id: matchedPolicy.id, name: matchedPolicy.name, action: matchedPolicy.action }
+        }),
+        history
+      }
+    });
+    return true;
+  }
+
+  if (command.type === "attention_policy_create") {
+    emit({ type: "attention_policy_state", id: command.id, state: "working", message: "Drafting a bounded standing policy" });
+    try {
+      const draft = await (await agentModule()).runAttentionPolicyAgent(
+        command.request, templates, 60_000,
+        (message) => emit({ type: "attention_policy_state", id: command.id, state: "working", message })
+      );
+      const policy = attentionPolicies.add(draft);
+      emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
+      emit({ type: "attention_policy_state", id: command.id, state: "saved", message: `Added ${policy.name}` });
+    } catch (error) {
+      emit({
+        type: "error", id: command.id, code: "attention_policy_failed",
+        message: error instanceof Error ? error.message : "The standing policy could not be created."
+      });
+    }
+    return true;
+  }
+
+  if (command.type === "attention_policy_set_enabled") {
+    if (attentionPolicies.setEnabled(command.policyId, command.enabled) === undefined)
+      emit({ type: "error", id: command.id, code: "attention_policy_unavailable", message: "That standing policy is unavailable." });
+    else emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
+    return true;
+  }
+
+  if (command.type === "attention_policy_delete") {
+    if (!attentionPolicies.delete(command.policyId))
+      emit({ type: "error", id: command.id, code: "attention_policy_unavailable", message: "That standing policy is unavailable." });
+    else emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
+    return true;
+  }
+
   if (command.type === "attention_wake") {
     requestAttentionCycle({
       id: command.id, reason: command.reason,
@@ -927,6 +1083,20 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "template_suggestion_dismiss") {
     templateSuggestionStore.dismiss(command.suggestionId);
     emitTemplateSuggestions(command.id);
+    return true;
+  }
+
+  if (command.type === "digest_feedback") {
+    const digest = digestHistory.get(command.digestId);
+    if (digest === undefined) {
+      emit({ type: "error", id: command.id, code: "digest_unavailable", message: "That digest is no longer available." });
+      return true;
+    }
+    digestHistory.setFeedback(command.digestId, command.feedback);
+    attentionMemory.recordOutcome(command.feedback, digest.title,
+      digest.sections.flatMap((section) => section.entries.flatMap((entry) => entry.sourceIds)), digest.id);
+    emit({ type: "digest_history", id: command.id, digests: digestHistory.list() });
+    emitAttentionState(command.id);
     return true;
   }
 
@@ -957,7 +1127,7 @@ async function handle(raw: string): Promise<boolean> {
         attentionMemory.clearDigests();
         emit({ type: "digest_history", id: command.id, digests: [] });
       }
-      if (deleteAll) { attention.clear(); attentionLedger.clear(); attentionMemory.clear(); }
+      if (deleteAll) { attention.clear(); attentionLedger.clear(); attentionMemory.clear(); attentionPolicies.clear(); }
       else if (command.target === "notification-history") { attention.clearNotifications(); attentionMemory.clearNotifications(); }
       if (command.target === "notification-history") attentionLedger.clear();
       if (deleteAll || command.target === "notification-history") {
@@ -982,6 +1152,7 @@ async function handle(raw: string): Promise<boolean> {
       }
       configFingerprint = configurationFingerprint(configRoot);
       emit({ type: "data_deleted", id: command.id, target: command.target });
+      if (deleteAll) emit({ type: "attention_policies", id: command.id, policies: [] });
       if (deleteAll || command.target === "notification-history") emitAttention(command.id);
       if (deleteAll || command.target === "notification-history" || command.target === "digest-history") emitAttentionState(command.id);
       if (deleteAll || command.target === "notification-history" || command.target === "templates") emitTemplateSuggestions(command.id);
@@ -1118,6 +1289,7 @@ async function handle(raw: string): Promise<boolean> {
         integrations: publicIntegrations(),
         authMethods: await (await agentModule()).discoverAgentAuthMethods(),
         privacy: privacy.status(),
+        policies: attentionPolicies.list(),
         templateSuggestions: currentTemplateSuggestions(),
         update: releaseUpdates.status()
       });

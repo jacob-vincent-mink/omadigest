@@ -2,12 +2,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { groupAttentionItems } from "./intelligence.js";
+import { attentionEntityKeys, groupAttentionItems } from "./intelligence.js";
 import type {
   AttentionItem,
   AttentionMemoryKind,
   AttentionMemoryNode,
   AttentionMemoryStatus,
+  AttentionPreferenceHint,
   Digest
 } from "./types.js";
 
@@ -28,7 +29,7 @@ const episodeSchema = z.object({
   subject: z.string().min(1).max(200),
   summary: z.string().min(1).max(1_200),
   sources: z.array(sourceSchema).max(50),
-  action: z.enum(["hold", "digest", "notify", "read", "handoff", "cancelled"]).optional(),
+  action: z.enum(["ignore", "hold", "digest", "notify", "read", "handoff", "cancelled", "useful", "not-useful"]).optional(),
   digestId: z.string().uuid().optional()
 }).strict();
 const stateSchema = z.object({
@@ -85,7 +86,7 @@ export class AttentionMemory {
     if (groups.length > 0) this.#save(now);
   }
 
-  recordDecision(action: "hold" | "digest" | "notify", reason: string, items: AttentionItem[], subject?: string, now = new Date()): void {
+  recordDecision(action: "ignore" | "hold" | "digest" | "notify", reason: string, items: AttentionItem[], subject?: string, now = new Date()): void {
     const sources = sourceReferences(items);
     if (sources.length === 0) return;
     this.#upsert({
@@ -115,7 +116,7 @@ export class AttentionMemory {
     });
   }
 
-  recordOutcome(action: "read" | "handoff" | "cancelled", subject: string, sourceIds: string[], digestId?: string, now = new Date()): void {
+  recordOutcome(action: "read" | "handoff" | "cancelled" | "useful" | "not-useful", subject: string, sourceIds: string[], digestId?: string, now = new Date()): void {
     const sourceSet = new Set(sourceIds.slice(0, 50));
     const sources = this.#state.episodes.flatMap((episode) => episode.sources)
       .filter((source) => sourceSet.has(source.id));
@@ -131,6 +132,36 @@ export class AttentionMemory {
       action,
       ...(digestId === undefined ? {} : { digestId })
     });
+  }
+
+  preferenceHints(items: AttentionItem[], now = new Date()): AttentionPreferenceHint[] {
+    const groups = groupAttentionItems(items).slice(0, 40);
+    const cutoff = now.getTime() - ATTENTION_MEMORY_RETENTION_DAYS * 86_400_000;
+    const outcomes = this.#ordered().filter((episode) => episode.kind === "outcome"
+      && Date.parse(episode.occurredAt) >= cutoff
+      && ["read", "handoff", "useful", "not-useful"].includes(episode.action ?? ""));
+    return groups.flatMap((group) => {
+      const apps = new Set(group.items.map((item) => item.app.trim().toLowerCase()));
+      const entities = new Set(group.items.flatMap(attentionEntityKeys));
+      const related = outcomes.filter((episode) => episode.sources.some((source) => apps.has(source.app.trim().toLowerCase()))
+        || attentionEntityKeys({
+          id: episode.id, source: "omadigest.memory", app: "OmaDigest Memory",
+          title: episode.subject, body: episode.summary, urgency: "low", occurredAt: episode.occurredAt
+        }).some((entity) => entities.has(entity)));
+      if (related.length === 0) return [];
+      const useful = related.filter((episode) => episode.action === "useful").length;
+      const handoff = related.filter((episode) => episode.action === "handoff").length;
+      const read = related.filter((episode) => episode.action === "read").length;
+      const notUseful = related.filter((episode) => episode.action === "not-useful").length;
+      const positive = useful * 3 + handoff * 3 + read;
+      const negative = notUseful * 3;
+      if (positive === negative) return [];
+      const signal = positive > negative ? "surface" as const : "defer" as const;
+      const reason = signal === "surface"
+        ? `${useful + handoff} strong positive and ${read} read outcome${read === 1 ? "" : "s"} on related attention`
+        : `${notUseful} related digest${notUseful === 1 ? " was" : "s were"} marked not useful`;
+      return [{ subject: group.subject, signal, reason, sampleSize: related.length }];
+    }).sort((left, right) => right.sampleSize - left.sampleSize).slice(0, 12);
   }
 
   cover(limit = 24): AttentionMemoryNode[] {

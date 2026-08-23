@@ -34,6 +34,14 @@ export class DigestHistory {
     });
   }
 
+  setFeedback(id: string, feedback: "useful" | "not-useful"): void {
+    const current = this.#read().digests;
+    this.#write({
+      version: 1,
+      digests: current.map((digest) => digest.id === id ? { ...digest, feedback } : digest)
+    });
+  }
+
   delete(id: string): void {
     const current = this.#read().digests;
     this.#write({ version: 1, digests: current.filter((item) => item.id !== id) });
@@ -61,7 +69,9 @@ export class DigestHistory {
 function isDigest(value: unknown): value is Digest {
   if (!isObject(value) || typeof value.id !== "string" || typeof value.templateId !== "string"
     || typeof value.title !== "string" || typeof value.generatedAt !== "string"
-    || (value.readAt !== undefined && typeof value.readAt !== "string") || !Array.isArray(value.sections)) return false;
+    || (value.readAt !== undefined && typeof value.readAt !== "string")
+    || (value.feedback !== undefined && value.feedback !== "useful" && value.feedback !== "not-useful")
+    || !Array.isArray(value.sections)) return false;
   return value.sections.every((section) => isObject(section) && typeof section.title === "string" && Array.isArray(section.entries));
 }
 function isObject(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

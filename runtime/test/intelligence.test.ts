@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   automaticDigestDecision,
   classifyAttentionItem,
+  explicitAttentionRecallQuery,
   groupAttentionItems,
   suggestTemplates
 } from "../src/intelligence.js";
@@ -33,8 +34,31 @@ describe("attention intelligence", () => {
     expect(groups.find((group) => group.sourceIds.includes("1"))?.sourceIds).toEqual(["1", "2"]);
   });
 
+  it("correlates the same repository entity across notification, CI, and agent sources", () => {
+    const groups = groupAttentionItems([
+      item("github", "Review jacob/omadigest PR #184", { source: "github", app: "GitHub" }),
+      item("ci", "Build failed for jacob/omadigest pull request 184", { source: "ci", app: "Buildkite" }),
+      item("agent", "Agent completed work on jacob/omadigest PR #184", { source: "herdr", app: "Herdr" }),
+      item("other", "Review jacob/omadigest PR #918", { source: "github", app: "GitHub" })
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups.find((group) => group.sourceIds.includes("github"))).toMatchObject({
+      subject: "jacob/omadigest PR #184", reason: "shared-entity",
+      sourceIds: ["github", "ci", "agent"]
+    });
+  });
+
   it("does not group generic same-title notifications", () => {
     expect(groupAttentionItems([item("1", "New message"), item("2", "New message")])).toHaveLength(2);
+  });
+
+  it("requests precise recall only for explicit recurrence", () => {
+    expect(explicitAttentionRecallQuery([
+      item("1", "CI failed on jacob/omadigest PR #184", { body: "The same failure happened again" })
+    ])).toBe("jacob/omadigest PR #184");
+    expect(explicitAttentionRecallQuery([
+      item("2", "CI failed on jacob/omadigest PR #184", { body: "The check failed" })
+    ])).toBeUndefined();
   });
 
   it("does not generate on a brief low-signal DND toggle", () => {
@@ -57,5 +81,18 @@ describe("attention intelligence", () => {
   it("can suggest a fixed connector-backed recipe from count-only app frequency", () => {
     const hidden = [1, 2, 3, 4, 5, 6].map((number) => item(String(number), "", { body: "", contentAvailable: false }));
     expect(suggestTemplates(hidden, [], new Set(), new Date(now))[0]).toMatchObject({ id: "github-activity", itemCount: 6 });
+  });
+
+  it("discovers a recurring privacy-permitted app and intent pattern with examples", () => {
+    const recurring = [
+      item("1", "Prototype review comment added", { app: "Figma", occurredAt: "2026-08-19T10:00:00.000Z" }),
+      item("2", "Design review requested", { app: "Figma", occurredAt: "2026-08-19T11:00:00.000Z" }),
+      item("3", "Prototype review requested", { app: "Figma", occurredAt: "2026-08-20T09:00:00.000Z" }),
+      item("4", "Design approval requested", { app: "Figma", occurredAt: "2026-08-20T10:00:00.000Z" })
+    ];
+    const dynamic = suggestTemplates(recurring, [], new Set(), new Date(now))
+      .find((suggestion) => suggestion.id.startsWith("pattern-"));
+    expect(dynamic).toMatchObject({ applications: ["figma"], intents: ["review"], itemCount: 4 });
+    expect(dynamic?.example).toContain("Prototype review comment added");
   });
 });

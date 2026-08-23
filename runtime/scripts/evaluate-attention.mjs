@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -38,7 +38,27 @@ const scenarios = [
     ],
     items: [
       item("pr-repeat", "GitHub", "CI failed on PR #184", "The QML check failed again on the same branch", "ci-security", "normal", -2)
-    ]
+    ],
+    expected: { recalledHistory: true }
+  },
+  {
+    name: "jit-context-pack",
+    memoryEpisodes: [
+      memoryEpisode("prior-pr-184", "digest", "jacob/omadigest PR #184 report",
+        "PR #184 previously needed a QML alignment check before review.", "prior-pr-184", -4 * 1440)
+    ],
+    items: [
+      item("design-review", "Calendar", "OmaDigest design review starts in 12 minutes",
+        "Review jacob/omadigest PR #184 with the maintainers.", "timed-events", "normal", -1),
+      item("review-request", "GitHub", "Review requested on jacob/omadigest PR #184",
+        "The integration and attention UI are ready for review.", "reviews", "normal", -3)
+    ],
+    expected: { outcome: "digest", templateId: "context-pack" }
+  },
+  {
+    name: "standing-policy-compiler",
+    policyRequest: "Interrupt me for critical production failures. Keep everything else under the normal attention rules.",
+    expected: { outcome: "policy", policyAction: "notify" }
   }
 ];
 
@@ -59,6 +79,16 @@ function memoryEpisode(id, kind, subject, summary, sourceId, minutesAgo) {
 
 async function runScenario(scenario) {
   const stateRoot = mkdtempSync(join(tmpdir(), "omadigest-eval-"));
+  const configRoot = join(stateRoot, "config");
+  const sourceConfigRoot = process.env.XDG_CONFIG_HOME?.startsWith("/")
+    ? join(process.env.XDG_CONFIG_HOME, "omadigest")
+    : join(process.env.HOME || "", ".config", "omadigest");
+  const isolatedConfigRoot = join(configRoot, "omadigest");
+  mkdirSync(isolatedConfigRoot, { recursive: true, mode: 0o700 });
+  for (const name of ["auth.json", "agent.json", "models.json", "models-store.json"]) {
+    const source = join(sourceConfigRoot, name);
+    if (existsSync(source)) copyFileSync(source, join(isolatedConfigRoot, name));
+  }
   if (scenario.memoryEpisodes?.length) {
     const memoryRoot = join(stateRoot, "omadigest");
     mkdirSync(memoryRoot, { recursive: true, mode: 0o700 });
@@ -71,6 +101,7 @@ async function runScenario(scenario) {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      XDG_CONFIG_HOME: configRoot,
       XDG_STATE_HOME: stateRoot,
       XDG_RUNTIME_DIR: join(stateRoot, "runtime"),
       OMADIGEST_PLUGIN_DIR: process.cwd(),
@@ -82,6 +113,7 @@ async function runScenario(scenario) {
   const events = [];
   let stderr = "";
   let sawNotify = false;
+  let compiledPolicies = [];
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => { stderr = (stderr + String(chunk)).slice(-8_000); });
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
@@ -99,17 +131,25 @@ async function runScenario(scenario) {
         if (event.type === "attention_activity")
           process.stderr.write(`  ${event.activity?.state}: ${event.activity?.message}\n`);
         if (event.type === "ready") {
-          child.stdin.write(`${JSON.stringify({ type: "attention_ingest", id: `eval-ingest-${scenario.name}`, items: scenario.items })}\n`);
-          child.stdin.write(`${JSON.stringify({
-            type: "attention_wake", id: `eval-wake-${scenario.name}`,
-            reason: "scheduled", focusMinutes: 0, minimumItems: 3
-          })}\n`);
+          if (scenario.policyRequest) {
+            child.stdin.write(`${JSON.stringify({
+              type: "attention_policy_create", id: `eval-policy-${scenario.name}`, request: scenario.policyRequest
+            })}\n`);
+          } else {
+            child.stdin.write(`${JSON.stringify({ type: "attention_ingest", id: `eval-ingest-${scenario.name}`, items: scenario.items })}\n`);
+            child.stdin.write(`${JSON.stringify({
+              type: "attention_wake", id: `eval-wake-${scenario.name}`,
+              reason: "scheduled", focusMinutes: 0, minimumItems: 3
+            })}\n`);
+          }
         }
+        if (event.type === "attention_policies") compiledPolicies = event.policies || [];
         if (event.type === "attention_activity" && event.activity?.state === "notifying") sawNotify = true;
-        const outcome = event.type === "digest" ? "digest"
+        const outcome = event.type === "attention_policy_state" && event.state === "saved" ? "policy"
+          : event.type === "digest" ? "digest"
           : event.type === "attention_activity" && event.activity?.state === "holding" ? "hold"
           : sawNotify && event.type === "attention_activity" && event.activity?.state === "observing" ? "notify"
-          : event.type === "attention_activity" && event.activity?.state === "error" ? "error" : "";
+          : event.type === "error" || (event.type === "attention_activity" && event.activity?.state === "error") ? "error" : "";
         if (outcome !== "") {
           clearTimeout(timeout);
           resolveResult({
@@ -119,13 +159,19 @@ async function runScenario(scenario) {
             activity: events.filter((candidate) => candidate.type === "attention_activity")
               .map((candidate) => candidate.activity?.message).filter(Boolean),
             ...(event.digest?.title ? { digestTitle: event.digest.title } : {}),
+            ...(event.digest?.templateId ? { templateId: event.digest.templateId } : {}),
+            ...(outcome === "policy" && compiledPolicies[0] ? {
+              policyName: compiledPolicies[0].name,
+              policyAction: compiledPolicies[0].action,
+              policyMatch: compiledPolicies[0].match
+            } : {}),
             recalledHistory: events.some((candidate) => candidate.type === "attention_activity"
               && String(candidate.activity?.message || "").includes("Recalling related attention history")),
             ...(outcome === "hold" ? {
               heldCount: Number(event.activity?.heldCount || 0),
               nextCheckAt: String(event.activity?.nextCheckAt || "")
             } : {}),
-            ...(outcome === "error" ? { error: event.activity?.message || stderr.trim() } : {})
+            ...(outcome === "error" ? { error: event.message || event.activity?.message || stderr.trim() } : {})
           });
         }
       });
@@ -150,6 +196,11 @@ const results = [];
 const requested = process.argv[2];
 for (const scenario of requested ? scenarios.filter((candidate) => candidate.name === requested) : scenarios) {
   process.stderr.write(`Evaluating ${scenario.name}…\n`);
-  results.push(await runScenario(scenario));
+  const result = await runScenario(scenario);
+  for (const [key, expected] of Object.entries(scenario.expected || {})) {
+    if (result[key] !== expected)
+      throw new Error(`${scenario.name} expected ${key}=${JSON.stringify(expected)}, received ${JSON.stringify(result[key])}`);
+  }
+  results.push(result);
 }
 process.stdout.write(`${JSON.stringify({ evaluatedAt: new Date().toISOString(), results }, null, 2)}\n`);
