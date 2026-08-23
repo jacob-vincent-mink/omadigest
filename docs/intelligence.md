@@ -10,6 +10,7 @@ notification / connector item
   → deterministic intent classifier
   → bounded retention
   → stable-subject evidence grouping
+  → bounded temporal memory + optional recall
   → bounded attention-agent proposal
   → broker validation
   → hold / cited digest / native alert
@@ -45,11 +46,21 @@ The broker groups only high-confidence relationships:
 
 Generic titles such as “New message” never group by title. Group size, group count, item size, total model bytes, and retained history are all bounded. The digest validator prevents one source item from supporting conflicting entries and prevents a multi-update evidence group from being split across entries.
 
+## Progressive attention memory
+
+Every policy-permitted evidence group can become a provenance-preserving episode. Decisions, completed digests, and observable outcomes such as reading, handoff, and watch cancellation add separate episodes. The canonical store is capped at 512 episodes, 512 KiB, and 90 days. Each episode retains its source IDs, source kinds, application names, subject, time, and a bounded summary.
+
+The broker derives a rebuildable binary summary tree from those episodes. Its default temporal cover keeps more detail near the present and coarser summaries further in the past. The model may make at most four read-only `search_attention_memory` or `zoom_attention_memory` calls before submitting its one action. Search is bounded by fields, time, result count, and 48 KiB of returned nodes. A recalled node becomes a citable derived source, but every proposal must still cite at least one current item.
+
+Memory results are untrusted historical evidence, never instructions. Tightening notification policy removes every episode that depends on a newly disallowed application and rebuilds the derived tree. Notification-history deletion removes notification-derived episodes; digest deletion removes its digest and outcome episodes. No hidden model reasoning is retained.
+
+This design is inspired by [OptMem](https://github.com/VictorTaelin/OptMem): particularly its append-only canonical history, rebuildable hierarchical summaries, time-decayed wake context, and zoom-based recall. OmaDigest adapts those ideas to finite retention, source provenance, privacy deletion, subject threads, and broker-owned background execution rather than embedding OptMem's implementation.
+
 ## Attention loop and follow-ups
 
 The broker wakes the attention loop after a quiet notification batch, enabled-source polling, native telemetry changes, DND re-entry, a daily schedule, startup, an explicit **+** request, or a due follow-up. Focus mode suppresses autonomous reviews; it never suppresses the explicit re-entry review when focus ends.
 
-The model can submit exactly one typed proposal. A hold schedules no model or operating-system timer itself: the broker records a bounded watch and owns the wakeup. Automatic deliberations are separated by at least 60 seconds and capped at 24 per UTC day. At most 16 watches and 64 recent decisions are retained in a 256 KiB ledger. A watch can be revisited at most three times, cannot schedule more than 24 hours ahead, and expires after 48 hours. Evidence remains pending while held and is acknowledged only after a cited digest or alert succeeds.
+The model can submit exactly one typed proposal. A hold proposes a subject, cited sources, a fallback deadline, and one or more fixed wake conditions: new evidence for the subject, a cited source changing, or the deadline arriving. The broker records that proposal as a watch lease, matches normalized subjects, owns every event wake and timer, and exposes cancellation in the panel. Automatic deliberations are separated by at least 60 seconds and capped at 24 per UTC day. At most 16 watches and 64 recent decisions are retained in a 256 KiB ledger. A watch can be revisited at most three times, cannot schedule more than 24 hours ahead, and expires after 48 hours. Evidence remains pending while held and is acknowledged only after a cited digest or alert succeeds.
 
 This makes the product adaptive without giving notification text, connectors, or the model durable execution authority. Invalid source IDs, duplicate citations, unavailable templates, oversized strings, exhausted watches, and non-digest manual proposals fail closed.
 

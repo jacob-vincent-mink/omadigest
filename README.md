@@ -28,14 +28,15 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Privacy before persistence** — protected apps such as Signal start at **Ignore**; unknown apps start at **Count only**, with content erased.
 - **Citations by construction** — every factual digest entry must cite a supplied notification or connector source ID.
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
-- **Attention intelligence** — conservative subject grouping plus a bounded attention agent can hold related updates, create the right digest, or surface a time-sensitive alert without granting notification text execution authority.
+- **Attention intelligence** — conservative subject grouping plus a bounded attention agent can recall prior episodes, watch an evolving subject, create the right digest, or surface a time-sensitive alert without granting notification text execution authority.
+- **Progressive memory** — a provenance-preserving temporal memory keeps recent episodes detailed, compresses older context into rebuildable summaries, and lets the agent search or zoom before deciding.
 - **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
 - **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
 - **Useful sources out of the box** — native Omarchy notifications and focus state, live-tested GitHub metadata, local crash and update state, system telemetry, and Herdr agent activity.
 - **Category-level control** — keep a source enabled while turning off noisy streams such as completed tasks, network transitions, or account activity.
 - **Explicit action handoff** — send one cited digest item to the default Omarchy agent, or continue broader authoring work in Herdr.
-- **Background attention loop** — react after notification quiet windows, enabled-source polling, native events, DND re-entry, a daily schedule, or bounded follow-ups; **+** always requests a fresh digest.
+- **Background attention loop** — react after notification quiet windows, enabled-source polling, native events, DND re-entry, a daily schedule, or bounded watch leases that wake on related evidence, source changes, or a deadline; **+** always requests a fresh digest.
 - **Voice both ways** — dictate authoring requests with Voxtype and optionally read completed digests aloud.
 - **Inspectable configuration** — privacy, templates, integrations, permissions, setup, and enablement are file-backed and hot-reloadable.
 - **Theme-native UI** — the Quickshell panel, spacing, typography, and monochrome mark follow the active Omarchy theme.
@@ -115,7 +116,8 @@ Quickshell panel ◄─────┘                           ▼
        │ NDJSON                         bounded attention proposal
        ▼                                  │ hold / digest / alert
 TypeScript broker ◄───────────────────────┘
-       ├─ bounded follow-up ledger
+       ├─ searchable episodic memory + temporal summary tree
+       ├─ bounded conditional-watch ledger
        ├─ scoped digest Pi session ─────► validated cited digest
        ├─ Secret Service
        ├─ Voxtype
@@ -130,7 +132,7 @@ OmaDigest gives each model session only the structured submission tool needed fo
 
 | Session | Available tools |
 |---|---|
-| Attention review | `propose_attention_action` |
+| Attention review | `search_attention_memory`, `zoom_attention_memory`, `propose_attention_action` |
 | Digest generation | `emit_digest` |
 | Template drafting | `emit_template_draft`, `out_of_scope` |
 

@@ -21,6 +21,26 @@ describe("checked-in broker bundle", () => {
       latestVersion: "0.1.5",
       releaseUrl: "https://github.com/jacob-vincent-mink/omadigest/releases/tag/v0.1.5"
     }));
+    const watchId = "0fb3735a-54b1-4b4f-b0d1-9667c67756d2";
+    const now = new Date();
+    writeFileSync(join(releaseDirectory, "attention-loop.json"), JSON.stringify({
+      version: 2,
+      watches: [{
+        id: watchId, reason: "Wait for CI", subject: "PR #184", sourceIds: ["pr-184"],
+        wakeOn: ["new-evidence", "source-change", "deadline"], createdAt: now.toISOString(),
+        dueAt: new Date(now.getTime() + 60_000).toISOString(),
+        expiresAt: new Date(now.getTime() + 3_600_000).toISOString(), attempts: 1
+      }],
+      decisions: [],
+      budget: { day: now.toISOString().slice(0, 10), deliberations: 0 }
+    }));
+    writeFileSync(join(releaseDirectory, "attention-memory.json"), JSON.stringify({
+      version: 1,
+      episodes: [{
+        id: "evidence-pr-184", kind: "evidence", occurredAt: now.toISOString(), subject: "PR #184",
+        summary: "GitHub: Review requested on PR #184", sources: [{ id: "pr-184", source: "github", app: "GitHub" }]
+      }]
+    }));
 
     const child = spawn(process.execPath, [resolve("runtime/dist/omadigest-broker.mjs")], {
       cwd: process.cwd(),
@@ -45,6 +65,7 @@ describe("checked-in broker bundle", () => {
       JSON.stringify({ type: "privacy_set_rule", id: "privacy-set", app: "Test App", mode: "digest" }),
       JSON.stringify({ type: "privacy_delete_rule", id: "privacy-delete", app: "Test App" }),
       JSON.stringify({ type: "attention_focus", id: "focus-on", active: true }),
+      JSON.stringify({ type: "attention_watch_cancel", id: "watch-cancel", watchId }),
       JSON.stringify({ type: "template_delete", id: "template-delete", templateId: "general" }),
       JSON.stringify({ type: "shutdown" }),
       ""
@@ -74,6 +95,12 @@ describe("checked-in broker bundle", () => {
     expect(events.find((event) => event.id === "focus-on")).toMatchObject({
       type: "attention_activity",
       activity: { state: "holding", message: "Holding updates while you focus" }
+    });
+    expect(events.find((event) => event.type === "attention_state" && event.id === "initialize")).toMatchObject({
+      memory: { episodeCount: 1 }, watches: [{ id: watchId, subject: "PR #184" }]
+    });
+    expect(events.find((event) => event.type === "attention_state" && event.id === "watch-cancel")).toMatchObject({
+      watches: []
     });
     expect(events.find((event) => event.id === "privacy-delete")).toMatchObject({
       type: "privacy",

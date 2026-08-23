@@ -7,6 +7,7 @@ import {
   AttentionLedger,
   validateAttentionProposal
 } from "../src/attention-loop.js";
+import type { AttentionProposal } from "../src/types.js";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -17,9 +18,21 @@ function ledger(): AttentionLedger {
   return new AttentionLedger({ XDG_STATE_HOME: root, HOME: root });
 }
 
+function hold(reason: string, sourceIds: string[], followUpMinutes: number): Extract<AttentionProposal, { action: "hold" }> {
+  return {
+    action: "hold" as const,
+    reason,
+    sourceIds,
+    subject: "PR #42",
+    wakeOn: ["new-evidence", "source-change", "deadline"],
+    followUpMinutes
+  };
+}
+
 describe("attention proposal validation", () => {
   const context = {
     availableSourceIds: new Set(["one", "two"]),
+    currentSourceIds: new Set(["one", "two"]),
     availableTemplateIds: new Set(["general"]),
     allowHold: true,
     allowDigest: true,
@@ -40,9 +53,8 @@ describe("attention proposal validation", () => {
   });
 
   it("forces explicit user requests to produce a digest", () => {
-    expect(() => validateAttentionProposal({
-      action: "hold", reason: "Later", sourceIds: ["one"], followUpMinutes: 10
-    }, { ...context, manual: true })).toThrow("manual request");
+    expect(() => validateAttentionProposal(hold("Later", ["one"], 10),
+      { ...context, manual: true })).toThrow("manual request");
   });
 
   it("enforces broker-owned digest and interruption thresholds", () => {
@@ -53,6 +65,16 @@ describe("attention proposal validation", () => {
       action: "notify", reason: "Minor", sourceIds: ["one"], headline: "Update", body: "Available", urgency: "normal"
     }, { ...context, allowNotify: false })).toThrow("interruption threshold");
   });
+
+  it("requires current evidence even when historical memory is available", () => {
+    expect(() => validateAttentionProposal({
+      action: "digest", reason: "Historical only", sourceIds: ["memory-node"], templateId: "general"
+    }, {
+      ...context,
+      availableSourceIds: new Set(["one", "memory-node"]),
+      currentSourceIds: new Set(["one"])
+    })).toThrow("current evidence");
+  });
 });
 
 describe("AttentionLedger", () => {
@@ -62,9 +84,7 @@ describe("AttentionLedger", () => {
     const env = { XDG_STATE_HOME: root, HOME: root };
     const first = new AttentionLedger(env);
     const now = new Date("2026-08-22T12:00:00.000Z");
-    const watch = first.schedule({
-      action: "hold", reason: "Wait for CI", sourceIds: ["pr-42"], followUpMinutes: 15
-    }, now);
+    const watch = first.schedule(hold("Wait for CI", ["pr-42"], 15), now);
     expect(first.due(new Date("2026-08-22T12:14:59.000Z"))).toEqual([]);
     expect(new AttentionLedger(env).due(new Date("2026-08-22T12:15:00.000Z"))[0]?.id).toBe(watch.id);
   });
@@ -72,12 +92,12 @@ describe("AttentionLedger", () => {
   it("caps a watch at three follow-up attempts", () => {
     const state = ledger();
     let now = new Date("2026-08-22T12:00:00.000Z");
-    let watch = state.schedule({ action: "hold", reason: "One", sourceIds: ["x"], followUpMinutes: 1 }, now);
+    let watch = state.schedule(hold("One", ["x"], 1), now);
     now = new Date("2026-08-22T12:01:00.000Z");
-    watch = state.schedule({ action: "hold", reason: "Two", sourceIds: ["x"], followUpMinutes: 1 }, now, watch);
+    watch = state.schedule(hold("Two", ["x"], 1), now, watch);
     now = new Date("2026-08-22T12:02:00.000Z");
-    watch = state.schedule({ action: "hold", reason: "Three", sourceIds: ["x"], followUpMinutes: 1 }, now, watch);
-    expect(() => state.schedule({ action: "hold", reason: "Four", sourceIds: ["x"], followUpMinutes: 1 },
+    watch = state.schedule(hold("Three", ["x"], 1), now, watch);
+    expect(() => state.schedule(hold("Four", ["x"], 1),
       new Date("2026-08-22T12:03:00.000Z"), watch)).toThrow("follow-up limit");
   });
 
@@ -96,8 +116,31 @@ describe("AttentionLedger", () => {
   it("removes resolved evidence from active watches", () => {
     const state = ledger();
     const now = new Date("2026-08-22T12:00:00.000Z");
-    state.schedule({ action: "hold", reason: "Wait", sourceIds: ["one", "two"], followUpMinutes: 30 }, now);
+    state.schedule(hold("Wait", ["one", "two"], 30), now);
     state.resolve("digest", "Ready", ["one"], new Date("2026-08-22T12:05:00.000Z"));
     expect(state.active(new Date("2026-08-22T12:06:00.000Z"))).toEqual([]);
+  });
+
+  it("wakes a conditional lease on related evidence or a cited source changing", () => {
+    const state = ledger();
+    const now = new Date("2026-08-22T12:00:00.000Z");
+    const watch = state.schedule(hold("Wait for CI", ["pr-42"], 30), now);
+    const related = {
+      id: "ci-42", source: "github", app: "GitHub", title: "CI changed on PR #42", body: "Checks are green",
+      urgency: "normal" as const, occurredAt: new Date(now.getTime() + 60_000).toISOString()
+    };
+    const unrelated = { ...related, id: "ci-43", title: "CI changed on PR #43", body: "Checks failed" };
+    expect(state.matching([related, unrelated], new Date(now.getTime() + 60_000))).toEqual([
+      expect.objectContaining({ watch: expect.objectContaining({ id: watch.id }), sourceIds: ["ci-42"] })
+    ]);
+    expect(state.matching([{ ...related, id: "pr-42" }], new Date(now.getTime() + 120_000))[0]?.sourceIds).toEqual(["pr-42"]);
+  });
+
+  it("lets the user cancel a watch lease", () => {
+    const state = ledger();
+    const now = new Date("2026-08-22T12:00:00.000Z");
+    const watch = state.schedule(hold("Wait", ["one"], 30), now);
+    expect(state.cancel(watch.id, now)?.subject).toBe("PR #42");
+    expect(state.active(now)).toEqual([]);
   });
 });

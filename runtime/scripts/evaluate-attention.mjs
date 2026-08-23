@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -25,6 +25,20 @@ const scenarios = [
     items: [
       item("release-a", "Project Feed", "Library A published 2.4", "Maintenance release notes are available", "updates", "low", -5)
     ]
+  },
+  {
+    name: "history-aware-pr",
+    memoryEpisodes: [
+      ...Array.from({ length: 100 }, (_, index) => memoryEpisode(
+        `noise-${index}`, "evidence", `Routine repository update ${index}`,
+        `A low-signal repository update was observed ${Math.floor(index / 2) + 2} days ago.`, `noise-source-${index}`, -(Math.floor(index / 2) + 2) * 1440
+      )),
+      memoryEpisode("prior-pr-184", "digest", "PR #184 report",
+        "PR #184 had the same QML check failure before it recovered without intervention.", "prior-pr-184", -30 * 1440)
+    ],
+    items: [
+      item("pr-repeat", "GitHub", "CI failed on PR #184", "The QML check failed again on the same branch", "ci-security", "normal", -2)
+    ]
   }
 ];
 
@@ -35,8 +49,23 @@ function item(id, app, title, body, category, urgency, minutesAgo) {
   };
 }
 
+function memoryEpisode(id, kind, subject, summary, sourceId, minutesAgo) {
+  return {
+    id: `evaluation-${id}`, kind, occurredAt: new Date(Date.now() + minutesAgo * 60_000).toISOString(),
+    subject, summary, sources: [{ id: `evaluation:${sourceId}`, source: "omadigest.evaluation", app: "Evaluation" }],
+    ...(kind === "digest" ? { action: "digest", digestId: "67fd16f4-d77f-4782-b2d7-694ef2654c7f" } : {})
+  };
+}
+
 async function runScenario(scenario) {
   const stateRoot = mkdtempSync(join(tmpdir(), "omadigest-eval-"));
+  if (scenario.memoryEpisodes?.length) {
+    const memoryRoot = join(stateRoot, "omadigest");
+    mkdirSync(memoryRoot, { recursive: true, mode: 0o700 });
+    writeFileSync(join(memoryRoot, "attention-memory.json"), `${JSON.stringify({
+      version: 1, episodes: scenario.memoryEpisodes.slice(0, 512)
+    })}\n`, { mode: 0o600 });
+  }
   const startedAt = Date.now();
   const child = spawn(process.execPath, [resolve("runtime/dist/omadigest-broker.mjs")], {
     cwd: process.cwd(),
@@ -90,6 +119,8 @@ async function runScenario(scenario) {
             activity: events.filter((candidate) => candidate.type === "attention_activity")
               .map((candidate) => candidate.activity?.message).filter(Boolean),
             ...(event.digest?.title ? { digestTitle: event.digest.title } : {}),
+            recalledHistory: events.some((candidate) => candidate.type === "attention_activity"
+              && String(candidate.activity?.message || "").includes("Recalling related attention history")),
             ...(outcome === "hold" ? {
               heldCount: Number(event.activity?.heldCount || 0),
               nextCheckAt: String(event.activity?.nextCheckAt || "")

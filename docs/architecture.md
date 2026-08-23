@@ -15,15 +15,17 @@ Omarchy history ─► bounded broker reader ─► attention store
 enabled connector ─► normalized context ──────┤
                                               ▼
                                       bounded attention store
-                                              │
-                                  bounded attention proposal
+                                              ├─► episodic memory ─► temporal summary tree
+                                              │                         │ recall / zoom
+                                              ▼                         │
+                                  bounded attention proposal ◄──────────┘
                                               │
                               ┌───────────────┼───────────────┐
                               ▼               ▼               ▼
                          broker watch    cited digest    native alert
 ```
 
-Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. QML submits only the bounded live popup snapshot; the broker independently reads at most 50 regular non-symlink Omarchy history files under 64-KiB/file and 512-KiB total limits. The broker keeps at most 500 items in memory and seven daily mode-`0600` JSONL segments, deduplicates identical snapshots before append, and enforces 2-MiB segment and 8-MiB total budgets. Count-only records never reach either model. The attention agent receives only grouped, actionable evidence and public template summaries, while the digest agent receives only the evidence cited by the validated proposal under that template's stricter budget.
+Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. QML submits only the bounded live popup snapshot; the broker independently reads at most 50 regular non-symlink Omarchy history files under 64-KiB/file and 512-KiB total limits. The broker keeps at most 500 items in memory and seven daily mode-`0600` JSONL segments, deduplicates identical snapshots before append, and enforces 2-MiB segment and 8-MiB total budgets. Count-only records never reach either model. A separate mode-`0600` episodic memory retains at most 512 provenance-preserving evidence, decision, digest, and outcome records for 90 days under 512 KiB; its time-decayed summary tree is derived and rebuildable. The attention agent receives only grouped actionable evidence, a bounded temporal cover, public template summaries, and the results of up to four broker-owned recall calls. The digest agent receives only evidence cited by the validated proposal under that template's stricter budget.
 
 ## Pi runtime
 
@@ -34,7 +36,7 @@ Every Pi operation uses an in-memory session and settings. Digest and template i
 ### Session capabilities
 
 - Digest: `emit_digest`.
-- Attention: `propose_attention_action` (`hold`, `digest`, or `notify`).
+- Attention: read-only `search_attention_memory` and `zoom_attention_memory`, then exactly one `propose_attention_action` (`hold`, `digest`, or `notify`).
 - Template draft: `emit_template_draft`, `out_of_scope`.
 
 No built-in coding tools are enabled. Time, prompt, file, item, and output bounds are enforced outside the model.
@@ -43,7 +45,7 @@ No built-in coding tools are enabled. Time, prompt, file, item, and output bound
 
 User policy, templates, integrations, declared permissions, enablement, category overrides, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. Source enablement and category overrides use bounded version-2 state; version-1 integration enablement is migrated on read and rewritten on the next state change. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
 
-Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and the attention-loop ledger, then persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable; inline deletion of a bundled template records only its bounded ID in user configuration.
+Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes OmaDigest attention evidence, notification-derived memory episodes, and the attention-loop ledger, then persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Privacy tightening removes affected raw evidence and every dependent episode before rebuilding derived memory summaries. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable; inline deletion of a bundled template records only its bounded ID in user configuration.
 
 Release discovery is also broker-owned. It checks only GitHub's fixed `releases/latest` endpoint for this repository, at most once per 24 hours unless the user explicitly retries. Requests time out after five seconds; response and persisted state are each capped at 64 KiB. QML receives only the normalized current/latest versions, fixed release URL, check time, and per-version dismissal state.
 

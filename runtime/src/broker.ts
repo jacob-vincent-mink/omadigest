@@ -12,12 +12,13 @@ import type { DraftResult } from "./agent.js";
 import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
 import { AttentionStore, attentionItemSchema } from "./attention.js";
 import { AttentionLedger } from "./attention-loop.js";
+import { AttentionMemory } from "./attention-memory.js";
 import { installDraft, installTemplateEdit } from "./drafts.js";
 import { DictationService } from "./dictation.js";
 import { SpeechService, speechConfigSchema } from "./tts.js";
 import { DigestHistory } from "./digest-history.js";
 import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
-import { automaticDigestDecision, classifyAttentionItem, enrichedGenerationContext, suggestTemplates } from "./intelligence.js";
+import { automaticDigestDecision, classifyAttentionItem, enrichedGenerationContext, groupAttentionItems, suggestTemplates } from "./intelligence.js";
 import { TemplateSuggestionStore } from "./template-suggestion-store.js";
 import { launchHerdrHandoff } from "./herdr.js";
 import { clearUserIntegrations, clearUserTemplates, removeUserTemplate } from "./data-management.js";
@@ -41,6 +42,7 @@ import {
   PROTOCOL_VERSION,
   type AttentionActivity,
   type AttentionItem,
+  type AttentionWatch,
   type AttentionWakeReason,
   type BrokerEvent,
   type DigestTemplate,
@@ -157,6 +159,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attention_acknowledge"), id: z.string().min(1).max(100), itemIds: z.array(z.string().min(1).max(200)).max(200) }).strict(),
   z.object({ type: z.literal("attention_acknowledge_all"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("attention_focus"), id: z.string().min(1).max(100), active: z.boolean() }).strict(),
+  z.object({ type: z.literal("attention_watch_cancel"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({
     type: z.literal("attention_wake"), id: z.string().min(1).max(100),
     reason: z.enum(["manual", "dnd-ended", "scheduled"]),
@@ -202,10 +205,15 @@ const pendingDrafts = new Map<string, DraftResult>();
 const pendingHandoffs = new Map<string, { prompt: string; expiresAt: number }>();
 const attention = new AttentionStore();
 const attentionLedger = new AttentionLedger();
+const attentionMemory = new AttentionMemory();
 const privacy = new PrivacyPolicy(configRoot);
 attention.applyPolicy((item) => {
   const filtered = privacy.filter(item);
   return filtered === undefined ? undefined : classifyAttentionItem(filtered);
+});
+attentionMemory.applyNotificationPolicy((app) => {
+  const mode = privacy.modeFor(app);
+  return mode === "digest" || mode === "digest-and-handoff";
 });
 const digestHistory = new DigestHistory();
 const templateSuggestionStore = new TemplateSuggestionStore();
@@ -233,6 +241,7 @@ type AttentionCycleRequest = {
   reason: AttentionWakeReason;
   focusMinutes: number;
   minimumItems: number;
+  watchId?: string;
 };
 
 type AuthFlow = {
@@ -332,7 +341,7 @@ async function recordNativeTelemetry(): Promise<void> {
         events: [...nativeSourceState.events, ...events]
       });
       nativeSourceState = nativeSourceStore.read();
-      const ingested = attention.ingestWithResult(events.map(classifyAttentionItem));
+      const ingested = ingestAttentionItems(events.map(classifyAttentionItem));
       if (ingested.changedIds.length > 0) scheduleAttentionCycle("source-event", 30_000);
     }
   } finally {
@@ -369,11 +378,27 @@ function setAttentionActivity(state: AttentionActivity["state"], message: string
   emit({ type: "attention_activity", id, activity: attentionActivity });
 }
 
-function scheduleAttentionCycle(reason: Exclude<AttentionWakeReason, GenerationTrigger>, delayMs: number): void {
+function emitAttentionState(id: string): void {
+  emit({ type: "attention_state", id, watches: attentionLedger.active(), memory: attentionMemory.status() });
+}
+
+function ingestAttentionItems(items: AttentionItem[]): { total: number; changedIds: string[] } {
+  const ingested = attention.ingestWithResult(items);
+  if (ingested.changedIds.length === 0) return ingested;
+  const changed = attention.byIds(ingested.changedIds);
+  attentionMemory.recordEvidence(changed);
+  for (const match of attentionLedger.matching(changed))
+    scheduleAttentionCycle("follow-up", 1_000, match.watch.id);
+  emitAttentionState("attention-memory");
+  return ingested;
+}
+
+function scheduleAttentionCycle(reason: Exclude<AttentionWakeReason, GenerationTrigger>, delayMs: number, watchId?: string): void {
   if (focusActive || process.env.OMADIGEST_DISABLE_AUTOMATIC_ATTENTION === "1") return;
   if (reason === "notification-batch" && notificationQuietTimer !== undefined) clearTimeout(notificationQuietTimer);
   const timer = setTimeout(() => requestAttentionCycle({
-    id: `attention-${reason}-${Date.now()}`, reason, focusMinutes: 0, minimumItems: 3
+    id: `attention-${reason}-${Date.now()}`, reason, focusMinutes: 0, minimumItems: 3,
+    ...(watchId === undefined ? {} : { watchId })
   }), Math.max(1_000, Math.min(300_000, delayMs)));
   timer.unref();
   if (reason === "notification-batch") notificationQuietTimer = timer;
@@ -415,7 +440,7 @@ async function refreshAttentionSources(now: Date): Promise<string[]> {
         const presented = privacy.filter(item);
         return presented === undefined ? [] : [classifyAttentionItem(presented)];
       });
-    for (const id of attention.ingestWithResult(notificationItems).changedIds) changed.add(id);
+    for (const id of ingestAttentionItems(notificationItems).changedIds) changed.add(id);
   } catch { /* Native notification history may be unavailable outside Omarchy. */ }
   await recordNativeTelemetry();
   const selection = allEnabledSourceSelection();
@@ -426,7 +451,7 @@ async function refreshAttentionSources(now: Date): Promise<string[]> {
     integrationRuntime.sync(discovered, selection.connectorIds, selection.categories, since.toISOString(), until.toISOString()),
     collectNativeSourceItems(enabledNativeCategories(selection.connectorIds, selection.categories), since, until, nativeSourceState)
   ]);
-  for (const id of attention.ingestWithResult([...connectorItems, ...nativeItems].map(classifyAttentionItem)).changedIds) changed.add(id);
+  for (const id of ingestAttentionItems([...connectorItems, ...nativeItems].map(classifyAttentionItem)).changedIds) changed.add(id);
   return [...changed];
 }
 
@@ -437,10 +462,13 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     setAttentionActivity("checking", "Checking enabled sources", request.id);
     await refreshAttentionSources(now);
     emitAttention(request.id);
-    const dueWatch = request.reason === "follow-up" ? attentionLedger.due(now)[0] : undefined;
+    const dueWatch = request.reason === "follow-up"
+      ? (request.watchId === undefined ? attentionLedger.due(now)[0] : attentionLedger.get(request.watchId, now))
+      : undefined;
     const held = attentionLedger.heldIds(now);
-    const candidate = attention.pending(200).filter((item) =>
-      !held.has(item.id) || dueWatch?.sourceIds.includes(item.id));
+    const candidate = attention.pending(200).filter((item) => dueWatch === undefined
+      ? !held.has(item.id)
+      : isRelatedToWatch(item, dueWatch));
     const { items, excludedIds } = privacy.selectDigestEvidence(candidate, 100);
     if (excludedIds.length > 0) attention.acknowledge(excludedIds);
     if (items.length === 0) {
@@ -452,6 +480,8 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     }
     const permit = attentionLedger.permit(request.reason, now);
     if (!permit.allowed) {
+      if (dueWatch !== undefined && permit.retryAfterMs !== undefined)
+        scheduleAttentionCycle("follow-up", permit.retryAfterMs + 250, dueWatch.id);
       setAttentionActivity("holding", permit.reason ?? "Waiting for the next attention review", request.id);
       if (!automatic) emit({ type: "digest_skipped", id: request.id, reason: permit.reason ?? "Attention review is paused" });
       return;
@@ -489,26 +519,37 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
       allowHold,
       allowDigest: !automatic || !allowHold || items.length >= request.minimumItems || highSignal,
       allowNotify: items.some((item) => item.urgency === "critical"
-        || ["deadline", "meeting"].includes(String(item.intent || "")))
+        || ["deadline", "meeting"].includes(String(item.intent || ""))),
+      memory: {
+        cover: attentionMemory.cover(24),
+        search: (memoryRequest) => attentionMemory.search(memoryRequest),
+        zoom: (nodeId) => attentionMemory.zoom(nodeId)
+      }
     }, 60_000, (message) => setAttentionActivity("deliberating", message, request.id));
+
+    const proposalItems = evidenceForIds(proposal.sourceIds);
 
     if (proposal.action === "hold") {
       const watch = attentionLedger.schedule(proposal, now, dueWatch);
-      setAttentionActivity("holding", `Holding ${watch.sourceIds.length} ${watch.sourceIds.length === 1 ? "update" : "updates"} for a better moment`, request.id);
+      attentionMemory.recordDecision("hold", proposal.reason, proposalItems, proposal.subject, now);
+      emitAttentionState(request.id);
+      setAttentionActivity("holding", `Watching ${watch.subject}`, request.id);
       return;
     }
     if (proposal.action === "notify") {
       setAttentionActivity("notifying", "Surfacing a time-sensitive update", request.id);
       await notifyAttention(proposal.headline, proposal.body, proposal.urgency);
       attention.acknowledge(proposal.sourceIds);
-      attentionLedger.resolve("notify", proposal.reason, proposal.sourceIds, now);
+      attentionLedger.resolve("notify", proposal.reason, proposal.sourceIds, now, dueWatch?.id);
+      attentionMemory.recordDecision("notify", proposal.reason, proposalItems, undefined, now);
       emitAttention(request.id);
+      emitAttentionState(request.id);
       setAttentionActivity("observing", "Watching enabled sources", request.id);
       return;
     }
     const template = eligibleTemplates.find((candidateTemplate) => candidateTemplate.manifest.id === proposal.templateId);
     if (template === undefined) throw new Error("The attention agent selected an unavailable template");
-    const proposedItems = attention.byIds(proposal.sourceIds);
+    const proposedItems = proposalItems;
     const selected = privacy.selectDigestEvidence(proposedItems, template.manifest.context.maximumItems).items;
     if (selected.length === 0) throw new Error("The attention decision no longer has permitted evidence");
     setAttentionActivity("generating", `Building ${template.manifest.name}`, request.id);
@@ -516,9 +557,12 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     const digest = await (await agentModule()).runDigestAgent(template, selected, pluginRoot);
     digestHistory.save(digest);
     attention.acknowledge(proposal.sourceIds);
-    attentionLedger.resolve("digest", proposal.reason, proposal.sourceIds, now);
+    attentionLedger.resolve("digest", proposal.reason, proposal.sourceIds, now, dueWatch?.id);
+    attentionMemory.recordDecision("digest", proposal.reason, selected, undefined, now);
+    attentionMemory.recordDigest(digest, selected);
     emit({ type: "digest", id: request.id, digest });
     emitAttention(request.id);
+    emitAttentionState(request.id);
     emitTemplateSuggestions(request.id);
     setAttentionActivity("observing", "Watching enabled sources", request.id);
   } catch (error) {
@@ -531,6 +575,37 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
       message
     });
   }
+}
+
+function evidenceForIds(ids: string[]): AttentionItem[] {
+  const byId = new Map<string, AttentionItem>();
+  for (const item of [...attention.byIds(ids), ...attentionMemory.byIds(ids)]) byId.set(item.id, item);
+  return [...byId.values()].slice(0, 100);
+}
+
+function evidenceForHandoffIds(ids: string[]): AttentionItem[] {
+  return privacy.evidenceForHandoff(evidenceForIds(ids).filter((item) => {
+    if (item.source !== "omadigest.memory") return true;
+    const provenance = (item as AttentionItem & {
+      memoryProvenance?: Array<{ source: string; app: string }>;
+    }).memoryProvenance;
+    if (!Array.isArray(provenance) || provenance.length === 0) return false;
+    return provenance.every((source) => source.source !== "notifications"
+      || privacy.modeFor(source.app) === "digest-and-handoff");
+  }));
+}
+
+function isRelatedToWatch(item: AttentionItem, watch: AttentionWatch): boolean {
+  if (watch.sourceIds.includes(item.id)) return true;
+  const subject = groupAttentionItems([item])[0]?.subject ?? "";
+  return normalizedSubject(subject) === normalizedSubject(watch.subject);
+}
+
+function normalizedSubject(value: string): string {
+  const normalized = value.trim().toLowerCase().replaceAll(/\s+/gu, " ").slice(0, 200);
+  const explicit = /\b(pr|pull request|issue|ticket|task)[-\s#]*(\d{1,9})\b/u.exec(normalized);
+  if (explicit !== null) return `${explicit[1] === "pull request" ? "pr" : explicit[1]}-${explicit[2]}`;
+  return normalized;
 }
 
 function notifyAttention(headline: string, body: string, urgency: "normal" | "critical"): Promise<void> {
@@ -581,7 +656,7 @@ configWatcher.unref();
 const sourcePoller = setInterval(() => scheduleAttentionCycle("source-event", 1_000), 5 * 60_000);
 sourcePoller.unref();
 const followUpPoller = setInterval(() => {
-  if (attentionLedger.due().length > 0) scheduleAttentionCycle("follow-up", 1_000);
+  for (const watch of attentionLedger.due()) scheduleAttentionCycle("follow-up", 1_000, watch.id);
 }, 30_000);
 followUpPoller.unref();
 const startupReview = setTimeout(() => scheduleAttentionCycle("startup", 1_000), 30_000);
@@ -596,10 +671,15 @@ async function reloadFileBackedConfiguration(): Promise<void> {
     const filtered = privacy.filter(item);
     return filtered === undefined ? undefined : classifyAttentionItem(filtered);
   });
+  attentionMemory.applyNotificationPolicy((app) => {
+    const mode = privacy.modeFor(app);
+    return mode === "digest" || mode === "digest-and-handoff";
+  });
   emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
   emit({ type: "integrations", id: "config-watch", integrations: publicIntegrations() });
   emit({ type: "privacy", id: "config-watch", policy: privacy.status() });
   emitAttention("config-watch");
+  emitAttentionState("config-watch");
   emitTemplateSuggestions("config-watch");
 }
 
@@ -653,6 +733,7 @@ async function handle(raw: string): Promise<boolean> {
     });
     emitAttention("initialize");
     emit({ type: "attention_activity", id: "initialize", activity: attentionActivity });
+    emitAttentionState("initialize");
     void checkReleaseUpdate("initialize", false);
     return true;
   }
@@ -690,8 +771,13 @@ async function handle(raw: string): Promise<boolean> {
         const filtered = privacy.filter(item);
         return filtered === undefined ? undefined : classifyAttentionItem(filtered);
       });
+      attentionMemory.applyNotificationPolicy((app) => {
+        const mode = privacy.modeFor(app);
+        return mode === "digest" || mode === "digest-and-handoff";
+      });
       emit({ type: "privacy", id: command.id, policy: privacy.status() });
       emitAttention(command.id);
+      emitAttentionState(command.id);
       emitTemplateSuggestions(command.id);
     } catch (error) {
       emit({ type: "error", id: command.id, code: "privacy_invalid", message: error instanceof Error ? error.message : "Privacy settings could not be saved." });
@@ -764,7 +850,7 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_ingest") {
     try {
-      const ingested = attention.ingestWithResult(command.items.filter((item) =>
+      const ingested = ingestAttentionItems(command.items.filter((item) =>
         item.app.trim().toLowerCase() !== "omadigest").flatMap((item) => {
         const presented = privacy.filter(item);
         return presented === undefined ? [] : [classifyAttentionItem(presented)];
@@ -780,7 +866,7 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_refresh_notifications") {
     try {
-      const ingested = attention.ingestWithResult(readOmarchyNotificationHistory().filter((item) =>
+      const ingested = ingestAttentionItems(readOmarchyNotificationHistory().filter((item) =>
         item.app.trim().toLowerCase() !== "omadigest").flatMap((item) => {
         const presented = privacy.filter(item);
         return presented === undefined ? [] : [classifyAttentionItem(presented)];
@@ -817,6 +903,19 @@ async function handle(raw: string): Promise<boolean> {
     return true;
   }
 
+  if (command.type === "attention_watch_cancel") {
+    const watch = attentionLedger.cancel(command.watchId);
+    if (watch === undefined) {
+      emit({ type: "error", id: command.id, code: "watch_unavailable", message: "That attention watch is no longer active." });
+      return true;
+    }
+    attentionMemory.recordOutcome("cancelled", watch.subject, watch.sourceIds);
+    emitAttentionState(command.id);
+    setAttentionActivity(attentionLedger.active().length > 0 ? "holding" : "observing",
+      attentionLedger.active().length > 0 ? "Waiting on active watches" : "Watching enabled sources", command.id);
+    return true;
+  }
+
   if (command.type === "attention_wake") {
     requestAttentionCycle({
       id: command.id, reason: command.reason,
@@ -833,10 +932,20 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "digest_history" || command.type === "digest_mark_read"
     || command.type === "digest_delete" || command.type === "digest_clear") {
-    if (command.type === "digest_mark_read") digestHistory.markRead(command.digestId);
-    else if (command.type === "digest_delete") digestHistory.delete(command.digestId);
-    else if (command.type === "digest_clear") digestHistory.clear();
+    if (command.type === "digest_mark_read") {
+      const digest = digestHistory.get(command.digestId);
+      digestHistory.markRead(command.digestId);
+      if (digest !== undefined) attentionMemory.recordOutcome("read", digest.title,
+        digest.sections.flatMap((section) => section.entries.flatMap((entry) => entry.sourceIds)), digest.id);
+    } else if (command.type === "digest_delete") {
+      digestHistory.delete(command.digestId);
+      attentionMemory.deleteDigest(command.digestId);
+    } else if (command.type === "digest_clear") {
+      digestHistory.clear();
+      attentionMemory.clearDigests();
+    }
     emit({ type: "digest_history", id: command.id, digests: digestHistory.list() });
+    emitAttentionState(command.id);
     return true;
   }
 
@@ -845,10 +954,11 @@ async function handle(raw: string): Promise<boolean> {
       const deleteAll = command.target === "all";
       if (deleteAll || command.target === "digest-history") {
         digestHistory.clear();
+        attentionMemory.clearDigests();
         emit({ type: "digest_history", id: command.id, digests: [] });
       }
-      if (deleteAll) { attention.clear(); attentionLedger.clear(); }
-      else if (command.target === "notification-history") attention.clearNotifications();
+      if (deleteAll) { attention.clear(); attentionLedger.clear(); attentionMemory.clear(); }
+      else if (command.target === "notification-history") { attention.clearNotifications(); attentionMemory.clearNotifications(); }
       if (command.target === "notification-history") attentionLedger.clear();
       if (deleteAll || command.target === "notification-history") {
         nativeSourceStore.clear();
@@ -873,6 +983,7 @@ async function handle(raw: string): Promise<boolean> {
       configFingerprint = configurationFingerprint(configRoot);
       emit({ type: "data_deleted", id: command.id, target: command.target });
       if (deleteAll || command.target === "notification-history") emitAttention(command.id);
+      if (deleteAll || command.target === "notification-history" || command.target === "digest-history") emitAttentionState(command.id);
       if (deleteAll || command.target === "notification-history" || command.target === "templates") emitTemplateSuggestions(command.id);
     } catch (error) {
       emit({
@@ -909,7 +1020,7 @@ async function handle(raw: string): Promise<boolean> {
           nativeSourceState
         )
       ]);
-      attention.ingest([...connectorItems, ...nativeItems].map(classifyAttentionItem));
+      ingestAttentionItems([...connectorItems, ...nativeItems].map(classifyAttentionItem));
       safeContext = enrichedGenerationContext(command.context, attention.pending(200));
       if (command.templateId === undefined) {
         const refinedId = selectTemplate(templates, safeContext).templateId;
@@ -944,9 +1055,11 @@ async function handle(raw: string): Promise<boolean> {
       emit({ type: "digest_state", id: command.id, state: "working", templateId: selectedId });
       const digest = await (await agentModule()).runDigestAgent(template, items, pluginRoot);
       digestHistory.save(digest);
+      attentionMemory.recordDigest(digest, items);
       attention.acknowledge(items.map((item) => item.id));
       emit({ type: "digest", id: command.id, digest });
       emitAttention(command.id);
+      emitAttentionState(command.id);
       emitTemplateSuggestions(command.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Digest generation failed.";
@@ -1146,13 +1259,15 @@ async function handle(raw: string): Promise<boolean> {
       return true;
     }
     try {
-      const evidence = privacy.evidenceForHandoff(attention.byIds(entry.sourceIds));
+      const evidence = evidenceForHandoffIds(entry.sourceIds);
       if (evidence.length === 0) {
         emit({ type: "error", id: command.id, code: "handoff_evidence_unavailable", message: "This item has no content permitted for an agent handoff." });
         return true;
       }
       await launchClaimedDefaultAgent(formatDigestHandoff(digest.title, section.title, entry.headline,
         entry.explanation, evidence));
+      attentionMemory.recordOutcome("handoff", entry.headline, entry.sourceIds, digest.id);
+      emitAttentionState(command.id);
       emit({ type: "handoff", id: command.id, state: "launched", target: "default-agent" });
     } catch {
       emit({ type: "error", id: command.id, code: "handoff_failed", message: "The default Omarchy agent could not be launched." });

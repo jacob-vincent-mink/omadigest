@@ -42,10 +42,12 @@ OmaDigest has three trigger paths:
 3. **Native events** — react to configured power, battery, network, and Herdr transitions.
 4. **DND ended** — review what changed when Do Not Disturb ends.
 5. **Daily schedule** — run the optional local `HH:MM` review once per day.
-6. **Safe follow-up** — revisit evidence the attention agent deliberately held, within broker-owned limits.
+6. **Conditional watch** — revisit held evidence when a related update arrives, a cited source changes, or the broker-owned deadline expires.
 7. **Manual** — press **+** to check all sources and require a digest now.
 
-The panel's compact activity strip shows whether OmaDigest is checking sources, weighing evidence, holding related updates, generating, or surfacing an alert. Automatic reviews are rate-limited and daily-budgeted. The model cannot create its own timer or call notification, shell, filesystem, browser, or connector tools.
+The panel's compact activity strip shows whether OmaDigest is checking sources, weighing evidence, holding related updates, generating, or surfacing an alert. Active watches list their subject, wake conditions, deadline, and a cancel action. Automatic reviews are rate-limited and daily-budgeted. The model cannot create its own timer or call notification, shell, filesystem, browser, or connector tools.
+
+Before deciding, the attention agent receives a bounded time-decayed view of its recent episodes and may make up to four read-only searches or zoom into a coarse summary. Recalled history remains cited data, and the final action must include current evidence. This lets OmaDigest compare an evolving PR, meeting, incident, or agent task with what it previously saw without replaying its full history into every model call.
 
 The broker applies privacy, bounds the input, gathers enabled integration context, and filters templates by their compiled eligibility policy. The attention agent may choose among those eligible templates; the broker rejects unavailable or ineligible IDs. Successful generation marks only the cited input seen while retaining permitted evidence for later correlation.
 
@@ -97,7 +99,7 @@ Read-aloud controls appear only after a TTS adapter is configured under **Settin
 
 ```text
 ${XDG_CONFIG_HOME:-~/.config}/omadigest/   policy, templates, integrations, setup, enablement
-${XDG_STATE_HOME:-~/.local/state}/omadigest/ attention segments and digest history
+${XDG_STATE_HOME:-~/.local/state}/omadigest/ attention segments, progressive memory, watches, and digest history
 ```
 
 Provider authentication and secrets are intentionally not part of the editable configuration tree. See [configuration](configuration.md) for the complete file contract.

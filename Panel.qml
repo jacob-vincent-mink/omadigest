@@ -96,6 +96,16 @@ Panel {
     return minutes < 60 ? "Next review in " + minutes + "m" : "Next review around " + due.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
   }
 
+  function watchDetailText(watch) {
+    var conditions = watch && watch.wakeOn ? watch.wakeOn : []
+    var labels = []
+    if (conditions.indexOf("new-evidence") >= 0) labels.push("related update")
+    if (conditions.indexOf("source-change") >= 0) labels.push("status change")
+    var due = new Date(String(watch && watch.dueAt || ""))
+    if (!isNaN(due.getTime())) labels.push("by " + due.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))
+    return labels.join(" · ")
+  }
+
   function dataDeletionPrompt(target) {
     if (target === "digest-history") return "Delete every digest saved by OmaDigest? This cannot be undone."
     if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
@@ -235,6 +245,8 @@ Panel {
   function attentionSummaryText() {
     var available = root.attentionAvailableCount
     if (available > 0) return available + (available === 1 ? " attention item" : " attention items")
+    var followUps = (OmaDigest.OmaDigestStore.attentionWatches || []).length
+    if (followUps > 0) return followUps + (followUps === 1 ? " follow-up" : " follow-ups")
     return "All quiet"
   }
 
@@ -983,63 +995,119 @@ Panel {
             Rectangle {
               id: attentionActivityCard
               width: parent.width
-              height: activityRow.implicitHeight + Style.space(18)
+              height: attentionActivityContent.implicitHeight + Style.space(18)
               radius: Style.cornerRadius
               visible: ["checking", "deliberating", "holding", "generating", "notifying", "error"]
                 .indexOf(String(OmaDigest.OmaDigestStore.attentionActivity.state || "")) >= 0
+                || (OmaDigest.OmaDigestStore.attentionWatches || []).length > 0
               color: Util.alpha(Color.accent, 0.08)
               border.width: Style.spacing.hairline
               border.color: Util.alpha(Color.accent, 0.42)
 
-              Row {
-                id: activityRow
+              Column {
+                id: attentionActivityContent
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.margins: Style.space(9)
-                spacing: Style.space(9)
+                spacing: Style.space(7)
 
-                Rectangle {
-                  id: activityPulse
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: Style.space(8)
-                  height: width
-                  radius: width / 2
-                  color: Color.accent
+                Row {
+                  id: activityRow
+                  width: parent.width
+                  spacing: Style.space(9)
 
-                  SequentialAnimation on opacity {
-                    running: attentionActivityCard.visible && root.attentionBusy
-                    loops: Animation.Infinite
-                    NumberAnimation { to: 0.28; duration: 650; easing.type: Easing.InOutCubic }
-                    NumberAnimation { to: 1; duration: 650; easing.type: Easing.InOutCubic }
+                  Rectangle {
+                    id: activityPulse
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(8)
+                    height: width
+                    radius: width / 2
+                    color: Color.accent
+
+                    SequentialAnimation on opacity {
+                      running: attentionActivityCard.visible && root.attentionBusy
+                      loops: Animation.Infinite
+                      NumberAnimation { to: 0.28; duration: 650; easing.type: Easing.InOutCubic }
+                      NumberAnimation { to: 1; duration: 650; easing.type: Easing.InOutCubic }
+                    }
+                  }
+
+                  Column {
+                    width: parent.width - activityPulse.width - Style.space(9)
+                    spacing: Style.space(2)
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(OmaDigest.OmaDigestStore.attentionActivity.message || "Watching enabled sources")
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.weight: Font.DemiBold
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      visible: text !== ""
+                      text: root.attentionNextCheckText()
+                      color: Qt.darker(root.foreground, 1.35)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.features: { "tnum": 1 }
+                      elide: Text.ElideRight
+                    }
                   }
                 }
 
-                Column {
-                  width: parent.width - activityPulse.width - Style.space(9)
-                  spacing: Style.space(2)
+                Repeater {
+                  model: (OmaDigest.OmaDigestStore.attentionWatches || []).slice(0, 3)
 
-                  Text {
-                    textFormat: Text.PlainText
+                  Row {
+                    required property var modelData
                     width: parent.width
-                    text: String(OmaDigest.OmaDigestStore.attentionActivity.message || "Watching enabled sources")
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.bodySmall
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                  }
+                    height: Math.max(watchCopy.implicitHeight, cancelWatch.implicitHeight)
+                    spacing: Style.space(7)
 
-                  Text {
-                    textFormat: Text.PlainText
-                    width: parent.width
-                    visible: text !== ""
-                    text: root.attentionNextCheckText()
-                    color: Qt.darker(root.foreground, 1.35)
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    font.features: { "tnum": 1 }
-                    elide: Text.ElideRight
+                    Column {
+                      id: watchCopy
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: parent.width - cancelWatch.width - Style.space(7)
+                      spacing: Style.space(1)
+
+                      Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        text: String(modelData.subject || modelData.reason || "Attention watch")
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                      }
+
+                      Text {
+                        textFormat: Text.PlainText
+                        width: parent.width
+                        text: root.watchDetailText(modelData)
+                        color: Qt.darker(root.foreground, 1.35)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                      }
+                    }
+
+                    PanelActionButton {
+                      id: cancelWatch
+                      anchors.verticalCenter: parent.verticalCenter
+                      iconText: "×"
+                      tooltipText: "Stop watching"
+                      foreground: root.foreground
+                      fontFamily: root.fontFamily
+                      onClicked: OmaDigest.OmaDigestStore.cancelAttentionWatch(String(modelData.id || ""))
+                    }
                   }
                 }
               }

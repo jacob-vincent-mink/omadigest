@@ -79,18 +79,43 @@ export type TemplateSuggestion = {
 };
 
 export type AttentionProposal =
-  | { action: "hold"; reason: string; sourceIds: string[]; followUpMinutes: number }
+  | { action: "hold"; reason: string; sourceIds: string[]; subject: string; wakeOn: AttentionWatchCondition[]; followUpMinutes: number }
   | { action: "digest"; reason: string; sourceIds: string[]; templateId: string }
   | { action: "notify"; reason: string; sourceIds: string[]; headline: string; body: string; urgency: "normal" | "critical" };
+
+export type AttentionWatchCondition = "new-evidence" | "source-change" | "deadline";
 
 export type AttentionWatch = {
   id: string;
   reason: string;
+  subject: string;
   sourceIds: string[];
+  wakeOn: AttentionWatchCondition[];
   createdAt: string;
   dueAt: string;
   expiresAt: string;
   attempts: number;
+};
+
+export type AttentionMemoryKind = "evidence" | "decision" | "digest" | "outcome";
+
+export type AttentionMemoryNode = {
+  id: string;
+  kind: "episode" | "summary";
+  episodeKinds: AttentionMemoryKind[];
+  subject: string;
+  summary: string;
+  from: string;
+  to: string;
+  episodeCount: number;
+  sourceIds: string[];
+};
+
+export type AttentionMemoryStatus = {
+  episodeCount: number;
+  summaryCount: number;
+  oldestAt?: string;
+  newestAt?: string;
 };
 
 export type AttentionActivity = {
@@ -250,6 +275,7 @@ export type BrokerCommand =
   | { type: "attention_acknowledge"; id: string; itemIds: string[] }
   | { type: "attention_acknowledge_all"; id: string }
   | { type: "attention_focus"; id: string; active: boolean }
+  | { type: "attention_watch_cancel"; id: string; watchId: string }
   | { type: "attention_wake"; id: string; reason: GenerationTrigger; focusMinutes: number; minimumItems: number }
   | { type: "template_suggestion_dismiss"; id: string; suggestionId: string }
   | { type: "digest_generate"; id: string; templateId?: string; context: GenerationContext }
@@ -286,6 +312,7 @@ export type BrokerEvent =
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
   | { type: "attention"; id: string; digestibleCount: number; acknowledgedIds: string[] }
   | { type: "attention_activity"; id: string; activity: AttentionActivity }
+  | { type: "attention_state"; id: string; watches: AttentionWatch[]; memory: AttentionMemoryStatus }
   | { type: "template_suggestions"; id: string; suggestions: TemplateSuggestion[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest_skipped"; id: string; reason: string }

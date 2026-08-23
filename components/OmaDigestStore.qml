@@ -51,6 +51,8 @@ Scope {
   property string digestState: "idle"
   property int attentionCount: 0
   property var attentionActivity: ({ state: "observing", message: "Watching enabled sources", heldCount: 0, dailyDeliberations: 0, dailyLimit: 24 })
+  property var attentionWatches: []
+  property var attentionMemory: ({ episodeCount: 0, summaryCount: 0 })
   readonly property bool attentionBusy: ["checking", "deliberating", "generating", "notifying"].indexOf(String(attentionActivity.state || "")) >= 0
   property var acknowledgedAttention: ({})
   property var agentConnection: ({ connected: false, provider: "", model: "" })
@@ -250,6 +252,12 @@ Scope {
 
   function setAttentionFocus(active) {
     send({ type: "attention_focus", id: "attention-focus-" + nextId++, active: active === true })
+  }
+
+  function cancelAttentionWatch(watchId) {
+    var target = String(watchId || "")
+    if (!target) return
+    send({ type: "attention_watch_cancel", id: "attention-watch-" + nextId++, watchId: target })
   }
 
   function wakeAttention(reason, focusMinutes, minimumItems) {
@@ -506,6 +514,11 @@ Scope {
       if (activityMessage) status = activityMessage
       return
     }
+    if (event.type === "attention_state") {
+      attentionWatches = (event.watches || []).slice(0, 16)
+      attentionMemory = event.memory || ({ episodeCount: 0, summaryCount: 0 })
+      return
+    }
     if (event.type === "digest_state") {
       digestState = "working"
       status = "Building your digest…"
@@ -543,6 +556,8 @@ Scope {
       if (dataDeleteTarget === "notification-history" || dataDeleteTarget === "all") {
         attentionCount = 0
         acknowledgedAttention = ({})
+        attentionWatches = []
+        attentionMemory = ({ episodeCount: 0, summaryCount: 0 })
       }
       if (dataDeleteTarget === "integrations" || dataDeleteTarget === "all") integrationSetup = ({})
       dataDeleteRevision += 1

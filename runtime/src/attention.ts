@@ -53,7 +53,7 @@ export class AttentionStore {
     for (const item of items) {
       const existing = this.#items.get(item.id);
       if (existing !== undefined && JSON.stringify(existing) === JSON.stringify(item)) continue;
-      if (!this.#items.has(item.id)) this.#seen.delete(item.id);
+      this.#seen.delete(item.id);
       this.#items.delete(item.id);
       this.#items.set(item.id, item);
       changed.push(item);
@@ -139,7 +139,7 @@ export class AttentionStore {
   }
 
   byIds(ids: string[]): AttentionItem[] {
-    return ids.slice(0, 32).flatMap((id) => {
+    return ids.slice(0, 200).flatMap((id) => {
       const item = this.#items.get(id);
       return item === undefined ? [] : [item];
     });

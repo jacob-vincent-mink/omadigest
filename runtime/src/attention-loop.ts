@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writ
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import type { AttentionActivity, AttentionProposal, AttentionWakeReason, AttentionWatch } from "./types.js";
+import { groupAttentionItems } from "./intelligence.js";
+import type { AttentionActivity, AttentionItem, AttentionProposal, AttentionWakeReason, AttentionWatch } from "./types.js";
 
 export const ATTENTION_DAILY_LIMIT = 24;
 export const ATTENTION_MINIMUM_INTERVAL_MS = 60_000;
@@ -15,10 +16,13 @@ const WATCH_RETENTION_MS = 48 * 60 * 60 * 1_000;
 
 const sourceIdSchema = z.string().min(1).max(200);
 const reasonSchema = z.string().min(1).max(300);
+const watchConditionSchema = z.enum(["new-evidence", "source-change", "deadline"]);
 const watchSchema = z.object({
   id: z.string().uuid(),
   reason: reasonSchema,
+  subject: z.string().min(1).max(200),
   sourceIds: z.array(sourceIdSchema).min(1).max(50),
+  wakeOn: z.array(watchConditionSchema).min(1).max(3),
   createdAt: z.string().datetime(),
   dueAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
@@ -36,7 +40,7 @@ const budgetSchema = z.object({
   lastAt: z.string().datetime().optional()
 }).strict();
 const fileSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   watches: z.array(watchSchema).max(MAX_WATCHES),
   decisions: z.array(decisionSchema).max(MAX_DECISIONS),
   budget: budgetSchema
@@ -47,6 +51,7 @@ type StoredState = z.infer<typeof fileSchema>;
 
 export type ProposalValidationContext = {
   availableSourceIds: ReadonlySet<string>;
+  currentSourceIds: ReadonlySet<string>;
   availableTemplateIds: ReadonlySet<string>;
   allowHold: boolean;
   allowDigest: boolean;
@@ -58,6 +63,8 @@ const proposalSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("hold"), reason: reasonSchema,
     sourceIds: z.array(sourceIdSchema).min(1).max(50),
+    subject: z.string().min(1).max(200),
+    wakeOn: z.array(watchConditionSchema).min(1).max(3),
     followUpMinutes: z.number().int().min(1).max(ATTENTION_MAX_FOLLOW_UP_MINUTES)
   }).strict(),
   z.object({
@@ -79,6 +86,8 @@ export function validateAttentionProposal(raw: unknown, context: ProposalValidat
     throw new Error("An attention proposal cannot repeat source IDs");
   if (!proposal.sourceIds.every((id) => context.availableSourceIds.has(id)))
     throw new Error("An attention proposal referenced unavailable evidence");
+  if (!proposal.sourceIds.some((id) => context.currentSourceIds.has(id)))
+    throw new Error("An attention proposal must cite current evidence");
   if (proposal.action === "digest" && !context.availableTemplateIds.has(proposal.templateId))
     throw new Error("An attention proposal selected an unavailable template");
   if (proposal.action === "hold" && (!context.allowHold || context.manual))
@@ -104,14 +113,18 @@ export class AttentionLedger {
     this.#load(new Date());
   }
 
-  permit(reason: AttentionWakeReason, now = new Date()): { allowed: boolean; reason?: string } {
+  permit(reason: AttentionWakeReason, now = new Date()): { allowed: boolean; reason?: string; retryAfterMs?: number } {
     this.#rollBudget(now);
     if (reason !== "manual" && this.#state.budget.deliberations >= ATTENTION_DAILY_LIMIT)
       return { allowed: false, reason: "Daily attention-agent limit reached" };
     const last = Date.parse(this.#state.budget.lastAt ?? "");
     const bypassInterval = reason === "manual";
     if (!bypassInterval && Number.isFinite(last) && now.getTime() - last < ATTENTION_MINIMUM_INTERVAL_MS)
-      return { allowed: false, reason: "Waiting before another attention review" };
+      return {
+        allowed: false,
+        reason: "Waiting before another attention review",
+        retryAfterMs: ATTENTION_MINIMUM_INTERVAL_MS - (now.getTime() - last)
+      };
     return { allowed: true };
   }
 
@@ -129,7 +142,9 @@ export class AttentionLedger {
     const watch: AttentionWatch = {
       id: previous?.id ?? randomUUID(),
       reason: proposal.reason,
+      subject: proposal.subject,
       sourceIds: [...new Set(proposal.sourceIds)].slice(0, 50),
+      wakeOn: [...new Set(proposal.wakeOn)].slice(0, 3),
       createdAt: previous?.createdAt ?? now.toISOString(),
       dueAt: dueAt.toISOString(),
       expiresAt: new Date(Math.min(
@@ -156,13 +171,43 @@ export class AttentionLedger {
     return this.#state.watches.map((watch) => ({ ...watch, sourceIds: [...watch.sourceIds] }));
   }
 
+  get(id: string, now = new Date()): AttentionWatch | undefined {
+    return this.active(now).find((watch) => watch.id === id);
+  }
+
+  cancel(id: string, now = new Date()): AttentionWatch | undefined {
+    const watch = this.#state.watches.find((candidate) => candidate.id === id);
+    if (watch === undefined) return undefined;
+    this.#state.watches = this.#state.watches.filter((candidate) => candidate.id !== id);
+    this.recordDecision("hold", `cancelled: ${watch.reason}`, watch.sourceIds, now, false);
+    this.#save(now);
+    return { ...watch, sourceIds: [...watch.sourceIds], wakeOn: [...watch.wakeOn] };
+  }
+
+  matching(items: AttentionItem[], now = new Date()): Array<{ watch: AttentionWatch; sourceIds: string[] }> {
+    const active = this.active(now);
+    if (active.length === 0 || items.length === 0) return [];
+    const groups = groupAttentionItems(items);
+    return active.flatMap((watch) => {
+      const watched = new Set(watch.sourceIds);
+      const sameSource = items.filter((item) => watched.has(item.id)).map((item) => item.id);
+      const sameSubject = groups.filter((group) => normalizeSubject(group.subject) === normalizeSubject(watch.subject))
+        .flatMap((group) => group.sourceIds).filter((id) => !watched.has(id));
+      const matched = new Set<string>();
+      if (watch.wakeOn.includes("source-change")) for (const id of sameSource) matched.add(id);
+      if (watch.wakeOn.includes("new-evidence")) for (const id of sameSubject) matched.add(id);
+      return matched.size === 0 ? [] : [{ watch, sourceIds: [...matched].slice(0, 50) }];
+    }).slice(0, 4);
+  }
+
   heldIds(now = new Date()): Set<string> {
     return new Set(this.active(now).filter((watch) => Date.parse(watch.dueAt) > now.getTime()).flatMap((watch) => watch.sourceIds));
   }
 
-  resolve(action: "digest" | "notify", reason: string, sourceIds: string[], now = new Date()): void {
+  resolve(action: "digest" | "notify", reason: string, sourceIds: string[], now = new Date(), watchId?: string): void {
     const resolved = new Set(sourceIds);
-    this.#state.watches = this.#state.watches.filter((watch) => !watch.sourceIds.some((id) => resolved.has(id)));
+    this.#state.watches = this.#state.watches.filter((watch) =>
+      watch.id !== watchId && !watch.sourceIds.some((id) => resolved.has(id)));
     this.recordDecision(action, reason, sourceIds, now, false);
     this.#save(now);
   }
@@ -197,7 +242,8 @@ export class AttentionLedger {
   #load(now: Date): void {
     try {
       if (!existsSync(this.#path) || statSync(this.#path).size > MAX_STATE_BYTES) return;
-      this.#state = fileSchema.parse(JSON.parse(readFileSync(this.#path, "utf8")));
+      const raw: unknown = JSON.parse(readFileSync(this.#path, "utf8"));
+      this.#state = migrateState(raw);
       this.#prune(now);
     } catch { this.#state = emptyState(now); }
   }
@@ -227,5 +273,37 @@ export class AttentionLedger {
 }
 
 function emptyState(now: Date): StoredState {
-  return { version: 1, watches: [], decisions: [], budget: { day: now.toISOString().slice(0, 10), deliberations: 0 } };
+  return { version: 2, watches: [], decisions: [], budget: { day: now.toISOString().slice(0, 10), deliberations: 0 } };
+}
+
+function normalizeSubject(value: string): string {
+  const normalized = value.trim().toLowerCase().replaceAll(/\s+/gu, " ").slice(0, 200);
+  const explicit = /\b(pr|pull request|issue|ticket|task)[-\s#]*(\d{1,9})\b/u.exec(normalized);
+  if (explicit !== null) return `${explicit[1] === "pull request" ? "pr" : explicit[1]}-${explicit[2]}`;
+  return normalized;
+}
+
+function migrateState(raw: unknown): StoredState {
+  const current = fileSchema.safeParse(raw);
+  if (current.success) return current.data;
+  const legacy = z.object({
+    version: z.literal(1),
+    watches: z.array(z.object({
+      id: z.string().uuid(), reason: reasonSchema, sourceIds: z.array(sourceIdSchema).min(1).max(50),
+      createdAt: z.string().datetime(), dueAt: z.string().datetime(), expiresAt: z.string().datetime(),
+      attempts: z.number().int().min(1).max(ATTENTION_MAX_WATCH_ATTEMPTS)
+    }).strict()).max(MAX_WATCHES),
+    decisions: z.array(decisionSchema).max(MAX_DECISIONS),
+    budget: budgetSchema
+  }).strict().parse(raw);
+  return fileSchema.parse({
+    version: 2,
+    watches: legacy.watches.map((watch) => ({
+      ...watch,
+      subject: watch.reason.slice(0, 200),
+      wakeOn: ["deadline"]
+    })),
+    decisions: legacy.decisions,
+    budget: legacy.budget
+  });
 }
