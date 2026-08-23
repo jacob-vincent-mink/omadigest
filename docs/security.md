@@ -6,13 +6,13 @@ OmaDigest processes private notification, calendar, model, and speech data. Its 
 
 - **Quickshell UI:** presentation and bounded snapshots from public Omarchy services. It does not perform network or filesystem work.
 - **Broker:** trusted local authority for persistence, credentials, model sessions, connector processes, and validation. Provider credentials are written mode `0600` under `${XDG_CONFIG_HOME:-~/.config}/omadigest/auth.json`; OAuth URLs and prompts cross the QML boundary, but tokens do not.
-- **Pi model provider:** receives only the selected skill and bounded attention evidence for one generation.
+- **Pi model provider:** receives only bounded evidence plus the public templates or selected template needed for one ephemeral attention or digest session.
 - **Integration:** separately launched, source-specific code with user authority constrained by process options and protocol.
 - **TTS provider:** receives finalized read-mode text only.
 
 ## Prompt injection
 
-Notification and connector strings are framed as untrusted evidence. They never become system instructions, cannot add tools, and cannot select a template. Digest sessions expose only `emit_digest`; drafting sessions expose one matching emitter and `out_of_scope`.
+Notification and connector strings are framed as untrusted evidence. They never become system instructions or add tools. Attention sessions expose only the action variants currently permitted by broker policy and may select only a broker-eligible template; digest sessions expose only `emit_digest`; drafting sessions expose one matching emitter and `out_of_scope`.
 
 Structured output does not prove that model classification is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, and unsupported actions cannot execute.
 
@@ -64,6 +64,8 @@ explicit default-agent handoff can still resolve citations for correlation.
 Connector enrichment is persisted only when normalized into the attention
 store. Completed digest history is capped at the newest 30 records and supports
 individual deletion and clear-all through the broker protocol.
+
+The attention agent cannot create a timer or execute an alert. It submits one cited `hold`, `digest`, or `notify` proposal. The broker owns follow-up scheduling, template eligibility, interruption and digest thresholds, source-ID validation, execution, and acknowledgement. Automatic deliberations have a 60-second minimum interval and a 24-per-day budget; watches are capped at 16, three attempts, 24 hours per follow-up, 48 hours of life, and a 256-KiB ledger.
 
 The release checker has no model or connector authority. It contacts one compiled-in GitHub API URL, rejects redirects and non-stable tags, caps the response and single-record cache at 64 KiB, and constructs the browser URL from the validated release tag rather than accepting a remote action URL.
 

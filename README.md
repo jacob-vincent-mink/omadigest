@@ -16,11 +16,11 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2ea44f"></a>
 </p>
 
-OmaDigest is a native Omarchy attention layer and background agent. Built around a custom harness using [Pi](https://github.com/earendil-works/pi), it observes the existing notification service, applies deterministic privacy policy before persistence, optionally gathers bounded context from removable integrations, selects a user-owned briefing template, and asks a tightly scoped agent for a structured digest with source citations. When you need to focus, OmaDigest handles the feed without taking over the rest of your computer.
+OmaDigest is a native Omarchy attention layer and background agent. Built around a custom harness using [Pi](https://github.com/earendil-works/pi), it observes the existing notification service, applies deterministic privacy policy before persistence, gathers bounded context from enabled integrations, and lets a tightly scoped attention agent hold, alert on, or brief you from permitted evidence. When you need to focus, OmaDigest handles the feed without taking over the rest of your computer.
 
 It does **not** replace the notification daemon or put a general-purpose agent inside the shell.
 
-> **Status:** Beta. The release demo exercises notification intake, privacy, DND re-entry, digest generation, source controls, template suggestions and authoring, deterministic routing, and default-agent integration authoring. Dictation, scheduling, and read-aloud remain optional beta surfaces.
+> **Status:** Beta. The release demo exercises notification intake, privacy, DND re-entry, digest generation, source controls, template suggestions and authoring, and default-agent integration authoring. Dictation, scheduling, and read-aloud remain optional beta surfaces.
 
 ## Highlights
 
@@ -28,14 +28,14 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Privacy before persistence** — protected apps such as Signal start at **Ignore**; unknown apps start at **Count only**, with content erased.
 - **Citations by construction** — every factual digest entry must cite a supplied notification or connector source ID.
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
-- **Attention intelligence** — conservative subject grouping, broker-owned intent routing, signal-aware DND triggers, and safe pattern-based template suggestions make the defaults improve without granting notification text authority.
+- **Attention intelligence** — conservative subject grouping plus a bounded attention agent can hold related updates, create the right digest, or surface a time-sensitive alert without granting notification text execution authority.
 - **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
 - **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
 - **Useful sources out of the box** — native Omarchy notifications and focus state, live-tested GitHub metadata, local crash and update state, system telemetry, and Herdr agent activity.
 - **Category-level control** — keep a source enabled while turning off noisy streams such as completed tasks, network transitions, or account activity.
 - **Explicit action handoff** — send one cited digest item to the default Omarchy agent, or continue broader authoring work in Herdr.
-- **Focus re-entry** — automatically generate after DND ends, at an optional daily time, or manually from the panel.
+- **Background attention loop** — react after notification quiet windows, enabled-source polling, native events, DND re-entry, a daily schedule, or bounded follow-ups; **+** always requests a fresh digest.
 - **Voice both ways** — dictate authoring requests with Voxtype and optionally read completed digests aloud.
 - **Inspectable configuration** — privacy, templates, integrations, permissions, setup, and enablement are file-backed and hot-reloadable.
 - **Theme-native UI** — the Quickshell panel, spacing, typography, and monochrome mark follow the active Omarchy theme.
@@ -112,12 +112,13 @@ Omarchy notifications ─┐
 Enabled integrations ──┼─► privacy filter ─► bounded attention store
                        │                           │
 Quickshell panel ◄─────┘                           ▼
-       │ NDJSON                          deterministic template router
-       ▼                                           │
-TypeScript broker ─────────────────────► scoped Pi session
-       │                                           │ emit_digest only
-       ├─ Secret Service                           ▼
-       ├─ Voxtype                          validated cited digest
+       │ NDJSON                         bounded attention proposal
+       ▼                                  │ hold / digest / alert
+TypeScript broker ◄───────────────────────┘
+       ├─ bounded follow-up ledger
+       ├─ scoped digest Pi session ─────► validated cited digest
+       ├─ Secret Service
+       ├─ Voxtype
        └─ TTS provider + mpv
 ```
 
@@ -129,6 +130,7 @@ OmaDigest gives each model session only the structured submission tool needed fo
 
 | Session | Available tools |
 |---|---|
+| Attention review | `propose_attention_action` |
 | Digest generation | `emit_digest` |
 | Template drafting | `emit_template_draft`, `out_of_scope` |
 
@@ -140,7 +142,7 @@ See [Security policy](SECURITY.md) and the detailed [security model](docs/securi
 
 ## Templates and integrations
 
-A template keeps human-readable instructions beside deterministic routing policy:
+A template keeps human-readable instructions beside broker-validated eligibility and output policy:
 
 ```text
 templates/<id>/

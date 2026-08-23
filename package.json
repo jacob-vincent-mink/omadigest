@@ -1,6 +1,6 @@
 {
   "name": "omadigest",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "license": "MIT",
   "private": true,
   "repository": "github:jacob-vincent-mink/omadigest",
@@ -10,6 +10,7 @@
     "build": "node runtime/scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "eval:attention": "node runtime/scripts/evaluate-attention.mjs",
     "check": "npm run typecheck && npm run build && npm test"
   },
   "dependencies": {

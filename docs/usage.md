@@ -4,7 +4,7 @@
 
 The bar's quill opens a deliberately small digest list. The header actions are:
 
-- **+** — generate from currently available, privacy-eligible attention items;
+- **+** — check every enabled source and explicitly request a digest from privacy-eligible evidence;
 - **✓** — mark the current backlog seen without deleting policy-permitted retained evidence;
 - **Settings** — open sources, templates, privacy, connections, and retained data controls.
 
@@ -37,13 +37,17 @@ Protected private applications such as Signal start at **Ignore**. Unknown appli
 
 OmaDigest has three trigger paths:
 
-1. **Manual** — press **+** when attention items are available.
-2. **DND ended** — after Do Not Disturb ends, generate when the configured minimum item count is met.
-3. **Daily schedule** — the optional local `HH:MM` widget setting triggers once per day when enough items are available.
+1. **Notification quiet window** — review a changed batch after notifications settle.
+2. **Enabled sources** — poll connectors and native Omarchy sources in the background and review new evidence.
+3. **Native events** — react to configured power, battery, network, and Herdr transitions.
+4. **DND ended** — review what changed when Do Not Disturb ends.
+5. **Daily schedule** — run the optional local `HH:MM` review once per day.
+6. **Safe follow-up** — revisit evidence the attention agent deliberately held, within broker-owned limits.
+7. **Manual** — press **+** to check all sources and require a digest now.
 
-The broker applies privacy, bounds the input, gathers enabled integration context, and selects a template deterministically. Successful generation marks the cited input seen while retaining permitted evidence for later correlation.
+The panel's compact activity strip shows whether OmaDigest is checking sources, weighing evidence, holding related updates, generating, or surfacing an alert. Automatic reviews are rate-limited and daily-budgeted. The model cannot create its own timer or call notification, shell, filesystem, browser, or connector tools.
 
-A generation-time template override, when shown, wins over normal routing. The model never chooses its own governing template.
+The broker applies privacy, bounds the input, gathers enabled integration context, and filters templates by their compiled eligibility policy. The attention agent may choose among those eligible templates; the broker rejects unavailable or ineligible IDs. Successful generation marks only the cited input seen while retaining permitted evidence for later correlation.
 
 ## Templates
 
@@ -129,7 +133,7 @@ Open **Settings → Connections** and complete a supported authentication flow. 
 
 ### No digest is generated after DND
 
-Confirm that DND has ended, enough policy-permitted/countable items exist, and the widget's minimum item setting is met. Open OmaDigest once after installation so the bar widget is active. Manual **+** generation remains available.
+Confirm that DND has ended and at least one policy-permitted item or enabled source result exists. Check the activity strip for a held follow-up or model connection error. Manual **+** always performs a fresh source check and requires a digest when evidence is available.
 
 ### An integration is unavailable
 

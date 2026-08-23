@@ -1,6 +1,7 @@
 export const PROTOCOL_VERSION = 2;
 
 export type GenerationTrigger = "manual" | "dnd-ended" | "scheduled";
+export type AttentionWakeReason = GenerationTrigger | "notification-batch" | "source-event" | "follow-up" | "startup";
 export type AttentionIntent = "failure" | "review" | "deadline" | "meeting" | "assignment"
   | "mention" | "request" | "completion" | "system" | "update";
 
@@ -75,6 +76,30 @@ export type TemplateSuggestion = {
   applications: string[];
   intents: AttentionIntent[];
   itemCount: number;
+};
+
+export type AttentionProposal =
+  | { action: "hold"; reason: string; sourceIds: string[]; followUpMinutes: number }
+  | { action: "digest"; reason: string; sourceIds: string[]; templateId: string }
+  | { action: "notify"; reason: string; sourceIds: string[]; headline: string; body: string; urgency: "normal" | "critical" };
+
+export type AttentionWatch = {
+  id: string;
+  reason: string;
+  sourceIds: string[];
+  createdAt: string;
+  dueAt: string;
+  expiresAt: string;
+  attempts: number;
+};
+
+export type AttentionActivity = {
+  state: "idle" | "observing" | "checking" | "deliberating" | "holding" | "generating" | "notifying" | "error";
+  message: string;
+  heldCount: number;
+  nextCheckAt?: string;
+  dailyDeliberations: number;
+  dailyLimit: number;
 };
 
 export type CompiledTemplate = {
@@ -224,6 +249,8 @@ export type BrokerCommand =
   | { type: "attention_refresh_notifications"; id: string }
   | { type: "attention_acknowledge"; id: string; itemIds: string[] }
   | { type: "attention_acknowledge_all"; id: string }
+  | { type: "attention_focus"; id: string; active: boolean }
+  | { type: "attention_wake"; id: string; reason: GenerationTrigger; focusMinutes: number; minimumItems: number }
   | { type: "template_suggestion_dismiss"; id: string; suggestionId: string }
   | { type: "digest_generate"; id: string; templateId?: string; context: GenerationContext }
   | { type: "digest_history"; id: string }
@@ -258,6 +285,7 @@ export type BrokerEvent =
   | { type: "dictation"; id: string; available: boolean; state: "idle" | "recording" | "transcribing"; transcript?: string }
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
   | { type: "attention"; id: string; digestibleCount: number; acknowledgedIds: string[] }
+  | { type: "attention_activity"; id: string; activity: AttentionActivity }
   | { type: "template_suggestions"; id: string; suggestions: TemplateSuggestion[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest_skipped"; id: string; reason: string }

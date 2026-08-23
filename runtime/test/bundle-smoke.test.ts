@@ -18,8 +18,8 @@ describe("checked-in broker bundle", () => {
     writeFileSync(join(releaseDirectory, "release-update.json"), JSON.stringify({
       version: 1,
       checkedAt: new Date().toISOString(),
-      latestVersion: "0.1.4",
-      releaseUrl: "https://github.com/jacob-vincent-mink/omadigest/releases/tag/v0.1.4"
+      latestVersion: "0.1.5",
+      releaseUrl: "https://github.com/jacob-vincent-mink/omadigest/releases/tag/v0.1.5"
     }));
 
     const child = spawn(process.execPath, [resolve("runtime/dist/omadigest-broker.mjs")], {
@@ -44,6 +44,7 @@ describe("checked-in broker bundle", () => {
       JSON.stringify({ type: "initialize", protocolVersion: 2 }),
       JSON.stringify({ type: "privacy_set_rule", id: "privacy-set", app: "Test App", mode: "digest" }),
       JSON.stringify({ type: "privacy_delete_rule", id: "privacy-delete", app: "Test App" }),
+      JSON.stringify({ type: "attention_focus", id: "focus-on", active: true }),
       JSON.stringify({ type: "template_delete", id: "template-delete", templateId: "general" }),
       JSON.stringify({ type: "shutdown" }),
       ""
@@ -69,6 +70,10 @@ describe("checked-in broker bundle", () => {
       type: "ready",
       protocolVersion: 2,
       privacy: { defaultMode: "count-only" }
+    });
+    expect(events.find((event) => event.id === "focus-on")).toMatchObject({
+      type: "attention_activity",
+      activity: { state: "holding", message: "Holding updates while you focus" }
     });
     expect(events.find((event) => event.id === "privacy-delete")).toMatchObject({
       type: "privacy",

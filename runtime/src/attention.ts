@@ -42,9 +42,13 @@ export class AttentionStore {
   }
 
   ingest(rawItems: AttentionItem[]): number {
+    return this.ingestWithResult(rawItems).total;
+  }
+
+  ingestWithResult(rawItems: AttentionItem[]): { total: number; changedIds: string[] } {
     const items = z.array(attentionItemSchema).max(200).parse(rawItems).filter((item) =>
       item.source !== "notifications" || this.#notificationClearedAt === "" || item.occurredAt > this.#notificationClearedAt);
-    if (items.length === 0) return this.#items.size;
+    if (items.length === 0) return { total: this.#items.size, changedIds: [] };
     const changed: AttentionItem[] = [];
     for (const item of items) {
       const existing = this.#items.get(item.id);
@@ -54,7 +58,7 @@ export class AttentionStore {
       this.#items.set(item.id, item);
       changed.push(item);
     }
-    if (changed.length === 0) return this.#items.size;
+    if (changed.length === 0) return { total: this.#items.size, changedIds: [] };
     this.#trimMemory();
     mkdirSync(this.#eventsDir, { recursive: true, mode: 0o700 });
     const day = new Date().toISOString().slice(0, 10);
@@ -67,7 +71,7 @@ export class AttentionStore {
     else this.#writeBoundedSegment(path, [...this.#items.values()]);
     chmodSync(path, 0o600);
     this.#pruneFiles();
-    return this.#items.size;
+    return { total: this.#items.size, changedIds: changed.map((item) => item.id) };
   }
 
   recent(limit: number): AttentionItem[] {

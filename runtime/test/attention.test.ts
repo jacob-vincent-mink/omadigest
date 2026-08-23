@@ -39,6 +39,17 @@ describe("AttentionStore", () => {
     expect(readFileSync(segment, "utf8").trim().split("\n")).toHaveLength(1);
   });
 
+  it("reports only changed source IDs so wakeups can be coalesced", () => {
+    const attention = store();
+    const item = {
+      id: "notification:stable", source: "notifications", app: "GitHub", title: "Review requested", body: "PR #42",
+      urgency: "normal" as const, occurredAt: "2026-08-20T10:00:00.000Z"
+    };
+    expect(attention.ingestWithResult([item]).changedIds).toEqual([item.id]);
+    expect(attention.ingestWithResult([item]).changedIds).toEqual([]);
+    expect(attention.ingestWithResult([{ ...item, body: "PR #42 approved" }]).changedIds).toEqual([item.id]);
+  });
+
   it("compacts attention persistence below the hard segment byte limit", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-attention-budget-"));
     roots.push(root);

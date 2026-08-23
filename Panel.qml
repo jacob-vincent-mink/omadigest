@@ -28,6 +28,7 @@ Panel {
   readonly property bool updateAvailable: String(releaseUpdate.state || "") === "available"
     && releaseUpdate.dismissed !== true
   readonly property bool demoIpcEnabled: Quickshell.env("OMADIGEST_DEMO_IPC") === "1"
+  readonly property bool attentionBusy: OmaDigest.OmaDigestStore.attentionBusy
 
   property string page: "list"
   property string digestTab: "unread"
@@ -53,7 +54,6 @@ Panel {
   })
   property double dndStartedAt: 0
   property string lastScheduledDay: ""
-  property var pendingAutomaticGeneration: null
   property string pendingDataDeletion: ""
 
   onSelectedTemplateChanged: templateEditMode = "view"
@@ -86,6 +86,15 @@ Panel {
   }
   function toggle() { root.opened ? close() : open() }
   function closeForPopoutSwitch() { root.controller.hide() }
+  function boundedIpc(value, maximum) { return String(value || "").slice(0, maximum) }
+  function attentionNextCheckText() {
+    var raw = String(OmaDigest.OmaDigestStore.attentionActivity.nextCheckAt || "")
+    if (!raw) return ""
+    var due = new Date(raw)
+    if (isNaN(due.getTime())) return ""
+    var minutes = Math.max(1, Math.round((due.getTime() - Date.now()) / 60000))
+    return minutes < 60 ? "Next review in " + minutes + "m" : "Next review around " + due.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+  }
 
   function dataDeletionPrompt(target) {
     if (target === "digest-history") return "Delete every digest saved by OmaDigest? This cannot be undone."
@@ -323,21 +332,15 @@ Panel {
 
   function generateDigest(trigger, focusMinutes) {
     var items = root.currentAttentionItems()
-    if (root.attentionAvailableCount <= 0 || OmaDigest.OmaDigestStore.digestState === "working") return
+    if (root.attentionBusy) return
     if (items.length > 0) OmaDigest.OmaDigestStore.ingest(items)
-    OmaDigest.OmaDigestStore.generateDigest(root.generationContext(trigger || "manual", focusMinutes || 0), "")
+    OmaDigest.OmaDigestStore.wakeAttention(trigger || "manual", focusMinutes || 0,
+      Math.max(1, Number(root.setting("minimumItems", 3)) || 3))
   }
 
   function requestAutomaticGeneration(trigger, focusMinutes) {
-    root.pendingAutomaticGeneration = { trigger: trigger, focusMinutes: focusMinutes }
-    OmaDigest.OmaDigestStore.refreshNotificationHistory()
-  }
-
-  function completeAutomaticGeneration() {
-    var pending = root.pendingAutomaticGeneration
-    root.pendingAutomaticGeneration = null
-    if (!pending || root.attentionAvailableCount <= 0) return
-    root.generateDigest(pending.trigger, pending.focusMinutes)
+    OmaDigest.OmaDigestStore.wakeAttention(trigger, focusMinutes,
+      Math.max(1, Number(root.setting("minimumItems", 3)) || 3))
   }
 
   Connections {
@@ -346,8 +349,10 @@ Panel {
       if (!root.notificationService) return
       if (root.notificationService.doNotDisturb) {
         root.dndStartedAt = Date.now()
+        OmaDigest.OmaDigestStore.setAttentionFocus(true)
         return
       }
+      OmaDigest.OmaDigestStore.setAttentionFocus(false)
       if (root.dndStartedAt <= 0) return
       var focusMinutes = Math.round((Date.now() - root.dndStartedAt) / 60000)
       root.dndStartedAt = 0
@@ -357,6 +362,12 @@ Panel {
 
   Connections {
     target: OmaDigest.OmaDigestStore
+    function onReadyChanged() {
+      if (!OmaDigest.OmaDigestStore.ready) return
+      var focusing = root.notificationService && root.notificationService.doNotDisturb === true
+      if (focusing && root.dndStartedAt <= 0) root.dndStartedAt = Date.now()
+      OmaDigest.OmaDigestStore.setAttentionFocus(focusing)
+    }
     function onDigestChanged() {
       if (!OmaDigest.OmaDigestStore.digest) return
       root.page = "detail"
@@ -397,28 +408,12 @@ Panel {
     }
   }
 
-  Timer {
-    id: automaticGenerationTimer
-    interval: 1000
-    repeat: false
-    onTriggered: root.completeAutomaticGeneration()
-  }
-
-  Connections {
-    target: OmaDigest.OmaDigestStore
-    function onAttentionRefreshed() {
-      if (root.pendingAutomaticGeneration) automaticGenerationTimer.restart()
-    }
-  }
-
   // Navigation and content-free status remain public. Demo mutations are
   // available only when the shell was explicitly started in demo IPC mode.
   IpcHandler {
     target: "omadigest"
 
     function demoGuard(): string { return root.demoIpcEnabled ? "" : "disabled" }
-    function bounded(value, maximum): string { return String(value || "").slice(0, maximum) }
-
     function open(): string { root.open(); return "ok" }
     function close(): string { root.close(); return "ok" }
 
@@ -464,7 +459,7 @@ Panel {
     }
 
     function showSource(integrationId: string): string {
-      var wanted = bounded(integrationId, 128)
+      var wanted = root.boundedIpc(integrationId, 128)
       var available = root.omarchySources().concat(root.connectedServiceSources())
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id || "") !== wanted) continue
@@ -479,7 +474,7 @@ Panel {
 
     function previewDataDeletion(target: string): string {
       if (demoGuard()) return demoGuard()
-      var requested = bounded(target, 32)
+      var requested = root.boundedIpc(target, 32)
       if (["digest-history", "notification-history", "integrations", "templates", "all"].indexOf(requested) < 0)
         return "invalid"
       root.settingsPage = "data"
@@ -491,8 +486,8 @@ Panel {
 
     function startDraft(kind: string, request: string): string {
       if (demoGuard()) return demoGuard()
-      var requestedKind = bounded(kind, 20) === "integration" ? "integration" : "template"
-      var boundedRequest = bounded(request, 20000)
+      var requestedKind = root.boundedIpc(kind, 20) === "integration" ? "integration" : "template"
+      var boundedRequest = root.boundedIpc(request, 20000)
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
       root.open()
@@ -512,8 +507,8 @@ Panel {
 
     function prepareDraft(kind: string, request: string): string {
       if (demoGuard()) return demoGuard()
-      var requestedKind = bounded(kind, 20) === "integration" ? "integration" : "template"
-      var boundedRequest = bounded(request, 20000)
+      var requestedKind = root.boundedIpc(kind, 20) === "integration" ? "integration" : "template"
+      var boundedRequest = root.boundedIpc(request, 20000)
       root.preparedDraftKind = requestedKind
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       root.page = "settings"
@@ -533,7 +528,7 @@ Panel {
 
     function submitDraft(kind: string): string {
       if (demoGuard()) return demoGuard()
-      if (bounded(kind, 20) === "integration") integrationDraftEditor.submit()
+      if (root.boundedIpc(kind, 20) === "integration") integrationDraftEditor.submit()
       else templateDraftEditor.submit()
       return "ok"
     }
@@ -548,7 +543,7 @@ Panel {
 
     function showDraft(kind: string): string {
       if (demoGuard()) return demoGuard()
-      var requestedKind = bounded(kind, 20) === "integration" ? "integration" : "template"
+      var requestedKind = root.boundedIpc(kind, 20) === "integration" ? "integration" : "template"
       root.settingsPage = requestedKind === "integration" ? "integrations" : "templates"
       if (requestedKind === "integration") root.sourcesView = "authoring"
       else {
@@ -569,7 +564,7 @@ Panel {
     }
 
     function showTemplate(templateId: string): string {
-      var wanted = bounded(templateId, 64)
+      var wanted = root.boundedIpc(templateId, 64)
       var available = OmaDigest.OmaDigestStore.templates || []
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id) !== wanted) continue
@@ -597,15 +592,15 @@ Panel {
     function setupIntegration(integrationId: string, valuesJson: string): string {
       if (demoGuard()) return demoGuard()
       try {
-        var rawValues = bounded(valuesJson || "{}", 65536)
-        OmaDigest.OmaDigestStore.setupIntegration(bounded(integrationId, 128), JSON.parse(rawValues))
+        var rawValues = root.boundedIpc(valuesJson || "{}", 65536)
+        OmaDigest.OmaDigestStore.setupIntegration(root.boundedIpc(integrationId, 128), JSON.parse(rawValues))
         return "ok"
       } catch (error) { return "invalid-json" }
     }
 
     function setupIntegrationDefaults(integrationId: string): string {
       if (demoGuard()) return demoGuard()
-      var wanted = bounded(integrationId, 128)
+      var wanted = root.boundedIpc(integrationId, 128)
       var available = OmaDigest.OmaDigestStore.integrations || []
       for (var index = 0; index < available.length; index++) {
         if (String(available[index].id) !== wanted) continue
@@ -625,19 +620,19 @@ Panel {
 
     function enableIntegration(integrationId: string): string {
       if (demoGuard()) return demoGuard()
-      OmaDigest.OmaDigestStore.setIntegrationEnabled(bounded(integrationId, 128), true)
+      OmaDigest.OmaDigestStore.setIntegrationEnabled(root.boundedIpc(integrationId, 128), true)
       return "ok"
     }
 
     function checkIntegration(integrationId: string): string {
       if (demoGuard()) return demoGuard()
-      OmaDigest.OmaDigestStore.checkIntegrationStatus(bounded(integrationId, 128))
+      OmaDigest.OmaDigestStore.checkIntegrationStatus(root.boundedIpc(integrationId, 128))
       return "ok"
     }
 
     function previewRoute(application: string): string {
       if (demoGuard()) return demoGuard()
-      var app = bounded(application, 120).trim()
+      var app = root.boundedIpc(application, 120).trim()
       if (!app) return "invalid"
       var counts = {}
       counts[app] = 1
@@ -816,8 +811,9 @@ Panel {
                 textFormat: Text.PlainText
                 width: parent.width
                 text: root.page === "list"
-                  ? (OmaDigest.OmaDigestStore.digestState === "working"
-                    ? "Generating a digest…" : root.attentionSummaryText())
+                  ? (root.attentionBusy
+                    ? String(OmaDigest.OmaDigestStore.attentionActivity.message || "Reviewing attention…")
+                    : root.attentionSummaryText())
                   : root.page === "settings" ? "Sources, privacy, connections, and retained data" : ""
                 visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
@@ -848,13 +844,13 @@ Panel {
 
               PanelActionButton {
                 visible: root.page === "list"
-                iconText: OmaDigest.OmaDigestStore.digestState === "working" ? "…" : "+"
-                tooltipText: root.attentionAvailableCount > 0 ? "Generate a new digest"
-                  : "Nothing new to digest"
+                iconText: root.attentionBusy ? "…" : "+"
+                tooltipText: root.attentionAvailableCount > 0 ? "Review attention and build a digest"
+                  : "Check enabled sources and build a digest"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
-                enabled: root.attentionAvailableCount > 0 && OmaDigest.OmaDigestStore.digestState !== "working"
-                opacity: enabled || OmaDigest.OmaDigestStore.digestState === "working" ? 1 : 0.35
+                enabled: OmaDigest.OmaDigestStore.ready && !root.attentionBusy
+                opacity: enabled || root.attentionBusy ? 1 : 0.35
                 onClicked: root.generateDigest("manual", 0)
               }
 
@@ -983,6 +979,71 @@ Panel {
             width: parent.width
             visible: root.page === "list"
             spacing: Style.space(8)
+
+            Rectangle {
+              id: attentionActivityCard
+              width: parent.width
+              height: activityRow.implicitHeight + Style.space(18)
+              radius: Style.cornerRadius
+              visible: ["checking", "deliberating", "holding", "generating", "notifying", "error"]
+                .indexOf(String(OmaDigest.OmaDigestStore.attentionActivity.state || "")) >= 0
+              color: Util.alpha(Color.accent, 0.08)
+              border.width: Style.spacing.hairline
+              border.color: Util.alpha(Color.accent, 0.42)
+
+              Row {
+                id: activityRow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.margins: Style.space(9)
+                spacing: Style.space(9)
+
+                Rectangle {
+                  id: activityPulse
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(8)
+                  height: width
+                  radius: width / 2
+                  color: Color.accent
+
+                  SequentialAnimation on opacity {
+                    running: attentionActivityCard.visible && root.attentionBusy
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.28; duration: 650; easing.type: Easing.InOutCubic }
+                    NumberAnimation { to: 1; duration: 650; easing.type: Easing.InOutCubic }
+                  }
+                }
+
+                Column {
+                  width: parent.width - activityPulse.width - Style.space(9)
+                  spacing: Style.space(2)
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: String(OmaDigest.OmaDigestStore.attentionActivity.message || "Watching enabled sources")
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    visible: text !== ""
+                    text: root.attentionNextCheckText()
+                    color: Qt.darker(root.foreground, 1.35)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.features: { "tnum": 1 }
+                    elide: Text.ElideRight
+                  }
+                }
+              }
+            }
 
             Row {
               width: parent.width

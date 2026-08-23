@@ -91,7 +91,7 @@ BarWidget {
           size: Math.min(width, height)
           accent: button.active && button.useActiveColor ? button.activeColor : button.foreground
           active: root.opened || OmaDigest.OmaDigestStore.state === "routing"
-            || OmaDigest.OmaDigestStore.digestState === "working" || OmaDigest.OmaDigestStore.draftState === "working"
+            || OmaDigest.OmaDigestStore.attentionBusy || OmaDigest.OmaDigestStore.digestState === "working" || OmaDigest.OmaDigestStore.draftState === "working"
             || OmaDigest.OmaDigestStore.dictationState !== "idle" || OmaDigest.OmaDigestStore.tts.state !== "idle"
         }
 
@@ -125,7 +125,7 @@ BarWidget {
       }
     }
     active: root.opened || OmaDigest.OmaDigestStore.state === "routing"
-      || OmaDigest.OmaDigestStore.digestState === "working" || OmaDigest.OmaDigestStore.draftState === "working"
+      || OmaDigest.OmaDigestStore.attentionBusy || OmaDigest.OmaDigestStore.digestState === "working" || OmaDigest.OmaDigestStore.draftState === "working"
       || OmaDigest.OmaDigestStore.dictationState !== "idle" || OmaDigest.OmaDigestStore.tts.state !== "idle"
     tooltipText: root.unreadCount > 0
       ? root.unreadCount + (root.unreadCount === 1 ? " unread digest" : " unread digests")

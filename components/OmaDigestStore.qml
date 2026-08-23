@@ -50,6 +50,8 @@ Scope {
   property var digestHistory: []
   property string digestState: "idle"
   property int attentionCount: 0
+  property var attentionActivity: ({ state: "observing", message: "Watching enabled sources", heldCount: 0, dailyDeliberations: 0, dailyLimit: 24 })
+  readonly property bool attentionBusy: ["checking", "deliberating", "generating", "notifying"].indexOf(String(attentionActivity.state || "")) >= 0
   property var acknowledgedAttention: ({})
   property var agentConnection: ({ connected: false, provider: "", model: "" })
   property var authMethods: []
@@ -244,6 +246,20 @@ Scope {
 
   function acknowledgeAllAttention() {
     send({ type: "attention_acknowledge_all", id: "attention-" + nextId++ })
+  }
+
+  function setAttentionFocus(active) {
+    send({ type: "attention_focus", id: "attention-focus-" + nextId++, active: active === true })
+  }
+
+  function wakeAttention(reason, focusMinutes, minimumItems) {
+    clearError()
+    send({
+      type: "attention_wake", id: "attention-wake-" + nextId++,
+      reason: String(reason || "manual"),
+      focusMinutes: Math.max(0, Math.min(1440, Number(focusMinutes) || 0)),
+      minimumItems: Math.max(1, Math.min(200, Number(minimumItems) || 3))
+    })
   }
 
   function requestDigestHistory() { send({ type: "digest_history", id: "history-" + nextId++ }) }
@@ -482,6 +498,12 @@ Scope {
       for (var index = 0; index < ids.length; index++) nextAcknowledged[String(ids[index])] = true
       acknowledgedAttention = nextAcknowledged
       root.attentionRefreshed()
+      return
+    }
+    if (event.type === "attention_activity") {
+      attentionActivity = event.activity || attentionActivity
+      var activityMessage = String(attentionActivity.message || "")
+      if (activityMessage) status = activityMessage
       return
     }
     if (event.type === "digest_state") {

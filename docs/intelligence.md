@@ -1,6 +1,6 @@
 # Attention intelligence
 
-OmaDigest keeps “smart” behavior split between deterministic broker policy and a narrowly scoped model. The broker decides what is safe, related, eligible, and routable. The model only names and summarizes the resulting bounded evidence.
+OmaDigest keeps judgment and authority separate. A narrowly scoped attention agent may decide whether a bounded set of evidence is worth holding, digesting, or surfacing now. The broker alone decides what evidence is permitted, which source IDs and templates exist, when a follow-up may run, and how an approved typed action is executed.
 
 ## Pipeline
 
@@ -9,11 +9,10 @@ notification / connector item
   → privacy filter
   → deterministic intent classifier
   → bounded retention
-  → automatic-trigger decision
-  → deterministic template selector
   → stable-subject evidence grouping
-  → bounded model context
-  → cited digest validation
+  → bounded attention-agent proposal
+  → broker validation
+  → hold / cited digest / native alert
 ```
 
 Privacy runs first. Ignored items disappear. Count-only notification items retain only application, time, and urgency; their erased text cannot influence classification, model context, citations, or handoff.
@@ -35,7 +34,7 @@ Every actionable item may receive one broker-owned intent:
 
 Classification uses bounded category IDs and fixed local patterns. Notification and connector strings remain untrusted evidence. Integrations can add new categories without changing the template contract; the broker maps them into the stable intent taxonomy.
 
-Templates may match `intents`, `minimumIntentShare`, and `urgencies` in addition to triggers, applications, focus duration, item count, and connector availability. Selection remains deterministic and testable without a model.
+Templates may match `intents`, `minimumIntentShare`, and `urgencies` in addition to triggers, applications, focus duration, item count, and connector availability. Their routing metadata remains an inspectable recommendation, while the attention agent may select among available templates when it submits a cited digest proposal. Manual requests are broker-enforced to produce a digest rather than silently holding or interrupting.
 
 ## Evidence grouping
 
@@ -46,15 +45,13 @@ The broker groups only high-confidence relationships:
 
 Generic titles such as “New message” never group by title. Group size, group count, item size, total model bytes, and retained history are all bounded. The digest validator prevents one source item from supporting conflicting entries and prevents a multi-update evidence group from being split across entries.
 
-## Automatic triggers
+## Attention loop and follow-ups
 
-Manual generation always remains explicit. Scheduled generation checks for new evidence. Focus re-entry generates when one of these is true:
+The broker wakes the attention loop after a quiet notification batch, enabled-source polling, native telemetry changes, DND re-entry, a daily schedule, startup, an explicit **+** request, or a due follow-up. Focus mode suppresses autonomous reviews; it never suppresses the explicit re-entry review when focus ends.
 
-- critical actionable attention arrived;
-- the configured item threshold is met and at least one item has a high-signal intent; or
-- a meaningful focus session has at least one high-signal item.
+The model can submit exactly one typed proposal. A hold schedules no model or operating-system timer itself: the broker records a bounded watch and owns the wakeup. Automatic deliberations are separated by at least 60 seconds and capped at 24 per UTC day. At most 16 watches and 64 recent decisions are retained in a 256 KiB ledger. A watch can be revisited at most three times, cannot schedule more than 24 hours ahead, and expires after 48 hours. Evidence remains pending while held and is acknowledged only after a cited digest or alert succeeds.
 
-A brief DND toggle with only low-signal updates is skipped with a normal status message, not treated as an error. Skipped items remain available for a later manual or scheduled digest.
+This makes the product adaptive without giving notification text, connectors, or the model durable execution authority. Invalid source IDs, duplicate citations, unavailable templates, oversized strings, exhausted watches, and non-digest manual proposals fail closed.
 
 ## Template suggestions
 
@@ -64,4 +61,4 @@ Suggestions never auto-install policy. The user can draft one through the constr
 
 ## Extension points
 
-New integrations should provide narrow categories. Add category-to-intent mappings in the broker only when the meaning is stable. Add a suggestion as a fixed recipe with a minimum sample size, fixed prompt, and tests. Avoid app-specific model prompts, free-form trigger rules, or content-defined actions.
+New integrations should provide narrow categories. Add category-to-intent mappings in the broker only when the meaning is stable. Add a suggestion as a fixed recipe with a minimum sample size, fixed prompt, and tests. New attention actions must be typed broker capabilities with explicit validation and budgets; content-defined tools or timers do not belong in the model session.

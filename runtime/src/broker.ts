@@ -11,6 +11,7 @@ import { IntegrationRuntime } from "./integration-runtime.js";
 import type { DraftResult } from "./agent.js";
 import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/auth/types.js";
 import { AttentionStore, attentionItemSchema } from "./attention.js";
+import { AttentionLedger } from "./attention-loop.js";
 import { installDraft, installTemplateEdit } from "./drafts.js";
 import { DictationService } from "./dictation.js";
 import { SpeechService, speechConfigSchema } from "./tts.js";
@@ -36,7 +37,17 @@ import { readOmarchyNotificationHistory } from "./notification-history.js";
 import { HandoffTransport } from "./handoff-transport.js";
 import { readBoundedProtocolLines } from "./protocol-lines.js";
 import { mergeVisibleTemplates, TemplateVisibilityStore, templateIdSchema } from "./template-visibility.js";
-import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration, type SourceStatus } from "./types.js";
+import {
+  PROTOCOL_VERSION,
+  type AttentionActivity,
+  type AttentionItem,
+  type AttentionWakeReason,
+  type BrokerEvent,
+  type DigestTemplate,
+  type GenerationTrigger,
+  type PublicIntegration,
+  type SourceStatus
+} from "./types.js";
 
 const contextSchema = z.object({
   trigger: z.enum(["manual", "dnd-ended", "scheduled"]),
@@ -145,6 +156,12 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attention_refresh_notifications"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("attention_acknowledge"), id: z.string().min(1).max(100), itemIds: z.array(z.string().min(1).max(200)).max(200) }).strict(),
   z.object({ type: z.literal("attention_acknowledge_all"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("attention_focus"), id: z.string().min(1).max(100), active: z.boolean() }).strict(),
+  z.object({
+    type: z.literal("attention_wake"), id: z.string().min(1).max(100),
+    reason: z.enum(["manual", "dnd-ended", "scheduled"]),
+    focusMinutes: z.number().min(0).max(1440), minimumItems: z.number().int().min(1).max(200)
+  }).strict(),
   z.object({
     type: z.literal("template_suggestion_dismiss"), id: z.string().min(1).max(100),
     suggestionId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/)
@@ -184,6 +201,7 @@ let templates = loadAllTemplates();
 const pendingDrafts = new Map<string, DraftResult>();
 const pendingHandoffs = new Map<string, { prompt: string; expiresAt: number }>();
 const attention = new AttentionStore();
+const attentionLedger = new AttentionLedger();
 const privacy = new PrivacyPolicy(configRoot);
 attention.applyPolicy((item) => {
   const filtered = privacy.filter(item);
@@ -204,6 +222,18 @@ const integrationRoots = {
 const nativeSourceStore = new NativeSourceStore(configRoot);
 let nativeSourceState = nativeSourceStore.read();
 let nativeSourceSampling = false;
+let focusActive = false;
+let attentionActivity = attentionLedger.activity("observing", "Watching enabled sources");
+let attentionCycleRunning = false;
+let queuedAttentionCycle: AttentionCycleRequest | undefined;
+let notificationQuietTimer: NodeJS.Timeout | undefined;
+
+type AttentionCycleRequest = {
+  id: string;
+  reason: AttentionWakeReason;
+  focusMinutes: number;
+  minimumItems: number;
+};
 
 type AuthFlow = {
   id: string;
@@ -302,6 +332,8 @@ async function recordNativeTelemetry(): Promise<void> {
         events: [...nativeSourceState.events, ...events]
       });
       nativeSourceState = nativeSourceStore.read();
+      const ingested = attention.ingestWithResult(events.map(classifyAttentionItem));
+      if (ingested.changedIds.length > 0) scheduleAttentionCycle("source-event", 30_000);
     }
   } finally {
     nativeSourceSampling = false;
@@ -330,6 +362,184 @@ nativeSourceSampler.unref();
 
 function emit(event: BrokerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
+}
+
+function setAttentionActivity(state: AttentionActivity["state"], message: string, id = "attention-loop"): void {
+  attentionActivity = attentionLedger.activity(state, message);
+  emit({ type: "attention_activity", id, activity: attentionActivity });
+}
+
+function scheduleAttentionCycle(reason: Exclude<AttentionWakeReason, GenerationTrigger>, delayMs: number): void {
+  if (focusActive || process.env.OMADIGEST_DISABLE_AUTOMATIC_ATTENTION === "1") return;
+  if (reason === "notification-batch" && notificationQuietTimer !== undefined) clearTimeout(notificationQuietTimer);
+  const timer = setTimeout(() => requestAttentionCycle({
+    id: `attention-${reason}-${Date.now()}`, reason, focusMinutes: 0, minimumItems: 3
+  }), Math.max(1_000, Math.min(300_000, delayMs)));
+  timer.unref();
+  if (reason === "notification-batch") notificationQuietTimer = timer;
+}
+
+function requestAttentionCycle(request: AttentionCycleRequest): void {
+  if (focusActive && !["manual", "dnd-ended"].includes(request.reason)) return;
+  if (attentionCycleRunning) {
+    if (queuedAttentionCycle?.reason !== "manual" || request.reason === "manual") queuedAttentionCycle = request;
+    return;
+  }
+  attentionCycleRunning = true;
+  void runAttentionCycle(request).finally(() => {
+    attentionCycleRunning = false;
+    const queued = queuedAttentionCycle;
+    queuedAttentionCycle = undefined;
+    if (queued !== undefined) requestAttentionCycle(queued);
+  });
+}
+
+function allEnabledSourceSelection(): { connectorIds: string[]; categories: Record<string, string[]> } {
+  const categories: Record<string, string[]> = {};
+  const connectorIds: string[] = [];
+  for (const source of publicIntegrations().filter((candidate) => candidate.enabled).slice(0, 64)) {
+    const enabled = source.categories.filter((category) => category.enabled).map((category) => category.id).slice(0, 32);
+    if (enabled.length === 0) continue;
+    connectorIds.push(source.id);
+    categories[source.id] = enabled;
+  }
+  return { connectorIds: connectorIds.slice(0, 16), categories };
+}
+
+async function refreshAttentionSources(now: Date): Promise<string[]> {
+  const changed = new Set<string>();
+  if (process.env.OMADIGEST_DISABLE_SOURCE_SYNC === "1") return [];
+  try {
+    const notificationItems = readOmarchyNotificationHistory().filter((item) =>
+      item.app.trim().toLowerCase() !== "omadigest").flatMap((item) => {
+        const presented = privacy.filter(item);
+        return presented === undefined ? [] : [classifyAttentionItem(presented)];
+      });
+    for (const id of attention.ingestWithResult(notificationItems).changedIds) changed.add(id);
+  } catch { /* Native notification history may be unavailable outside Omarchy. */ }
+  await recordNativeTelemetry();
+  const selection = allEnabledSourceSelection();
+  const since = new Date(now.getTime() - 86_400_000);
+  const until = new Date(now.getTime() + 7 * 86_400_000);
+  const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
+  const [connectorItems, nativeItems] = await Promise.all([
+    integrationRuntime.sync(discovered, selection.connectorIds, selection.categories, since.toISOString(), until.toISOString()),
+    collectNativeSourceItems(enabledNativeCategories(selection.connectorIds, selection.categories), since, until, nativeSourceState)
+  ]);
+  for (const id of attention.ingestWithResult([...connectorItems, ...nativeItems].map(classifyAttentionItem)).changedIds) changed.add(id);
+  return [...changed];
+}
+
+async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> {
+  const automatic = request.reason !== "manual";
+  const now = new Date();
+  try {
+    setAttentionActivity("checking", "Checking enabled sources", request.id);
+    await refreshAttentionSources(now);
+    emitAttention(request.id);
+    const dueWatch = request.reason === "follow-up" ? attentionLedger.due(now)[0] : undefined;
+    const held = attentionLedger.heldIds(now);
+    const candidate = attention.pending(200).filter((item) =>
+      !held.has(item.id) || dueWatch?.sourceIds.includes(item.id));
+    const { items, excludedIds } = privacy.selectDigestEvidence(candidate, 100);
+    if (excludedIds.length > 0) attention.acknowledge(excludedIds);
+    if (items.length === 0) {
+      setAttentionActivity(attentionLedger.active(now).length > 0 ? "holding" : "observing",
+        attentionLedger.active(now).length > 0 ? "Waiting for related updates" : "Watching enabled sources", request.id);
+      if (!automatic) emit({ type: "digest_skipped", id: request.id, reason: "No digestible items are available" });
+      emitAttention(request.id);
+      return;
+    }
+    const permit = attentionLedger.permit(request.reason, now);
+    if (!permit.allowed) {
+      setAttentionActivity("holding", permit.reason ?? "Waiting for the next attention review", request.id);
+      if (!automatic) emit({ type: "digest_skipped", id: request.id, reason: permit.reason ?? "Attention review is paused" });
+      return;
+    }
+    attentionLedger.recordDeliberation(now, automatic);
+    setAttentionActivity("deliberating", "Weighing what deserves attention", request.id);
+    const routingTrigger: GenerationTrigger = request.reason === "manual" ? "manual"
+      : request.reason === "dnd-ended" ? "dnd-ended" : "scheduled";
+    const routingContext = enrichedGenerationContext({
+      trigger: routingTrigger,
+      itemCount: items.length,
+      focusMinutes: request.focusMinutes,
+      automaticMinimumItems: request.minimumItems,
+      appCounts: {},
+      availableConnectors: ["notifications", ...publicIntegrations().filter((source) => source.enabled).map((source) => source.id)].slice(0, 64),
+      now: now.toISOString()
+    }, items);
+    const eligibleTemplates = templates.filter((candidate) => {
+      try { selectTemplate([candidate], routingContext); return true; }
+      catch { return false; }
+    });
+    if (eligibleTemplates.length === 0) throw new Error("No digest template matches this attention review");
+    const highSignal = items.some((item) => [
+      "failure", "review", "deadline", "meeting", "assignment", "mention", "request"
+    ].includes(String(item.intent || "")));
+    const allowHold = dueWatch === undefined || dueWatch.attempts < 3;
+    const proposal = await (await agentModule()).runAttentionAgent({
+      reason: request.reason,
+      focusMinutes: request.focusMinutes,
+      minimumItems: request.minimumItems,
+      items,
+      templates: eligibleTemplates,
+      watches: attentionLedger.active(now),
+      manual: !automatic,
+      allowHold,
+      allowDigest: !automatic || !allowHold || items.length >= request.minimumItems || highSignal,
+      allowNotify: items.some((item) => item.urgency === "critical"
+        || ["deadline", "meeting"].includes(String(item.intent || "")))
+    }, 60_000, (message) => setAttentionActivity("deliberating", message, request.id));
+
+    if (proposal.action === "hold") {
+      const watch = attentionLedger.schedule(proposal, now, dueWatch);
+      setAttentionActivity("holding", `Holding ${watch.sourceIds.length} ${watch.sourceIds.length === 1 ? "update" : "updates"} for a better moment`, request.id);
+      return;
+    }
+    if (proposal.action === "notify") {
+      setAttentionActivity("notifying", "Surfacing a time-sensitive update", request.id);
+      await notifyAttention(proposal.headline, proposal.body, proposal.urgency);
+      attention.acknowledge(proposal.sourceIds);
+      attentionLedger.resolve("notify", proposal.reason, proposal.sourceIds, now);
+      emitAttention(request.id);
+      setAttentionActivity("observing", "Watching enabled sources", request.id);
+      return;
+    }
+    const template = eligibleTemplates.find((candidateTemplate) => candidateTemplate.manifest.id === proposal.templateId);
+    if (template === undefined) throw new Error("The attention agent selected an unavailable template");
+    const proposedItems = attention.byIds(proposal.sourceIds);
+    const selected = privacy.selectDigestEvidence(proposedItems, template.manifest.context.maximumItems).items;
+    if (selected.length === 0) throw new Error("The attention decision no longer has permitted evidence");
+    setAttentionActivity("generating", `Building ${template.manifest.name}`, request.id);
+    emit({ type: "digest_state", id: request.id, state: "working", templateId: template.manifest.id });
+    const digest = await (await agentModule()).runDigestAgent(template, selected, pluginRoot);
+    digestHistory.save(digest);
+    attention.acknowledge(proposal.sourceIds);
+    attentionLedger.resolve("digest", proposal.reason, proposal.sourceIds, now);
+    emit({ type: "digest", id: request.id, digest });
+    emitAttention(request.id);
+    emitTemplateSuggestions(request.id);
+    setAttentionActivity("observing", "Watching enabled sources", request.id);
+  } catch (error) {
+    const message = boundedMessage(error, "Attention review failed");
+    attentionLedger.recordError(message, now);
+    setAttentionActivity("error", message, request.id);
+    if (!automatic) emit({
+      type: "error", id: request.id,
+      code: message.startsWith("Authenticate a model") ? "model_not_connected" : "attention_failed",
+      message
+    });
+  }
+}
+
+function notifyAttention(headline: string, body: string, urgency: "normal" | "critical"): Promise<void> {
+  return new Promise((resolveNotify, rejectNotify) => {
+    const child = execFile("/usr/bin/notify-send", ["--app-name=OmaDigest", `--urgency=${urgency}`, headline, body], {
+      timeout: 10_000, windowsHide: true
+    }, (error) => error === null ? resolveNotify() : rejectNotify(error));
+    child.unref();
+  });
 }
 
 async function checkReleaseUpdate(id: string, force: boolean): Promise<void> {
@@ -367,6 +577,15 @@ const configWatcher = setInterval(() => {
   void reloadFileBackedConfiguration().finally(() => { configReloading = false; });
 }, 2_000);
 configWatcher.unref();
+
+const sourcePoller = setInterval(() => scheduleAttentionCycle("source-event", 1_000), 5 * 60_000);
+sourcePoller.unref();
+const followUpPoller = setInterval(() => {
+  if (attentionLedger.due().length > 0) scheduleAttentionCycle("follow-up", 1_000);
+}, 30_000);
+followUpPoller.unref();
+const startupReview = setTimeout(() => scheduleAttentionCycle("startup", 1_000), 30_000);
+startupReview.unref();
 
 async function reloadFileBackedConfiguration(): Promise<void> {
   templateVisibility.reload();
@@ -433,6 +652,7 @@ async function handle(raw: string): Promise<boolean> {
       update: releaseUpdates.status()
     });
     emitAttention("initialize");
+    emit({ type: "attention_activity", id: "initialize", activity: attentionActivity });
     void checkReleaseUpdate("initialize", false);
     return true;
   }
@@ -544,12 +764,14 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_ingest") {
     try {
-      attention.ingest(command.items.flatMap((item) => {
+      const ingested = attention.ingestWithResult(command.items.filter((item) =>
+        item.app.trim().toLowerCase() !== "omadigest").flatMap((item) => {
         const presented = privacy.filter(item);
         return presented === undefined ? [] : [classifyAttentionItem(presented)];
       }));
       emitAttention(command.id);
       emitTemplateSuggestions(command.id);
+      if (ingested.changedIds.length > 0) scheduleAttentionCycle("notification-batch", 45_000);
     } catch {
       emit({ type: "error", id: command.id, code: "attention_invalid", message: "Some attention items were invalid." });
     }
@@ -558,12 +780,14 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_refresh_notifications") {
     try {
-      attention.ingest(readOmarchyNotificationHistory().flatMap((item) => {
+      const ingested = attention.ingestWithResult(readOmarchyNotificationHistory().filter((item) =>
+        item.app.trim().toLowerCase() !== "omadigest").flatMap((item) => {
         const presented = privacy.filter(item);
         return presented === undefined ? [] : [classifyAttentionItem(presented)];
       }));
       emitAttention(command.id);
       emitTemplateSuggestions(command.id);
+      if (ingested.changedIds.length > 0) scheduleAttentionCycle("notification-batch", 45_000);
     } catch {
       emit({ type: "error", id: command.id, code: "notification_history_unavailable", message: "Notification history could not be refreshed." });
     }
@@ -579,6 +803,25 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "attention_acknowledge_all") {
     attention.acknowledge(attention.pending(500).map((item) => item.id));
     emitAttention(command.id);
+    return true;
+  }
+
+  if (command.type === "attention_focus") {
+    focusActive = command.active;
+    if (focusActive && notificationQuietTimer !== undefined) {
+      clearTimeout(notificationQuietTimer);
+      notificationQuietTimer = undefined;
+    }
+    setAttentionActivity(focusActive ? "holding" : "observing",
+      focusActive ? "Holding updates while you focus" : "Watching enabled sources", command.id);
+    return true;
+  }
+
+  if (command.type === "attention_wake") {
+    requestAttentionCycle({
+      id: command.id, reason: command.reason,
+      focusMinutes: command.focusMinutes, minimumItems: command.minimumItems
+    });
     return true;
   }
 
@@ -604,8 +847,9 @@ async function handle(raw: string): Promise<boolean> {
         digestHistory.clear();
         emit({ type: "digest_history", id: command.id, digests: [] });
       }
-      if (deleteAll) attention.clear();
+      if (deleteAll) { attention.clear(); attentionLedger.clear(); }
       else if (command.target === "notification-history") attention.clearNotifications();
+      if (command.target === "notification-history") attentionLedger.clear();
       if (deleteAll || command.target === "notification-history") {
         nativeSourceStore.clear();
         nativeSourceState = { version: 1, events: [] };

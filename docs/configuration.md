@@ -8,7 +8,7 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/omadigest/
 
 This is deliberate: the user's default Omarchy agent can review or edit policy, templates, integrations, and declared permissions without automating the panel. OmaDigest fingerprints this tree every two seconds and reloads valid external changes into the running UI and broker.
 
-Bounded runtime state lives separately under `${XDG_STATE_HOME:-$HOME/.local/state}/omadigest/`. That directory includes attention segments, seen IDs, digest history, dismissed template suggestions, and one release-update cache record. It is product state, not an agent-editable control plane.
+Bounded runtime state lives separately under `${XDG_STATE_HOME:-$HOME/.local/state}/omadigest/`. That directory includes attention segments, seen IDs, digest history, the bounded attention-loop watch/decision ledger, dismissed template suggestions, and one release-update cache record. It is product state, not an agent-editable control plane.
 
 ## Layout
 
@@ -17,7 +17,7 @@ omadigest/
 ├── privacy.json                    # notification intake/model/handoff policy
 ├── templates/<id>/
 │   ├── SKILL.md                    # readable generation instructions
-│   └── template.compiled.json      # deterministic routing and output policy
+│   └── template.compiled.json      # eligibility and output policy
 ├── template-state.json             # bounded hidden packaged-template IDs
 ├── integrations/<id>/
 │   ├── manifest.json               # setup, capabilities, and permissions
@@ -53,7 +53,7 @@ Integration secrets and TTS keys intentionally remain in Secret Service rather t
 Modes are:
 
 - `ignore`: do not retain or count the notification;
-- `count-only`: retain app/time/urgency with title and body erased; aggregate application counts may influence deterministic template routing, but individual records are excluded from digest evidence, citations, and handoffs;
+- `count-only`: retain app/time/urgency with title and body erased; these records may contribute only to local frequency-based template suggestions and are excluded from attention decisions, digest evidence, citations, alerts, and handoffs;
 - `digest`: permit content in digest generation but hide it from default-agent handoff;
 - `digest-and-handoff`: also permit cited content after an explicit **Send to agent** click.
 

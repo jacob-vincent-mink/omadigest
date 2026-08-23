@@ -16,25 +16,25 @@ enabled connector ─► normalized context ──────┤
                                               ▼
                                       bounded attention store
                                               │
-                                  deterministic template selection
+                                  bounded attention proposal
                                               │
-                                       ephemeral Pi session
-                                              │ emit_digest
-                                              ▼
-                                      structured cited digest
+                              ┌───────────────┼───────────────┐
+                              ▼               ▼               ▼
+                         broker watch    cited digest    native alert
 ```
 
-Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. QML submits only the bounded live popup snapshot; the broker independently reads at most 50 regular non-symlink Omarchy history files under 64-KiB/file and 512-KiB total limits. The broker keeps at most 500 items in memory and seven daily mode-`0600` JSONL segments, deduplicates identical snapshots before append, and enforces 2-MiB segment and 8-MiB total budgets. Deterministic routing may use aggregate application counts from count-only records, but generation excludes individual contentless evidence before model context assembly and again at the model boundary, then applies the selected template's stricter item budget.
+Attention items carry stable ID, source, app, bounded title/body, content-availability state, urgency, and timestamp. QML submits only the bounded live popup snapshot; the broker independently reads at most 50 regular non-symlink Omarchy history files under 64-KiB/file and 512-KiB total limits. The broker keeps at most 500 items in memory and seven daily mode-`0600` JSONL segments, deduplicates identical snapshots before append, and enforces 2-MiB segment and 8-MiB total budgets. Count-only records never reach either model. The attention agent receives only grouped, actionable evidence and public template summaries, while the digest agent receives only the evidence cited by the validated proposal under that template's stricter budget.
 
 ## Pi runtime
 
 The broker embeds `@earendil-works/pi-coding-agent` and exposes Pi's typed provider authentication through **Settings → Connections**. Codex/ChatGPT and Grok OAuth open in the system browser; OpenAI and xAI API-key prompts stay inside the panel. Credentials and the selected provider live in OmaDigest's private configuration rather than the shell or QML process. The runtime disables model-network catalog refresh and discovers no user extensions, project instructions, or unrelated skills.
 
-Every Pi operation uses an in-memory session and settings. The selected digest or template skill is injected directly into the system prompt; Pi's probabilistic skill invocation does not govern routing. Integration authoring instead launches the default coding agent with a dedicated skill and exact paths to the package protocol and validator.
+Every Pi operation uses an in-memory session and settings. Digest and template instructions are injected directly into their system prompts. The attention session may exercise judgment only by submitting one typed proposal; it cannot execute or schedule that proposal itself. Integration authoring instead launches the default coding agent with a dedicated skill and exact paths to the package protocol and validator.
 
 ### Session capabilities
 
 - Digest: `emit_digest`.
+- Attention: `propose_attention_action` (`hold`, `digest`, or `notify`).
 - Template draft: `emit_template_draft`, `out_of_scope`.
 
 No built-in coding tools are enabled. Time, prompt, file, item, and output bounds are enforced outside the model.
@@ -43,7 +43,7 @@ No built-in coding tools are enabled. Time, prompt, file, item, and output bound
 
 User policy, templates, integrations, declared permissions, enablement, category overrides, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. Source enablement and category overrides use bounded version-2 state; version-1 integration enablement is migrated on read and rewritten on the next state change. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
 
-Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable; inline deletion of a bundled template records only its bounded ID in user configuration.
+Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and the attention-loop ledger, then persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable; inline deletion of a bundled template records only its bounded ID in user configuration.
 
 Release discovery is also broker-owned. It checks only GitHub's fixed `releases/latest` endpoint for this repository, at most once per 24 hours unless the user explicitly retries. Requests time out after five seconds; response and persisted state are each capped at 64 KiB. QML receives only the normalized current/latest versions, fixed release URL, check time, and per-version dismissal state.
 
@@ -55,7 +55,7 @@ Templates have readable `SKILL.md` instructions and a schema-validated compiled 
 
 An integration is discovered only when its directory, strict manifest, and regular `.mjs` entry point validate. Default-agent authoring occurs in a temporary staging directory; a standalone broker-owned command enforces file, byte, path, schema, syntax, sandbox-test, and protocol-probe gates before atomic installation. The packaged authoring skill can be explicitly linked into shared Codex, Claude, and Pi-compatible skill directories; plugin installation itself still runs no hook. Enablement is separate state from live probe status. Setup fields are manifest-driven; secrets go to Secret Service and ordinary values to private JSON.
 
-Connectors run as child processes with a minimal environment, versioned NDJSON, no home mount, no direct network namespace, and no child-process permission. HTTPS is a typed broker service with exact declared host/port enforcement, public-address validation, no automatic redirects, and request/byte/time caps. External commands and connector filesystem permissions are rejected. The bundled GitHub source is special-cased as audited trusted code: the broker performs fixed read-only `gh api` calls and passes only bounded data to its unprivileged connector. Results are bounded and validated before becoming attention items. Manifests may declare bounded source categories; legacy manifests receive an implicit enabled `default` category. Sync receives the deterministic intersection of template-requested and user-enabled categories, and undeclared or disabled results are discarded before persistence. Generation runs only connector IDs explicitly named by the selected template. Connector failure is isolated and does not fail notification intake.
+Connectors run as child processes with a minimal environment, versioned NDJSON, no home mount, no direct network namespace, and no child-process permission. HTTPS is a typed broker service with exact declared host/port enforcement, public-address validation, no automatic redirects, and request/byte/time caps. External commands and connector filesystem permissions are rejected. The bundled GitHub source is special-cased as audited trusted code: the broker performs fixed read-only `gh api` calls and passes only bounded data to its unprivileged connector. Results are bounded and validated before becoming attention items. Manifests may declare bounded source categories; legacy manifests receive an implicit enabled `default` category. Background sync requests only user-enabled sources and categories, and undeclared or disabled results are discarded before persistence. Connector failure is isolated and does not fail notification intake.
 
 Public source status is a structured object with `unknown`, `checking`, `ready`, `authentication-required`, `setup-required`, or `error` state, plus bounded message, completion timestamp, and stable connector error code when available. Authentication/setup actions are derived only from concrete manifest setup fields, never connector-controlled strings or URLs.
 
