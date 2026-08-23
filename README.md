@@ -30,10 +30,11 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
 - **Attention intelligence** — conservative subject grouping plus a bounded attention agent can recall prior episodes, watch an evolving subject, create the right digest, or surface a time-sensitive alert without granting notification text execution authority.
 - **Progressive memory** — a provenance-preserving temporal memory keeps recent episodes detailed, compresses older context into rebuildable summaries, and lets the agent search or zoom before deciding.
+- **Attention timeline** — inspect received evidence, holds, digests, alerts, handoffs, and feedback as subject threads, then switch to a time-decayed memory view and open compressed spans back toward their source moments.
 - **Cross-source correlation** — stable PR, issue, repository, URL, and CVE entities join related notifications, CI results, connector evidence, and agent activity without relying on matching app names.
 - **Just-in-time context packs** — approaching meetings and deadlines can schedule a bounded pre-event checkback, recall related history, and produce a focused context pack.
-- **Standing attention policies** — describe what should interrupt, wait, become a digest, or stay quiet; a scoped compiler turns it into inspectable deterministic matching policy.
-- **Outcome learning and explanations** — useful/not-useful feedback, reads, handoffs, and cancelled watches become bounded soft timing hints, while **Why this?** shows the evidence, correlation, matching policy, and relevant history.
+- **Standing attention policies** — describe what should interrupt, wait, become a digest, or stay quiet; a scoped compiler previews current matches and priority conflicts before the deterministic policy is saved.
+- **Outcome learning and explanations** — useful/not-useful feedback, reads, handoffs, and cancelled watches become visible bounded calibration signals, while **Why this?** links the evidence, correlation, matching policy, and subject timeline.
 - **Templates stay yours** — edit instructions and routing JSON directly, or ask the constrained in-panel agent for a validated revision; editing a packaged default creates a resettable user overlay.
 - **Right-sized authoring** — a scoped session drafts readable templates in-panel; integration requests open the default coding agent with a dedicated skill and a validated, disabled-by-default install path.
 - **Sandboxed connector boundary** — integrations are disabled by default, permission-declared, removable, time-bounded, and run outside Quickshell.
@@ -136,7 +137,7 @@ OmaDigest gives each model session only the structured submission tool needed fo
 
 | Session | Available tools |
 |---|---|
-| Attention review | `search_attention_memory`, `zoom_attention_memory`, `propose_attention_action` |
+| Attention review | `search_attention_memory`, `read_attention_thread`, `zoom_attention_memory`, `propose_attention_action` |
 | Digest generation | `emit_digest` |
 | Standing-policy compilation | `emit_attention_policy` |
 | Template drafting | `emit_template_draft`, `out_of_scope` |

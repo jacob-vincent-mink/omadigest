@@ -101,6 +101,21 @@ export type AttentionPolicy = {
   createdAt: string;
 };
 
+export type AttentionPolicyPreview = {
+  id: string;
+  draft: Omit<AttentionPolicy, "id" | "enabled" | "createdAt">;
+  matchedCount: number;
+  examples: Array<{ id: string; app: string; title: string }>;
+  conflicts: Array<{
+    policyId: string;
+    name: string;
+    action: AttentionPolicyAction;
+    priority: number;
+    winner: "draft" | "existing";
+  }>;
+  expiresAt: string;
+};
+
 export type AttentionPreferenceHint = {
   subject: string;
   signal: "surface" | "defer";
@@ -121,6 +136,7 @@ export type AttentionExplanation = {
   sourceCount: number;
   applications: string[];
   entities: string[];
+  thread?: { id: string; label: string };
   policy?: { id: string; name: string; action: AttentionPolicyAction };
   history: AttentionMemoryNode[];
 };
@@ -163,6 +179,60 @@ export type AttentionMemoryStatus = {
   summaryCount: number;
   oldestAt?: string;
   newestAt?: string;
+};
+
+export type AttentionTimelineMode = "events" | "memory";
+
+export type AttentionThread = {
+  id: string;
+  label: string;
+  episodeCount: number;
+  sourceCount: number;
+  applications: string[];
+  lastAt: string;
+  lastAction?: AttentionPolicyAction | "read" | "handoff" | "cancelled" | "useful" | "not-useful";
+};
+
+export type AttentionTimelineItem = {
+  id: string;
+  kind: AttentionMemoryKind | "summary";
+  subject: string;
+  summary: string;
+  from: string;
+  to: string;
+  episodeCount: number;
+  sourceCount: number;
+  applications: string[];
+  threadId?: string;
+  threadLabel?: string;
+  action?: AttentionPolicyAction | "read" | "handoff" | "cancelled" | "useful" | "not-useful";
+  digestId?: string;
+  memoryNodeId?: string;
+  expandable: boolean;
+};
+
+export type AttentionTimelinePage = {
+  mode: AttentionTimelineMode;
+  items: AttentionTimelineItem[];
+  threads: AttentionThread[];
+  hasMore: boolean;
+  nextCursor?: string;
+  selectedThreadId?: string;
+};
+
+export type AttentionCalibration = {
+  outcomeCount: number;
+  readCount: number;
+  handoffCount: number;
+  usefulCount: number;
+  notUsefulCount: number;
+  subjects: Array<{
+    threadId: string;
+    label: string;
+    signal: "surface" | "defer" | "neutral";
+    sampleSize: number;
+    lastAt: string;
+  }>;
 };
 
 export type AttentionActivity = {
@@ -324,8 +394,12 @@ export type BrokerCommand =
   | { type: "attention_focus"; id: string; active: boolean }
   | { type: "attention_watch_cancel"; id: string; watchId: string }
   | { type: "attention_memory_search"; id: string; query: string }
+  | { type: "attention_timeline_query"; id: string; mode: AttentionTimelineMode; threadId?: string; cursor?: string; limit?: number }
+  | { type: "attention_timeline_zoom"; id: string; nodeId: string }
   | { type: "attention_explain"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
   | { type: "attention_policy_create"; id: string; request: string }
+  | { type: "attention_policy_accept"; id: string; previewId: string }
+  | { type: "attention_policy_reject"; id: string; previewId: string }
   | { type: "attention_policy_set_enabled"; id: string; policyId: string; enabled: boolean }
   | { type: "attention_policy_delete"; id: string; policyId: string }
   | { type: "attention_wake"; id: string; reason: GenerationTrigger; focusMinutes: number; minimumItems: number }
@@ -365,11 +439,14 @@ export type BrokerEvent =
   | { type: "tts"; id: string; configured: boolean; state: "idle" | "playing" | "paused"; config?: { provider: string; endpoint: string; model: string; voice: string; speed: number } }
   | { type: "attention"; id: string; digestibleCount: number; acknowledgedIds: string[] }
   | { type: "attention_activity"; id: string; activity: AttentionActivity }
-  | { type: "attention_state"; id: string; watches: AttentionWatch[]; memory: AttentionMemoryStatus }
+  | { type: "attention_state"; id: string; watches: AttentionWatch[]; memory: AttentionMemoryStatus; calibration: AttentionCalibration }
   | { type: "attention_memory_results"; id: string; query: string; results: AttentionMemoryNode[] }
+  | { type: "attention_timeline"; id: string; page: AttentionTimelinePage; append: boolean }
+  | { type: "attention_timeline_zoomed"; id: string; parentId: string; items: AttentionTimelineItem[] }
   | { type: "attention_explanation"; id: string; explanation: AttentionExplanation }
   | { type: "attention_policies"; id: string; policies: AttentionPolicy[] }
-  | { type: "attention_policy_state"; id: string; state: "working" | "saved"; message: string }
+  | { type: "attention_policy_preview"; id: string; preview: AttentionPolicyPreview }
+  | { type: "attention_policy_state"; id: string; state: "working" | "preview" | "saved" | "idle"; message: string }
   | { type: "template_suggestions"; id: string; suggestions: TemplateSuggestion[] }
   | { type: "digest_state"; id: string; state: "working"; templateId: string }
   | { type: "digest_skipped"; id: string; reason: string }

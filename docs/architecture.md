@@ -38,7 +38,7 @@ Every Pi operation uses an in-memory session and settings. Digest and template i
 ### Session capabilities
 
 - Digest: `emit_digest`.
-- Attention: read-only `search_attention_memory` and `zoom_attention_memory`, then exactly one `propose_attention_action` (`hold`, `digest`, or `notify`).
+- Attention: bounded read-only `search_attention_memory`, `read_attention_thread`, and `zoom_attention_memory`, then exactly one `propose_attention_action` (`hold`, `digest`, or `notify`).
 - Standing-policy compilation: `emit_attention_policy`.
 - Template draft: `emit_template_draft`, `out_of_scope`.
 

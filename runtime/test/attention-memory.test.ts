@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AttentionMemory } from "../src/attention-memory.js";
+import { ATTENTION_TIMELINE_MAX_BYTES, AttentionMemory } from "../src/attention-memory.js";
 import type { AttentionItem, Digest } from "../src/types.js";
 
 const roots: string[] = [];
@@ -113,5 +113,73 @@ describe("AttentionMemory", () => {
     expect(memory.preferenceHints(evidence, new Date(now.getTime() + 420_000))[0]).toMatchObject({
       signal: "defer", sampleSize: 5
     });
+    expect(memory.calibration()).toMatchObject({
+      outcomeCount: 5,
+      handoffCount: 1,
+      usefulCount: 1,
+      notUsefulCount: 3,
+      subjects: [expect.objectContaining({ signal: "defer", sampleSize: 5 })]
+    });
+  });
+
+  it("projects correlated subject threads as a stable paged event timeline", () => {
+    const { memory } = store();
+    const now = new Date("2026-08-23T12:00:00.000Z");
+    const evidence = [item("pr-184", "Review jacob/omadigest PR #184", now.toISOString(), "github", "GitHub")];
+    memory.recordEvidence(evidence, now);
+    memory.recordDecision("hold", "Wait for CI on PR #184", evidence, "PR #184", now);
+    memory.recordDigest({
+      id: "5ef4f768-2649-4d3a-8a62-dd3a8fed669c", templateId: "general", title: "PR #184 report",
+      generatedAt: now.toISOString(), sections: []
+    }, evidence);
+    memory.recordOutcome("read", "PR #184 report", ["pr-184"], "5ef4f768-2649-4d3a-8a62-dd3a8fed669c", now);
+
+    const first = memory.timeline({ mode: "events", limit: 2 });
+    expect(first.items).toHaveLength(2);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBeTruthy();
+    const second = memory.timeline({ mode: "events", limit: 2, cursor: first.nextCursor! });
+    expect(second.items).toHaveLength(2);
+    expect(new Set([...first.items, ...second.items].map((entry) => entry.id)).size).toBe(4);
+    expect(new Set([...first.items, ...second.items].map((entry) => entry.threadId)).size).toBe(1);
+    expect([...first.items, ...second.items].find((entry) => entry.action === "read")?.summary)
+      .toBe("PR #184 report");
+    expect(first.threads[0]).toMatchObject({ episodeCount: 4, sourceCount: 1 });
+    expect(memory.thread(first.threads[0]!.id).map((node) => node.episodeKinds[0]))
+      .toEqual(expect.arrayContaining(["evidence", "decision", "digest", "outcome"]));
+    expect(memory.thread("thread-000000000000000000000000")).toEqual([]);
+    expect(memory.timeline({ mode: "events", cursor: "not-a-cursor" })).toMatchObject({ items: [], hasMore: false });
+  });
+
+  it("filters and progressively reveals a bounded memory timeline", () => {
+    const { memory } = store();
+    const start = Date.parse("2026-08-20T00:00:00.000Z");
+    const evidence = Array.from({ length: 30 }, (_, index) => item(
+      `pr-${index}`, `Review jacob/omadigest PR #184 update ${index} ${"detail ".repeat(100)}`,
+      new Date(start + index * 60_000).toISOString(), "github", "GitHub"
+    ));
+    for (const entry of evidence) memory.recordEvidence([entry], new Date(entry.occurredAt));
+    const events = memory.timeline({ mode: "events", limit: 4 });
+    const threadId = events.threads[0]!.id;
+    const memoryPage = memory.timeline({ mode: "memory", threadId, limit: 4 });
+    expect(memoryPage.items).toHaveLength(4);
+    expect(memoryPage.items.reduce((total, entry) => total + entry.episodeCount, 0)).toBe(30);
+    expect(Buffer.byteLength(JSON.stringify(memoryPage.items), "utf8")).toBeLessThanOrEqual(ATTENTION_TIMELINE_MAX_BYTES);
+    const summary = memoryPage.items.find((entry) => entry.expandable)!;
+    const children = memory.timelineZoom(summary.memoryNodeId!);
+    expect(children).toHaveLength(2);
+    expect(children.reduce((total, entry) => total + entry.episodeCount, 0)).toBe(summary.episodeCount);
+  });
+
+  it("keeps an existing thread identifier when later evidence adds a stronger entity", () => {
+    const { memory } = store();
+    const now = new Date("2026-08-23T12:00:00.000Z");
+    const evidence = [item("build-1", "Build needs review", now.toISOString(), "github", "GitHub")];
+    memory.recordEvidence(evidence, now);
+    const original = memory.timeline({ mode: "events" }).threads[0]!.id;
+    memory.recordDecision("hold", "Wait for CI on jacob/omadigest PR #184", evidence, "PR #184", new Date(now.getTime() + 60_000));
+    const updated = memory.timeline({ mode: "events" }).threads[0]!;
+    expect(updated.id).toBe(original);
+    expect(updated.episodeCount).toBe(2);
   });
 });

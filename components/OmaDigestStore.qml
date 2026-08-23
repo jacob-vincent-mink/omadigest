@@ -53,12 +53,23 @@ Scope {
   property var attentionActivity: ({ state: "observing", message: "Watching enabled sources", heldCount: 0, dailyDeliberations: 0, dailyLimit: 24 })
   property var attentionWatches: []
   property var attentionMemory: ({ episodeCount: 0, summaryCount: 0 })
+  property var attentionCalibration: ({ outcomeCount: 0, readCount: 0, handoffCount: 0, usefulCount: 0, notUsefulCount: 0, subjects: [] })
   property var attentionPolicies: []
   property string attentionPolicyState: "idle"
   property string attentionPolicyMessage: ""
+  property var attentionPolicyPreview: null
   property string attentionMemoryQuery: ""
   property var attentionMemoryResults: []
   property var attentionExplanation: null
+  property string attentionTimelineMode: "events"
+  property var attentionTimelineItems: []
+  property var attentionTimelineThreads: []
+  property string attentionTimelineThreadId: ""
+  property string attentionTimelineThreadLabel: "All attention"
+  property string attentionTimelineCursor: ""
+  property bool attentionTimelineHasMore: false
+  property bool attentionTimelineLoading: false
+  property int attentionTimelineZoomDepth: 0
   readonly property bool attentionBusy: ["checking", "deliberating", "generating", "notifying"].indexOf(String(attentionActivity.state || "")) >= 0
   property var acknowledgedAttention: ({})
   property var agentConnection: ({ connected: false, provider: "", model: "" })
@@ -273,6 +284,53 @@ Scope {
     send({ type: "attention_memory_search", id: "attention-memory-" + nextId++, query: text })
   }
 
+  function requestAttentionTimeline(mode, threadId, threadLabel, append) {
+    var nextMode = String(mode || attentionTimelineMode) === "memory" ? "memory" : "events"
+    var nextThreadId = String(threadId === undefined ? attentionTimelineThreadId : threadId || "")
+    var shouldAppend = append === true && nextMode === "events" && attentionTimelineCursor !== ""
+    attentionTimelineMode = nextMode
+    attentionTimelineThreadId = nextThreadId
+    attentionTimelineThreadLabel = nextThreadId === "" ? "All attention" : String(threadLabel || attentionTimelineThreadLabel || "Subject")
+    attentionTimelineLoading = true
+    if (!shouldAppend) {
+      attentionTimelineItems = []
+      attentionTimelineCursor = ""
+      attentionTimelineHasMore = false
+      attentionTimelineZoomDepth = 0
+    }
+    var command = {
+      type: "attention_timeline_query", id: "attention-timeline-" + nextId++, mode: nextMode, limit: nextMode === "events" ? 24 : 16
+    }
+    if (nextThreadId !== "") command.threadId = nextThreadId
+    if (shouldAppend) command.cursor = attentionTimelineCursor
+    send(command)
+  }
+
+  function selectAttentionTimelineThread(thread) {
+    if (!thread) requestAttentionTimeline(attentionTimelineMode, "", "All attention", false)
+    else requestAttentionTimeline(attentionTimelineMode, String(thread.id || ""), String(thread.label || "Subject"), false)
+  }
+
+  function setAttentionTimelineMode(mode) {
+    requestAttentionTimeline(mode, attentionTimelineThreadId, attentionTimelineThreadLabel, false)
+  }
+
+  function loadOlderAttentionTimeline() {
+    if (attentionTimelineHasMore && !attentionTimelineLoading)
+      requestAttentionTimeline("events", attentionTimelineThreadId, attentionTimelineThreadLabel, true)
+  }
+
+  function zoomAttentionTimeline(nodeId) {
+    var target = String(nodeId || "")
+    if (!target || attentionTimelineLoading) return
+    attentionTimelineLoading = true
+    send({ type: "attention_timeline_zoom", id: "attention-timeline-" + nextId++, nodeId: target })
+  }
+
+  function resetAttentionTimelineZoom() {
+    requestAttentionTimeline("memory", attentionTimelineThreadId, attentionTimelineThreadLabel, false)
+  }
+
   function explainDigestEntry(digestId, sectionIndex, entryIndex) {
     attentionExplanation = null
     send({
@@ -287,7 +345,25 @@ Scope {
     clearError()
     attentionPolicyState = "working"
     attentionPolicyMessage = "Drafting a bounded standing policy"
+    attentionPolicyPreview = null
     send({ type: "attention_policy_create", id: "attention-policy-" + nextId++, request: text })
+  }
+
+  function acceptAttentionPolicyPreview() {
+    if (!attentionPolicyPreview || !attentionPolicyPreview.id) return
+    var previewId = String(attentionPolicyPreview.id)
+    attentionPolicyState = "working"
+    attentionPolicyMessage = "Saving standing policy"
+    send({ type: "attention_policy_accept", id: "attention-policy-" + nextId++, previewId: previewId })
+  }
+
+  function rejectAttentionPolicyPreview() {
+    if (!attentionPolicyPreview || !attentionPolicyPreview.id) return
+    var previewId = String(attentionPolicyPreview.id)
+    attentionPolicyPreview = null
+    attentionPolicyState = "idle"
+    attentionPolicyMessage = ""
+    send({ type: "attention_policy_reject", id: "attention-policy-" + nextId++, previewId: previewId })
   }
 
   function setAttentionPolicyEnabled(policyId, enabled) {
@@ -559,11 +635,29 @@ Scope {
     if (event.type === "attention_state") {
       attentionWatches = (event.watches || []).slice(0, 16)
       attentionMemory = event.memory || ({ episodeCount: 0, summaryCount: 0 })
+      attentionCalibration = event.calibration || ({ outcomeCount: 0, readCount: 0, handoffCount: 0, usefulCount: 0, notUsefulCount: 0, subjects: [] })
       return
     }
     if (event.type === "attention_memory_results") {
       attentionMemoryQuery = String(event.query || "")
       attentionMemoryResults = (event.results || []).slice(0, 12)
+      return
+    }
+    if (event.type === "attention_timeline") {
+      var page = event.page || ({})
+      var received = (page.items || []).slice(0, 40)
+      attentionTimelineItems = event.append === true ? attentionTimelineItems.concat(received).slice(0, 120) : received
+      attentionTimelineThreads = (page.threads || []).slice(0, 16)
+      attentionTimelineCursor = String(page.nextCursor || "")
+      attentionTimelineHasMore = page.hasMore === true
+      attentionTimelineLoading = false
+      attentionTimelineZoomDepth = 0
+      return
+    }
+    if (event.type === "attention_timeline_zoomed") {
+      attentionTimelineItems = (event.items || []).slice(0, 40)
+      attentionTimelineLoading = false
+      attentionTimelineZoomDepth += 1
       return
     }
     if (event.type === "attention_explanation") {
@@ -572,6 +666,11 @@ Scope {
     }
     if (event.type === "attention_policies") {
       attentionPolicies = (event.policies || []).slice(0, 32)
+      attentionPolicyPreview = null
+      return
+    }
+    if (event.type === "attention_policy_preview") {
+      attentionPolicyPreview = event.preview || null
       return
     }
     if (event.type === "attention_policy_state") {

@@ -13,7 +13,7 @@ import type { AuthEvent, AuthPrompt } from "../../node_modules/@earendil-works/p
 import { AttentionStore, attentionItemSchema } from "./attention.js";
 import { AttentionLedger } from "./attention-loop.js";
 import { AttentionMemory } from "./attention-memory.js";
-import { AttentionPolicyStore } from "./attention-policy.js";
+import { AttentionPolicyStore, type AttentionPolicyDraft } from "./attention-policy.js";
 import { detectJitContext, isJitActionWindow } from "./jit-context.js";
 import { installDraft, installTemplateEdit } from "./drafts.js";
 import { DictationService } from "./dictation.js";
@@ -44,6 +44,7 @@ import {
   PROTOCOL_VERSION,
   type AttentionActivity,
   type AttentionItem,
+  type AttentionPolicyPreview,
   type AttentionWatch,
   type AttentionWakeReason,
   type BrokerEvent,
@@ -164,10 +165,22 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attention_watch_cancel"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("attention_memory_search"), id: z.string().min(1).max(100), query: z.string().min(1).max(200) }).strict(),
   z.object({
+    type: z.literal("attention_timeline_query"), id: z.string().min(1).max(100),
+    mode: z.enum(["events", "memory"]),
+    threadId: z.string().regex(/^thread-[a-f0-9]{24}$/u).optional(),
+    cursor: z.string().min(1).max(320).optional(), limit: z.number().int().min(1).max(40).optional()
+  }).strict(),
+  z.object({
+    type: z.literal("attention_timeline_zoom"), id: z.string().min(1).max(100),
+    nodeId: z.string().regex(/^memory-(?:episode|summary)-\d+-\d+-[a-f0-9]{24}$/u)
+  }).strict(),
+  z.object({
     type: z.literal("attention_explain"), id: z.string().min(1).max(100), digestId: z.string().uuid(),
     sectionIndex: z.number().int().min(0).max(50), entryIndex: z.number().int().min(0).max(200)
   }).strict(),
   z.object({ type: z.literal("attention_policy_create"), id: z.string().min(1).max(100), request: z.string().min(1).max(2_000) }).strict(),
+  z.object({ type: z.literal("attention_policy_accept"), id: z.string().min(1).max(100), previewId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("attention_policy_reject"), id: z.string().min(1).max(100), previewId: z.string().uuid() }).strict(),
   z.object({
     type: z.literal("attention_policy_set_enabled"), id: z.string().min(1).max(100),
     policyId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/), enabled: z.boolean()
@@ -223,6 +236,7 @@ function loadAllTemplates() {
 let templates = loadAllTemplates();
 const pendingDrafts = new Map<string, DraftResult>();
 const pendingHandoffs = new Map<string, { prompt: string; expiresAt: number }>();
+const pendingPolicyPreviews = new Map<string, { draft: AttentionPolicyDraft; expiresAt: number }>();
 const attention = new AttentionStore();
 const attentionLedger = new AttentionLedger();
 const attentionMemory = new AttentionMemory();
@@ -400,7 +414,10 @@ function setAttentionActivity(state: AttentionActivity["state"], message: string
 }
 
 function emitAttentionState(id: string): void {
-  emit({ type: "attention_state", id, watches: attentionLedger.active(), memory: attentionMemory.status() });
+  emit({
+    type: "attention_state", id, watches: attentionLedger.active(),
+    memory: attentionMemory.status(), calibration: attentionMemory.calibration()
+  });
 }
 
 function ingestAttentionItems(items: AttentionItem[]): { total: number; changedIds: string[] } {
@@ -576,6 +593,7 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     const boundedMemory = [...recalled, ...memoryCover]
       .filter((node, index, all) => all.findIndex((candidate) => candidate.id === node.id) === index)
       .slice(0, 32);
+    const subjectThreads = attentionMemory.threadsForSourceIds(reviewItems.map((item) => item.id), 16);
     const proposal = await (await agentModule()).runAttentionAgent({
       reason: request.reason,
       focusMinutes: request.focusMinutes,
@@ -592,7 +610,9 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
       ...(jitContext === undefined ? {} : { jitContext }),
       memory: {
         cover: boundedMemory,
+        threads: subjectThreads,
         search: (memoryRequest) => attentionMemory.search(memoryRequest),
+        thread: (threadId, kinds, limit) => attentionMemory.thread(threadId, kinds, limit),
         zoom: (nodeId) => attentionMemory.zoom(nodeId)
       }
     }, 60_000, (message) => setAttentionActivity("deliberating", message, request.id));
@@ -1005,6 +1025,28 @@ async function handle(raw: string): Promise<boolean> {
     return true;
   }
 
+  if (command.type === "attention_timeline_query") {
+    emit({
+      type: "attention_timeline", id: command.id,
+      page: attentionMemory.timeline({
+        mode: command.mode,
+        ...(command.threadId === undefined ? {} : { threadId: command.threadId }),
+        ...(command.cursor === undefined ? {} : { cursor: command.cursor }),
+        ...(command.limit === undefined ? {} : { limit: command.limit })
+      }),
+      append: command.cursor !== undefined
+    });
+    return true;
+  }
+
+  if (command.type === "attention_timeline_zoom") {
+    emit({
+      type: "attention_timeline_zoomed", id: command.id, parentId: command.nodeId,
+      items: attentionMemory.timelineZoom(command.nodeId)
+    });
+    return true;
+  }
+
   if (command.type === "attention_explain") {
     const digest = digestHistory.get(command.digestId);
     const entry = digest?.sections[command.sectionIndex]?.entries[command.entryIndex];
@@ -1016,6 +1058,7 @@ async function handle(raw: string): Promise<boolean> {
     const group = groupAttentionItems(evidence)[0];
     const applications = [...new Set(evidence.map((item) => item.app))].slice(0, 12);
     const entities = [...new Set(evidence.flatMap(attentionEntityKeys))].slice(0, 16);
+    const thread = attentionMemory.threadForSourceIds(entry.sourceIds);
     const matchedPolicy = attentionPolicies.evaluate(evidence)[0]?.policy;
     const historyQuery = [group?.subject, entry.headline, ...applications].filter(Boolean).join(" ").slice(0, 200);
     const history = historyQuery === "" ? [] : attentionMemory.search({ query: historyQuery, limit: 6 });
@@ -1030,6 +1073,7 @@ async function handle(raw: string): Promise<boolean> {
         sourceCount: entry.sourceIds.length,
         applications,
         entities,
+        ...(thread === undefined ? {} : { thread }),
         ...(matchedPolicy === undefined ? {} : {
           policy: { id: matchedPolicy.id, name: matchedPolicy.name, action: matchedPolicy.action }
         }),
@@ -1046,15 +1090,51 @@ async function handle(raw: string): Promise<boolean> {
         command.request, templates, 60_000,
         (message) => emit({ type: "attention_policy_state", id: command.id, state: "working", message })
       );
-      const policy = attentionPolicies.add(draft);
-      emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
-      emit({ type: "attention_policy_state", id: command.id, state: "saved", message: `Added ${policy.name}` });
+      const now = Date.now();
+      for (const [previewId, preview] of pendingPolicyPreviews)
+        if (preview.expiresAt <= now) pendingPolicyPreviews.delete(previewId);
+      while (pendingPolicyPreviews.size >= 4) pendingPolicyPreviews.delete(pendingPolicyPreviews.keys().next().value!);
+      const previewId = randomUUID();
+      const expiresAt = now + 10 * 60_000;
+      pendingPolicyPreviews.set(previewId, { draft, expiresAt });
+      const inspection = attentionPolicies.preview(draft, attention.pending(200));
+      const preview: AttentionPolicyPreview = {
+        id: previewId,
+        ...inspection,
+        expiresAt: new Date(expiresAt).toISOString()
+      };
+      emit({ type: "attention_policy_preview", id: command.id, preview });
+      emit({
+        type: "attention_policy_state", id: command.id, state: "preview",
+        message: preview.conflicts.length > 0
+          ? `${preview.conflicts.length} overlapping policy${preview.conflicts.length === 1 ? "" : "ies"} to review`
+          : "Review how this policy will behave"
+      });
     } catch (error) {
       emit({
         type: "error", id: command.id, code: "attention_policy_failed",
         message: error instanceof Error ? error.message : "The standing policy could not be created."
       });
     }
+    return true;
+  }
+
+  if (command.type === "attention_policy_accept") {
+    const pending = pendingPolicyPreviews.get(command.previewId);
+    pendingPolicyPreviews.delete(command.previewId);
+    if (pending === undefined || pending.expiresAt <= Date.now()) {
+      emit({ type: "error", id: command.id, code: "attention_policy_preview_expired", message: "That policy preview expired. Draft it again." });
+      return true;
+    }
+    const policy = attentionPolicies.add(pending.draft);
+    emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
+    emit({ type: "attention_policy_state", id: command.id, state: "saved", message: `Added ${policy.name}` });
+    return true;
+  }
+
+  if (command.type === "attention_policy_reject") {
+    pendingPolicyPreviews.delete(command.previewId);
+    emit({ type: "attention_policy_state", id: command.id, state: "idle", message: "" });
     return true;
   }
 

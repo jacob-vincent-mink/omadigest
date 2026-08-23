@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writ
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { attentionEntityKeys, classifyAttentionItem } from "./intelligence.js";
-import type { AttentionItem, AttentionPolicy } from "./types.js";
+import type { AttentionItem, AttentionPolicy, AttentionPolicyPreview } from "./types.js";
 
 export const MAX_ATTENTION_POLICIES = 32;
 export const MAX_ATTENTION_POLICY_BYTES = 128 * 1024;
@@ -110,6 +110,42 @@ export class AttentionPolicyStore {
     }).sort((left, right) => right.policy.priority - left.policy.priority || left.policy.id.localeCompare(right.policy.id));
   }
 
+  preview(raw: AttentionPolicyDraft, items: AttentionItem[]): Omit<AttentionPolicyPreview, "id" | "expiresAt"> {
+    const draft = attentionPolicyDraftSchema.parse(raw);
+    const candidate = policySchema.parse({
+      ...draft, id: "preview", enabled: true, createdAt: new Date(0).toISOString()
+    }) as AttentionPolicy;
+    const matched = items.slice(0, 200).map(classifyAttentionItem)
+      .filter((item) => matches(candidate, item)).slice(0, 100);
+    const conflicts = this.#policies.filter((policy) => policy.enabled
+      && policy.action !== candidate.action && potentiallyOverlaps(policy.match, candidate.match))
+      .map((policy) => ({
+        policyId: policy.id,
+        name: policy.name,
+        action: policy.action,
+        priority: policy.priority,
+        winner: draft.priority > policy.priority ? "draft" as const : "existing" as const
+      })).sort((left, right) => right.priority - left.priority || left.policyId.localeCompare(right.policyId)).slice(0, 8);
+    return {
+      draft: {
+        name: candidate.name,
+        description: candidate.description,
+        priority: candidate.priority,
+        action: candidate.action,
+        match: cloneMatch(candidate.match),
+        ...(candidate.templateId === undefined ? {} : { templateId: candidate.templateId }),
+        ...(candidate.followUpMinutes === undefined ? {} : { followUpMinutes: candidate.followUpMinutes })
+      },
+      matchedCount: matched.length,
+      examples: matched.slice(0, 3).map((item) => ({
+        id: item.id,
+        app: item.app.slice(0, 120),
+        title: item.title.slice(0, 200)
+      })),
+      conflicts
+    };
+  }
+
   clear(): void {
     this.#policies = [];
     rmSync(this.#path, { force: true });
@@ -162,4 +198,14 @@ function slug(value: string): string {
 
 function normalizeEntity(value: string): string {
   return value.toLowerCase().replaceAll(/\s+/gu, " ").trim().slice(0, 160);
+}
+
+function potentiallyOverlaps(left: AttentionPolicy["match"], right: AttentionPolicy["match"]): boolean {
+  for (const key of ["applications", "sources", "intents", "urgencies"] as const) {
+    const leftValues = left[key]?.map((value) => String(value).trim().toLowerCase());
+    const rightValues = right[key]?.map((value) => String(value).trim().toLowerCase());
+    if (leftValues !== undefined && rightValues !== undefined
+      && !leftValues.some((value) => rightValues.includes(value))) return false;
+  }
+  return true;
 }

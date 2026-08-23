@@ -53,4 +53,24 @@ describe("AttentionPolicyStore", () => {
       action: "notify", match: { intents: ["update"] }
     })).toThrow("Notify policies");
   });
+
+  it("previews current matches and deterministic priority conflicts without persisting", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-policy-preview-"));
+    roots.push(root);
+    const store = new AttentionPolicyStore({ XDG_CONFIG_HOME: root, HOME: root });
+    store.add({
+      name: "Critical interruption", description: "Interrupt for critical failures", priority: 90,
+      action: "notify", match: { applications: ["GitHub"], intents: ["failure"] }
+    });
+    const preview = store.preview({
+      name: "Failure report", description: "Digest GitHub failures", priority: 70,
+      action: "digest", match: { applications: ["GitHub"], intents: ["failure"] }, templateId: "general"
+    }, [fixture()]);
+    expect(preview).toMatchObject({
+      matchedCount: 1,
+      examples: [{ id: "ci-184", app: "GitHub" }],
+      conflicts: [{ name: "Critical interruption", action: "notify", winner: "existing" }]
+    });
+    expect(store.list()).toHaveLength(1);
+  });
 });

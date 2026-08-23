@@ -5,10 +5,15 @@ import { z } from "zod";
 import { attentionEntityKeys, groupAttentionItems } from "./intelligence.js";
 import type {
   AttentionItem,
+  AttentionCalibration,
   AttentionMemoryKind,
   AttentionMemoryNode,
   AttentionMemoryStatus,
   AttentionPreferenceHint,
+  AttentionThread,
+  AttentionTimelineItem,
+  AttentionTimelineMode,
+  AttentionTimelinePage,
   Digest
 } from "./types.js";
 
@@ -16,6 +21,9 @@ export const ATTENTION_MEMORY_MAX_EPISODES = 512;
 export const ATTENTION_MEMORY_RETENTION_DAYS = 90;
 export const ATTENTION_MEMORY_MAX_FILE_BYTES = 512 * 1024;
 export const ATTENTION_MEMORY_MAX_MODEL_BYTES = 48 * 1024;
+export const ATTENTION_TIMELINE_MAX_BYTES = 64 * 1024;
+export const ATTENTION_TIMELINE_MAX_ITEMS = 40;
+export const ATTENTION_TIMELINE_MAX_THREADS = 16;
 
 const sourceSchema = z.object({
   id: z.string().min(1).max(200),
@@ -49,12 +57,20 @@ export type AttentionMemorySearch = {
   limit?: number;
 };
 
+export type AttentionTimelineRequest = {
+  mode: AttentionTimelineMode;
+  threadId?: string;
+  cursor?: string;
+  limit?: number;
+};
+
 export class AttentionMemory {
   readonly #path: string;
   #state: MemoryState = { version: 1, episodes: [] };
   readonly #knownNodes = new Map<string, AttentionMemoryNode>();
   readonly #knownRanges = new Map<string, [number, number]>();
   readonly #knownSources = new Map<string, SourceReference[]>();
+  readonly #knownEpisodeIds = new Map<string, string[]>();
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
     const state = env.XDG_STATE_HOME?.startsWith("/")
@@ -210,15 +226,103 @@ export class AttentionMemory {
     return boundedNodes(scored.map(({ index }) => this.#node(episodes, index, index + 1)));
   }
 
-  zoom(nodeId: string): AttentionMemoryNode[] {
+  thread(threadId: string, kinds: AttentionMemoryKind[] = [], limit = 12): AttentionMemoryNode[] {
+    if (!/^thread-[a-f0-9]{24}$/u.test(threadId)) return [];
     const episodes = this.#ordered();
-    const range = this.#knownRanges.get(nodeId);
+    const threadIndex = buildThreadIndex(episodes);
+    const allowedKinds = new Set(kinds.slice(0, 4));
+    const maximum = Math.max(1, Math.min(16, limit));
+    const indexes = episodes.map((episode, index) => ({ episode, index }))
+      .filter(({ episode }) => threadIndex.get(episode.id)?.id === threadId
+        && (allowedKinds.size === 0 || allowedKinds.has(episode.kind)))
+      .slice(-maximum).reverse();
+    return boundedNodes(indexes.map(({ index }) => this.#node(episodes, index, index + 1)));
+  }
+
+  zoom(nodeId: string): AttentionMemoryNode[] {
+    const knownIds = this.#knownEpisodeIds.get(nodeId);
+    const episodes = knownIds === undefined
+      ? this.#ordered()
+      : this.#ordered().filter((episode) => knownIds.includes(episode.id));
+    const range = knownIds === undefined ? this.#knownRanges.get(nodeId) : [0, episodes.length] as [number, number];
     if (range === undefined || range[1] - range[0] <= 1) return [];
     const midpoint = Math.floor((range[0] + range[1]) / 2);
     return boundedNodes([
       this.#node(episodes, range[0], midpoint),
       this.#node(episodes, midpoint, range[1])
     ]);
+  }
+
+  timeline(request: AttentionTimelineRequest): AttentionTimelinePage {
+    const episodes = this.#ordered();
+    const threadIndex = buildThreadIndex(episodes);
+    const threads = this.#threads(episodes, threadIndex);
+    const selectedThreadId = request.threadId?.trim();
+    if (request.mode === "memory") {
+      const selectedEpisodes = selectedThreadId === undefined
+        ? episodes
+        : episodes.filter((episode) => threadIndex.get(episode.id)?.id === selectedThreadId);
+      const nodes = this.#coverEpisodes(selectedEpisodes, Math.max(1, Math.min(24, request.limit ?? 16))).reverse();
+      return {
+        mode: "memory",
+        items: boundedTimelineItems(nodes.map((node) => this.#timelineNode(node, selectedEpisodes, threadIndex))),
+        threads,
+        hasMore: false,
+        ...(selectedThreadId === undefined ? {} : { selectedThreadId })
+      };
+    }
+
+    const cursor = parseTimelineCursor(request.cursor);
+    if (request.cursor !== undefined && cursor === undefined) return {
+      mode: "events", items: [], threads, hasMore: false,
+      ...(selectedThreadId === undefined ? {} : { selectedThreadId })
+    };
+    const limit = Math.max(1, Math.min(ATTENTION_TIMELINE_MAX_ITEMS, request.limit ?? 24));
+    const matching = [...episodes].reverse().filter((episode) => {
+      if (selectedThreadId !== undefined && threadIndex.get(episode.id)?.id !== selectedThreadId) return false;
+      return cursor === undefined || compareEpisodeToCursor(episode, cursor) < 0;
+    });
+    const candidates = matching.slice(0, limit + 1);
+    const items = boundedTimelineItems(candidates.slice(0, limit).map((episode) =>
+      episodeTimelineItem(episode, threadIndex.get(episode.id)!)));
+    const last = items.at(-1);
+    return {
+      mode: "events",
+      items,
+      threads,
+      hasMore: candidates.length > items.length,
+      ...(last === undefined || candidates.length <= items.length ? {} : { nextCursor: timelineCursor(last.to, last.id) }),
+      ...(selectedThreadId === undefined ? {} : { selectedThreadId })
+    };
+  }
+
+  timelineZoom(nodeId: string): AttentionTimelineItem[] {
+    const episodes = this.#ordered();
+    const threadIndex = buildThreadIndex(episodes);
+    const children = this.zoom(nodeId).reverse();
+    return boundedTimelineItems(children.map((node) => this.#timelineNode(node, episodes, threadIndex)));
+  }
+
+  threadForSourceIds(sourceIds: string[]): { id: string; label: string } | undefined {
+    return this.threadsForSourceIds(sourceIds, 1)[0];
+  }
+
+  threadsForSourceIds(sourceIds: string[], limit = 16): Array<{ id: string; label: string }> {
+    const wanted = new Set(sourceIds.slice(0, 50));
+    if (wanted.size === 0) return [];
+    const episodes = this.#ordered();
+    const threadIndex = buildThreadIndex(episodes);
+    const result: Array<{ id: string; label: string }> = [];
+    const seen = new Set<string>();
+    for (const episode of [...episodes].reverse()) {
+      if (!episode.sources.some((source) => wanted.has(source.id))) continue;
+      const thread = threadIndex.get(episode.id)!;
+      if (seen.has(thread.id)) continue;
+      result.push(thread);
+      seen.add(thread.id);
+      if (result.length >= Math.max(1, Math.min(16, limit))) break;
+    }
+    return result;
   }
 
   byIds(ids: string[]): AttentionItem[] {
@@ -252,6 +356,117 @@ export class AttentionMemory {
       ...(episodes[0] === undefined ? {} : { oldestAt: episodes[0].occurredAt }),
       ...(episodes.at(-1) === undefined ? {} : { newestAt: episodes.at(-1)!.occurredAt })
     };
+  }
+
+  calibration(): AttentionCalibration {
+    const episodes = this.#ordered();
+    const outcomes = episodes.filter((episode) => episode.kind === "outcome");
+    const threadIndex = buildThreadIndex(episodes);
+    const grouped = new Map<string, MemoryEpisode[]>();
+    for (const episode of outcomes) {
+      const threadId = threadIndex.get(episode.id)!.id;
+      grouped.set(threadId, [...(grouped.get(threadId) ?? []), episode]);
+    }
+    const subjects = [...grouped.entries()].map(([threadId, entries]) => {
+      const latest = entries.at(-1)!;
+      const score = entries.reduce((total, episode) => total
+        + (episode.action === "useful" || episode.action === "handoff" ? 3
+          : episode.action === "read" ? 1 : episode.action === "not-useful" ? -3 : 0), 0);
+      return {
+        threadId,
+        label: threadIndex.get(latest.id)!.label,
+        signal: score > 0 ? "surface" as const : score < 0 ? "defer" as const : "neutral" as const,
+        sampleSize: entries.length,
+        lastAt: latest.occurredAt
+      };
+    }).sort((left, right) => right.sampleSize - left.sampleSize || right.lastAt.localeCompare(left.lastAt)).slice(0, 6);
+    return {
+      outcomeCount: outcomes.length,
+      readCount: outcomes.filter((episode) => episode.action === "read").length,
+      handoffCount: outcomes.filter((episode) => episode.action === "handoff").length,
+      usefulCount: outcomes.filter((episode) => episode.action === "useful").length,
+      notUsefulCount: outcomes.filter((episode) => episode.action === "not-useful").length,
+      subjects
+    };
+  }
+
+  #coverEpisodes(episodes: MemoryEpisode[], limit: number): AttentionMemoryNode[] {
+    if (episodes.length === 0) return [];
+    const maximum = Math.max(1, Math.min(48, limit));
+    const ranges: Array<[number, number]> = [[0, episodes.length]];
+    while (ranges.length < maximum) {
+      let selected = -1;
+      let selectedScore = -1;
+      for (let index = 0; index < ranges.length; index += 1) {
+        const [lo, hi] = ranges[index]!;
+        if (hi - lo <= 1) continue;
+        const recency = hi / episodes.length;
+        const score = (hi - lo) * (1 + recency * 2);
+        if (score >= selectedScore) { selected = index; selectedScore = score; }
+      }
+      if (selected < 0) break;
+      const [lo, hi] = ranges[selected]!;
+      const midpoint = Math.floor((lo + hi) / 2);
+      ranges.splice(selected, 1, [lo, midpoint], [midpoint, hi]);
+    }
+    return boundedNodes(ranges.map(([lo, hi]) => this.#node(episodes, lo, hi)));
+  }
+
+  #timelineNode(
+    node: AttentionMemoryNode,
+    episodes: MemoryEpisode[],
+    threadIndex: Map<string, ThreadDescriptor>
+  ): AttentionTimelineItem {
+    const knownIds = new Set(this.#knownEpisodeIds.get(node.id) ?? []);
+    const selected = knownIds.size === 0 ? [] : episodes.filter((episode) => knownIds.has(episode.id));
+    const threadIds = new Set(selected.map((episode) => threadIndex.get(episode.id)?.id));
+    const thread = selected[0] === undefined || threadIds.size !== 1 ? undefined : threadIndex.get(selected[0].id);
+    const sources = uniqueSources(selected.flatMap((episode) => episode.sources));
+    const single = selected.length === 1 ? selected[0] : undefined;
+    return {
+      id: node.id,
+      kind: single?.kind ?? "summary",
+      subject: node.subject,
+      summary: single === undefined
+        ? bounded(selected.slice(-4).map((episode) => `${episode.subject}: ${timelineSummary(episode)}`).join("; "), 1_200)
+        : timelineSummary(single),
+      from: node.from,
+      to: node.to,
+      episodeCount: node.episodeCount,
+      sourceCount: sources.length,
+      applications: [...new Set(sources.map((source) => source.app))].slice(0, 8),
+      ...(thread === undefined ? {} : { threadId: thread.id, threadLabel: thread.label }),
+      ...(single?.action === undefined ? {} : { action: single.action }),
+      ...(single?.digestId === undefined ? {} : { digestId: single.digestId }),
+      memoryNodeId: node.id,
+      expandable: node.episodeCount > 1
+    };
+  }
+
+  #threads(episodes: MemoryEpisode[], threadIndex: Map<string, ThreadDescriptor>): AttentionThread[] {
+    const grouped = new Map<string, { label: string; episodes: MemoryEpisode[] }>();
+    for (const episode of episodes) {
+      const thread = threadIndex.get(episode.id)!;
+      const current = grouped.get(thread.id) ?? { label: thread.label, episodes: [] };
+      current.label = episode.subject;
+      current.episodes.push(episode);
+      grouped.set(thread.id, current);
+    }
+    return [...grouped.entries()].map(([id, value]) => {
+      const ordered = [...value.episodes].sort((left, right) => compareEpisodes(left, right));
+      const last = ordered.at(-1)!;
+      const sources = uniqueSources(ordered.flatMap((episode) => episode.sources));
+      return {
+        id,
+        label: bounded(value.label, 120),
+        episodeCount: ordered.length,
+        sourceCount: sources.length,
+        applications: [...new Set(sources.map((source) => source.app))].slice(0, 6),
+        lastAt: last.occurredAt,
+        ...(last.action === undefined ? {} : { lastAction: last.action })
+      };
+    }).sort((left, right) => right.lastAt.localeCompare(left.lastAt))
+      .slice(0, ATTENTION_TIMELINE_MAX_THREADS);
   }
 
   applyNotificationPolicy(allowed: (app: string) => boolean): void {
@@ -296,7 +511,7 @@ export class AttentionMemory {
   }
 
   #ordered(): MemoryEpisode[] {
-    return [...this.#state.episodes].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+    return [...this.#state.episodes].sort(compareEpisodes);
   }
 
   #node(episodes: MemoryEpisode[], lo: number, hi: number): AttentionMemoryNode {
@@ -325,6 +540,7 @@ export class AttentionMemory {
     this.#knownNodes.set(node.id, node);
     this.#knownRanges.set(node.id, [lo, hi]);
     this.#knownSources.set(node.id, sources);
+    this.#knownEpisodeIds.set(node.id, selected.map((episode) => episode.id));
     return node;
   }
 
@@ -374,6 +590,7 @@ export class AttentionMemory {
     this.#knownNodes.clear();
     this.#knownRanges.clear();
     this.#knownSources.clear();
+    this.#knownEpisodeIds.clear();
   }
 }
 
@@ -413,6 +630,153 @@ function boundedNodes(nodes: AttentionMemoryNode[]): AttentionMemoryNode[] {
     const presented = { ...node, summary: node.summary.slice(0, 600), sourceIds: node.sourceIds.slice(0, 4) };
     const size = Buffer.byteLength(JSON.stringify(presented), "utf8") + 1;
     if (bytes + size > ATTENTION_MEMORY_MAX_MODEL_BYTES) break;
+    result.push(presented);
+    bytes += size;
+  }
+  return result;
+}
+
+type ThreadDescriptor = { id: string; label: string };
+
+function episodeTimelineItem(episode: MemoryEpisode, thread: ThreadDescriptor): AttentionTimelineItem {
+  const sources = uniqueSources(episode.sources);
+  return {
+    id: episode.id,
+    kind: episode.kind,
+    subject: episode.subject,
+    summary: timelineSummary(episode),
+    from: episode.occurredAt,
+    to: episode.occurredAt,
+    episodeCount: 1,
+    sourceCount: sources.length,
+    applications: [...new Set(sources.map((source) => source.app))].slice(0, 8),
+    threadId: thread.id,
+    threadLabel: thread.label,
+    ...(episode.action === undefined ? {} : { action: episode.action }),
+    ...(episode.digestId === undefined ? {} : { digestId: episode.digestId }),
+    expandable: false
+  };
+}
+
+function episodeAliases(episode: MemoryEpisode): string[] {
+  const entities = attentionEntityKeys({
+    id: episode.id,
+    source: episode.sources[0]?.source ?? "omadigest.memory",
+    app: episode.sources[0]?.app ?? "OmaDigest Memory",
+    title: episode.subject,
+    body: episode.summary,
+    contentAvailable: true,
+    urgency: "low",
+    occurredAt: episode.occurredAt
+  });
+  const work = entities.filter((entity) => entity.startsWith("work:")).slice(0, 4);
+  const semantic = work.length > 0 ? work : entities.filter((entity) =>
+    entity.startsWith("cve:") || entity.startsWith("ref:") || entity.startsWith("repo:")).slice(0, 4);
+  const sourceAliases = episode.sources.length === 1 ? [`source:${episode.sources[0]!.id}`] : [];
+  const subject = `subject:${episode.subject.toLowerCase().replaceAll(/[^\p{L}\p{N}]+/gu, "-").replaceAll(/^-|-$/gu, "").slice(0, 120)}`;
+  return [...semantic, ...sourceAliases, ...(semantic.length === 0 ? [subject] : [])];
+}
+
+function timelineSummary(episode: MemoryEpisode): string {
+  if (episode.action === undefined) return episode.summary;
+  const prefix = `${episode.action}:`;
+  return episode.summary.toLowerCase().startsWith(prefix)
+    ? episode.summary.slice(prefix.length).trim() || episode.subject
+    : episode.summary;
+}
+
+function buildThreadIndex(episodes: MemoryEpisode[]): Map<string, ThreadDescriptor> {
+  const parent = new Map<string, string>();
+  const aliasesByEpisode = new Map<string, string[]>();
+  const find = (value: string): string => {
+    const current = parent.get(value);
+    if (current === undefined) { parent.set(value, value); return value; }
+    if (current === value) return value;
+    const root = find(current);
+    parent.set(value, root);
+    return root;
+  };
+  const union = (left: string, right: string): void => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) parent.set(rightRoot, leftRoot);
+  };
+  for (const episode of episodes) {
+    const aliases = episodeAliases(episode);
+    aliasesByEpisode.set(episode.id, aliases);
+    for (const alias of aliases) find(alias);
+    for (const alias of aliases.slice(1)) union(aliases[0]!, alias);
+  }
+  const latestByRoot = new Map<string, MemoryEpisode>();
+  const earliestByRoot = new Map<string, MemoryEpisode>();
+  const aliasesByRoot = new Map<string, Set<string>>();
+  for (const episode of episodes) {
+    const aliases = aliasesByEpisode.get(episode.id)!;
+    const root = find(aliases[0]!);
+    const knownAliases = aliasesByRoot.get(root) ?? new Set<string>();
+    for (const alias of aliases) knownAliases.add(alias);
+    aliasesByRoot.set(root, knownAliases);
+    if (!earliestByRoot.has(root)) earliestByRoot.set(root, episode);
+    latestByRoot.set(root, episode);
+  }
+  const descriptors = new Map<string, ThreadDescriptor>();
+  for (const root of aliasesByRoot.keys()) {
+    const earliest = earliestByRoot.get(root)!;
+    const ranked = [...aliasesByEpisode.get(earliest.id)!]
+      .sort((left, right) => aliasRank(left) - aliasRank(right) || left.localeCompare(right));
+    descriptors.set(root, {
+      id: `thread-${digestId(ranked[0] ?? root)}`,
+      label: bounded(latestByRoot.get(root)?.subject ?? "Attention thread", 120)
+    });
+  }
+  return new Map(episodes.map((episode) => {
+    const aliases = aliasesByEpisode.get(episode.id)!;
+    return [episode.id, descriptors.get(find(aliases[0]!))!] as const;
+  }));
+}
+
+function aliasRank(value: string): number {
+  if (value.startsWith("work:")) return 0;
+  if (value.startsWith("cve:")) return 1;
+  if (value.startsWith("ref:")) return 2;
+  if (value.startsWith("repo:")) return 3;
+  if (value.startsWith("source:")) return 4;
+  return 5;
+}
+
+function compareEpisodes(left: MemoryEpisode, right: MemoryEpisode): number {
+  return left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id);
+}
+
+function timelineCursor(occurredAt: string, id: string): string {
+  return Buffer.from(JSON.stringify([occurredAt, id]), "utf8").toString("base64url");
+}
+
+function parseTimelineCursor(value: string | undefined): { occurredAt: string; id: string } | undefined {
+  if (value === undefined || value.length > 320) return undefined;
+  try {
+    const parsed = z.tuple([z.string().datetime(), z.string().min(1).max(100)])
+      .safeParse(JSON.parse(Buffer.from(value, "base64url").toString("utf8")));
+    return parsed.success ? { occurredAt: parsed.data[0], id: parsed.data[1] } : undefined;
+  } catch { return undefined; }
+}
+
+function compareEpisodeToCursor(episode: MemoryEpisode, cursor: { occurredAt: string; id: string }): number {
+  return episode.occurredAt.localeCompare(cursor.occurredAt) || episode.id.localeCompare(cursor.id);
+}
+
+function boundedTimelineItems(items: AttentionTimelineItem[]): AttentionTimelineItem[] {
+  const result: AttentionTimelineItem[] = [];
+  let bytes = 2;
+  for (const item of items.slice(0, ATTENTION_TIMELINE_MAX_ITEMS)) {
+    const presented = {
+      ...item,
+      subject: item.subject.slice(0, 200),
+      summary: item.summary.slice(0, 600),
+      applications: item.applications.slice(0, 8)
+    };
+    const size = Buffer.byteLength(JSON.stringify(presented), "utf8") + 1;
+    if (bytes + size > ATTENTION_TIMELINE_MAX_BYTES) break;
     result.push(presented);
     bytes += size;
   }

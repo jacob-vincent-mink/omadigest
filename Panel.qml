@@ -31,6 +31,7 @@ Panel {
   readonly property bool attentionBusy: OmaDigest.OmaDigestStore.attentionBusy
 
   property string page: "list"
+  property bool timelineThreadsOpen: false
   property string digestTab: "unread"
   property string preparedDraftKind: ""
   property string settingsPage: "integrations"
@@ -176,6 +177,38 @@ Panel {
     if (!current || String(current.readAt || "") !== "") return
     OmaDigest.OmaDigestStore.markDigestRead(current.id)
     OmaDigest.OmaDigestStore.digest = Object.assign({}, current, { readAt: new Date().toISOString() })
+  }
+
+  function openAttentionTimeline(threadId, threadLabel) {
+    root.timelineThreadsOpen = false
+    root.page = "timeline"
+    OmaDigest.OmaDigestStore.requestAttentionTimeline(
+      "events", String(threadId || ""), String(threadLabel || "All attention"), false)
+    root.scrollToTop()
+  }
+
+  function timelineKindLabel(entry) {
+    var kind = String(entry && entry.kind || "evidence")
+    var action = String(entry && entry.action || "")
+    if (kind === "summary") return "MEMORY SPAN"
+    if (kind === "evidence") return "RECEIVED"
+    if (kind === "digest") return "DIGESTED"
+    if (kind === "outcome") return action === "handoff" ? "SENT TO AGENT" : action.toUpperCase() || "OUTCOME"
+    return action === "hold" ? "HELD FOR LATER" : action === "notify" ? "NOTIFIED" : action.toUpperCase() || "DECIDED"
+  }
+
+  function timelineWhen(entry) {
+    var from = new Date(String(entry && entry.from || ""))
+    var to = new Date(String(entry && entry.to || ""))
+    if (isNaN(to.getTime())) return ""
+    if (Number(entry && entry.episodeCount || 1) > 1 && !isNaN(from.getTime())) {
+      var fromDay = from.toLocaleDateString(Qt.locale(), "MMM d")
+      var toDay = to.toLocaleDateString(Qt.locale(), "MMM d")
+      if (fromDay === toDay)
+        return fromDay + " · " + from.toLocaleTimeString(Qt.locale(), "hh:mm") + "–" + to.toLocaleTimeString(Qt.locale(), "hh:mm")
+      return fromDay + " – " + toDay
+    }
+    return to.toLocaleString(Qt.locale(), "MMM d · hh:mm")
   }
 
   function scrollToTop() { Qt.callLater(function() { panelScroll.contentY = 0 }) }
@@ -465,6 +498,16 @@ Panel {
       root.selectedSource = null
       root.sourcesView = "list"
       root.page = "settings"
+      root.open()
+      root.scrollToTop()
+      return "ok"
+    }
+
+    function showTimeline(mode: string): string {
+      root.page = "timeline"
+      root.timelineThreadsOpen = false
+      OmaDigest.OmaDigestStore.requestAttentionTimeline(
+        String(mode) === "memory" ? "memory" : "events", "", "All attention", false)
       root.open()
       root.scrollToTop()
       return "ok"
@@ -811,7 +854,8 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 text: root.page === "settings" ? "OMADIGEST SETTINGS"
-                  : root.page === "detail" ? "DIGEST" : "OMADIGEST"
+                  : root.page === "detail" ? "DIGEST"
+                  : root.page === "timeline" ? "ATTENTION TIMELINE" : "OMADIGEST"
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.subtitle
@@ -826,7 +870,8 @@ Panel {
                   ? (root.attentionBusy
                     ? String(OmaDigest.OmaDigestStore.attentionActivity.message || "Reviewing attention…")
                     : root.attentionSummaryText())
-                  : root.page === "settings" ? "Sources, privacy, connections, and retained data" : ""
+                  : root.page === "settings" ? "Sources, privacy, connections, and retained data"
+                  : root.page === "timeline" ? String(OmaDigest.OmaDigestStore.attentionTimelineThreadLabel || "All attention") : ""
                 visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
@@ -841,7 +886,7 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
 
               PanelActionButton {
-                visible: root.page === "detail" || root.page === "settings"
+                visible: root.page === "detail" || root.page === "settings" || root.page === "timeline"
                 iconText: "󰅁"
                 tooltipText: root.page === "settings" && root.settingsPage === "integrations" && root.sourcesView !== "list"
                   ? "Back to sources" : "Back to digests"
@@ -850,8 +895,20 @@ Panel {
                 onClicked: {
                   if (root.page === "settings" && root.settingsPage === "integrations" && root.sourcesView !== "list")
                     root.showSourceList()
-                  else root.page = "list"
+                  else {
+                    root.timelineThreadsOpen = false
+                    root.page = "list"
+                  }
                 }
+              }
+
+              PanelActionButton {
+                visible: root.page === "list"
+                iconText: "󰋚"
+                tooltipText: "Open attention timeline"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.openAttentionTimeline("", "All attention")
               }
 
               PanelActionButton {
@@ -1226,6 +1283,367 @@ Panel {
             }
           }
 
+          // One bounded projection of observable attention events and compressed memory.
+          Column {
+            width: parent.width
+            visible: root.page === "timeline"
+            spacing: Style.space(10)
+
+            Row {
+              width: parent.width
+              height: Style.space(40)
+              spacing: Style.space(6)
+
+              Repeater {
+                model: [
+                  { id: "events", label: "Events" },
+                  { id: "memory", label: "Memory" }
+                ]
+
+                Button {
+                  required property var modelData
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: (content.width - Style.space(6)) / 2
+                  height: parent.height
+                  text: String(modelData.label)
+                  selected: OmaDigest.OmaDigestStore.attentionTimelineMode === modelData.id
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.bodySmall
+                  onClicked: {
+                    root.timelineThreadsOpen = false
+                    OmaDigest.OmaDigestStore.setAttentionTimelineMode(String(modelData.id))
+                  }
+                }
+              }
+            }
+
+            Rectangle {
+              width: parent.width
+              height: Style.space(42)
+              radius: Style.cornerRadius
+              color: timelineSubjectMouse.containsMouse
+                ? Style.hoverFillFor(root.foreground, Color.accent)
+                : Style.normalFillFor(root.foreground, Color.accent)
+              border.width: Style.spacing.hairline
+              border.color: Style.normalBorderFor(root.foreground, Color.accent)
+
+              Row {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.margins: Style.space(10)
+                spacing: Style.space(8)
+
+                Text {
+                  textFormat: Text.PlainText
+                  width: parent.width - timelineSubjectChevron.width - Style.space(8)
+                  text: String(OmaDigest.OmaDigestStore.attentionTimelineThreadLabel || "All attention")
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.weight: Font.DemiBold
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  id: timelineSubjectChevron
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.timelineThreadsOpen ? "⌃" : "⌄"
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                }
+              }
+
+              MouseArea {
+                id: timelineSubjectMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.timelineThreadsOpen = !root.timelineThreadsOpen
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.timelineThreadsOpen
+              spacing: Style.space(3)
+
+              Repeater {
+                model: [{ id: "", label: "All attention", episodeCount: Number(OmaDigest.OmaDigestStore.attentionMemory.episodeCount || 0) }]
+                  .concat(OmaDigest.OmaDigestStore.attentionTimelineThreads || [])
+
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: Style.space(40)
+                  radius: Style.cornerRadius
+                  color: String(modelData.id || "") === OmaDigest.OmaDigestStore.attentionTimelineThreadId
+                    ? Style.selectedFillFor(root.foreground, Color.accent)
+                    : (timelineThreadMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent")
+
+                  Row {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.margins: Style.space(9)
+                    spacing: Style.space(8)
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width - timelineThreadCount.width - Style.space(8)
+                      text: String(modelData.label || "Subject")
+                      color: String(modelData.id || "") === OmaDigest.OmaDigestStore.attentionTimelineThreadId
+                        ? Color.accent : root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.weight: Font.DemiBold
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      id: timelineThreadCount
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: String(Number(modelData.episodeCount || 0))
+                      color: Qt.darker(root.foreground, 1.35)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.features: { "tnum": 1 }
+                    }
+                  }
+
+                  MouseArea {
+                    id: timelineThreadMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      root.timelineThreadsOpen = false
+                      OmaDigest.OmaDigestStore.selectAttentionTimelineThread(modelData)
+                    }
+                  }
+                }
+              }
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              visible: OmaDigest.OmaDigestStore.attentionTimelineMode === "memory"
+                && OmaDigest.OmaDigestStore.attentionTimelineZoomDepth === 0
+              width: parent.width
+              text: "Recent moments stay distinct. Older history folds into spans you can open."
+              color: Qt.darker(root.foreground, 1.35)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
+
+            Button {
+              visible: OmaDigest.OmaDigestStore.attentionTimelineMode === "memory"
+                && OmaDigest.OmaDigestStore.attentionTimelineZoomDepth > 0
+              width: parent.width
+              height: visible ? Style.space(40) : 0
+              text: "←  Back to memory overview"
+              foreground: root.foreground
+              accent: Color.accent
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              bordered: true
+              onClicked: OmaDigest.OmaDigestStore.resetAttentionTimelineZoom()
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              visible: !OmaDigest.OmaDigestStore.attentionTimelineLoading
+                && (OmaDigest.OmaDigestStore.attentionTimelineItems || []).length === 0
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              topPadding: Style.space(30)
+              bottomPadding: Style.space(30)
+              text: "No attention history yet."
+              color: Qt.darker(root.foreground, 1.35)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+            }
+
+            Row {
+              visible: OmaDigest.OmaDigestStore.attentionTimelineLoading
+                && (OmaDigest.OmaDigestStore.attentionTimelineItems || []).length === 0
+              width: parent.width
+              height: visible ? Style.space(64) : 0
+              spacing: Style.space(9)
+
+              Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(8)
+                height: width
+                radius: width / 2
+                color: Color.accent
+                SequentialAnimation on opacity {
+                  running: parent.visible
+                  loops: Animation.Infinite
+                  NumberAnimation { to: 0.25; duration: 500; easing.type: Easing.InOutCubic }
+                  NumberAnimation { to: 1; duration: 500; easing.type: Easing.InOutCubic }
+                }
+              }
+              Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Loading attention history…"
+                color: Qt.darker(root.foreground, 1.25)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+            }
+
+            Repeater {
+              model: OmaDigest.OmaDigestStore.attentionTimelineItems || []
+
+              Row {
+                id: timelineEntry
+                required property var modelData
+                width: parent.width
+                height: timelineCard.height
+                spacing: Style.space(8)
+
+                Item {
+                  id: timelineRail
+                  width: Style.space(28)
+                  height: parent.height
+
+                  Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: Style.spacing.hairline
+                    color: Util.alpha(Color.accent, 0.38)
+                  }
+
+                  Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: Style.space(14)
+                    width: Math.min(Style.space(18), Style.space(9) + Math.log(Number(modelData.episodeCount || 1)) / Math.LN2)
+                    height: width
+                    radius: width / 2
+                    color: String(modelData.kind || "") === "summary" ? Color.background : Color.accent
+                    border.width: String(modelData.kind || "") === "summary" ? Style.space(2) : 0
+                    border.color: Color.accent
+                  }
+                }
+
+                Rectangle {
+                  id: timelineCard
+                  width: parent.width - timelineRail.width - parent.spacing
+                  height: timelineCardContent.implicitHeight + Style.space(18)
+                  radius: Style.cornerRadius
+                  color: timelineCardMouse.containsMouse && modelData.expandable === true
+                    ? Style.hoverFillFor(root.foreground, Color.accent)
+                    : Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: Style.spacing.hairline
+                  border.color: modelData.expandable === true
+                    ? Util.alpha(Color.accent, 0.58) : Style.normalBorderFor(root.foreground, Color.accent)
+
+                  Column {
+                    id: timelineCardContent
+                    anchors.fill: parent
+                    anchors.margins: Style.space(9)
+                    spacing: Style.space(4)
+
+                    Row {
+                      width: parent.width
+                      spacing: Style.space(8)
+                      Text {
+                        textFormat: Text.PlainText
+                        width: parent.width - timelineWhen.width - Style.space(8)
+                        text: root.timelineKindLabel(modelData)
+                        color: Color.accent
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        font.letterSpacing: 0.8
+                        elide: Text.ElideRight
+                      }
+                      Text {
+                        textFormat: Text.PlainText
+                        id: timelineWhen
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.timelineWhen(modelData)
+                        color: Qt.darker(root.foreground, 1.4)
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.features: { "tnum": 1 }
+                      }
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(modelData.subject || "Attention moment")
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.weight: Font.DemiBold
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(modelData.summary || "")
+                      color: Qt.darker(root.foreground, 1.22)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.WordWrap
+                      maximumLineCount: 3
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: Number(modelData.episodeCount || 1) > 1
+                        ? String(modelData.episodeCount) + " moments · open to inspect"
+                        : (modelData.applications || []).join(" · ")
+                      visible: text !== ""
+                      color: Qt.darker(root.foreground, 1.4)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+
+                  MouseArea {
+                    id: timelineCardMouse
+                    anchors.fill: parent
+                    enabled: modelData.expandable === true
+                    hoverEnabled: enabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: OmaDigest.OmaDigestStore.zoomAttentionTimeline(String(modelData.memoryNodeId || ""))
+                  }
+                }
+              }
+            }
+
+            Button {
+              visible: OmaDigest.OmaDigestStore.attentionTimelineMode === "events"
+                && OmaDigest.OmaDigestStore.attentionTimelineHasMore
+              width: parent.width
+              height: visible ? Style.space(40) : 0
+              text: OmaDigest.OmaDigestStore.attentionTimelineLoading ? "Loading…" : "Load older events"
+              foreground: root.foreground
+              accent: Color.accent
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              bordered: true
+              enabled: !OmaDigest.OmaDigestStore.attentionTimelineLoading
+              onClicked: OmaDigest.OmaDigestStore.loadOlderAttentionTimeline()
+            }
+          }
+
           // Clicking a list item opens this focused reader.
           Column {
             width: parent.width
@@ -1435,6 +1853,28 @@ Panel {
                             font.family: root.fontFamily
                             font.pixelSize: Style.font.caption
                             elide: Text.ElideRight
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            visible: OmaDigest.OmaDigestStore.attentionExplanation !== null
+                              && OmaDigest.OmaDigestStore.attentionExplanation.thread !== undefined
+                            text: "View subject timeline  →"
+                            color: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            topPadding: Style.space(3)
+                            MouseArea {
+                              anchors.fill: parent
+                              anchors.margins: -Style.space(6)
+                              cursorShape: Qt.PointingHandCursor
+                              onClicked: {
+                                var explanation = OmaDigest.OmaDigestStore.attentionExplanation
+                                root.openAttentionTimeline(
+                                  explanation && explanation.thread ? String(explanation.thread.id || "") : "",
+                                  explanation && explanation.thread ? String(explanation.thread.label || "Subject") : "Subject")
+                              }
+                            }
                           }
                         }
                       }
@@ -2319,6 +2759,97 @@ Panel {
                 wrapMode: Text.WordWrap
               }
 
+              Rectangle {
+                readonly property var calibration: OmaDigest.OmaDigestStore.attentionCalibration || ({})
+                visible: Number(calibration.outcomeCount || 0) > 0
+                width: parent.width
+                height: visible ? calibrationContent.implicitHeight + Style.space(18) : 0
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(root.foreground, Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: Style.normalBorderFor(root.foreground, Color.accent)
+
+                Column {
+                  id: calibrationContent
+                  anchors.fill: parent
+                  anchors.margins: Style.space(9)
+                  spacing: Style.space(6)
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: "CALIBRATION · " + Number(parent.parent.calibration.outcomeCount || 0) + " OBSERVED OUTCOMES"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 0.8
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: Number(parent.parent.calibration.readCount || 0) + " read · "
+                      + Number(parent.parent.calibration.handoffCount || 0) + " sent to agent · "
+                      + Number(parent.parent.calibration.usefulCount || 0) + " useful · "
+                      + Number(parent.parent.calibration.notUsefulCount || 0) + " not useful"
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                  }
+
+                  Repeater {
+                    model: (parent.parent.calibration.subjects || []).slice(0, 3)
+                    Row {
+                      required property var modelData
+                      width: parent.width
+                      height: Style.space(24)
+                      spacing: Style.space(8)
+                      Text {
+                        textFormat: Text.PlainText
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - calibrationSignal.width - Style.space(8)
+                        text: String(modelData.label || "Attention subject")
+                        color: root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                      }
+                      Text {
+                        textFormat: Text.PlainText
+                        id: calibrationSignal
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: String(modelData.signal || "neutral") === "surface" ? "SURFACE"
+                          : String(modelData.signal || "neutral") === "defer" ? "DEFER" : "LEARNING"
+                        color: String(modelData.signal || "neutral") === "neutral"
+                          ? Qt.darker(root.foreground, 1.35) : Color.accent
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                      }
+                    }
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: "Open the full timeline  →"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    MouseArea {
+                      anchors.fill: parent
+                      anchors.margins: -Style.space(5)
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.openAttentionTimeline("", "All attention")
+                    }
+                  }
+                }
+              }
+
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
@@ -2375,6 +2906,142 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
+              }
+
+              Rectangle {
+                readonly property var preview: OmaDigest.OmaDigestStore.attentionPolicyPreview
+                visible: preview !== null
+                width: parent.width
+                height: visible ? policyPreviewContent.implicitHeight + Style.space(20) : 0
+                radius: Style.cornerRadius
+                color: Style.selectedFillFor(root.foreground, Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: Color.accent
+
+                Column {
+                  id: policyPreviewContent
+                  anchors.fill: parent
+                  anchors.margins: Style.space(10)
+                  spacing: Style.space(7)
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: "POLICY PREVIEW"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 1
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: parent.parent.preview ? String(parent.parent.preview.draft.name || "Standing policy") : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: parent.parent.preview
+                      ? String(parent.parent.preview.draft.action || "hold").toUpperCase() + " · "
+                        + String(parent.parent.preview.draft.description || "") : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: parent.parent.preview
+                      ? "Matches " + Number(parent.parent.preview.matchedCount || 0) + " current attention item"
+                        + (Number(parent.parent.preview.matchedCount || 0) === 1 ? "" : "s") : ""
+                    color: Qt.darker(root.foreground, 1.3)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+
+                  Repeater {
+                    model: parent.parent.preview ? (parent.parent.preview.examples || []).slice(0, 3) : []
+                    Text {
+                      textFormat: Text.PlainText
+                      required property var modelData
+                      width: parent.width
+                      text: "• " + String(modelData.app || "Source") + " · " + String(modelData.title || "Attention item")
+                      color: Qt.darker(root.foreground, 1.25)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    visible: parent.parent.preview && (parent.parent.preview.conflicts || []).length > 0
+                    width: parent.width
+                    text: "OVERLAPS"
+                    color: Color.urgent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 0.8
+                  }
+
+                  Repeater {
+                    model: parent.parent.preview ? (parent.parent.preview.conflicts || []).slice(0, 4) : []
+                    Text {
+                      textFormat: Text.PlainText
+                      required property var modelData
+                      width: parent.width
+                      text: String(modelData.name || "Existing policy") + " · "
+                        + (String(modelData.winner || "existing") === "draft"
+                          ? "new policy wins by priority"
+                          : String(modelData.action || "hold").toUpperCase() + " wins by priority")
+                      color: Color.urgent
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+
+                  Row {
+                    width: parent.width
+                    height: Style.space(40)
+                    spacing: Style.space(8)
+                    Button {
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: (parent.width - parent.spacing) * 0.38
+                      height: parent.height
+                      text: "Discard"
+                      foreground: root.foreground
+                      accent: Color.accent
+                      fontFamily: root.fontFamily
+                      fontSize: Style.font.caption
+                      bordered: true
+                      onClicked: OmaDigest.OmaDigestStore.rejectAttentionPolicyPreview()
+                    }
+                    Button {
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: parent.width - parent.spacing - (parent.width - parent.spacing) * 0.38
+                      height: parent.height
+                      text: "Add policy"
+                      foreground: root.foreground
+                      accent: Color.accent
+                      fontFamily: root.fontFamily
+                      fontSize: Style.font.caption
+                      selected: true
+                      onClicked: OmaDigest.OmaDigestStore.acceptAttentionPolicyPreview()
+                    }
+                  }
+                }
               }
 
               Repeater {
