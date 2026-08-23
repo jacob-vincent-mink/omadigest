@@ -18,9 +18,11 @@ describe("OmaDigest data management", () => {
     const root = configRoot();
     mkdirSync(join(root, "templates", "custom"), { recursive: true });
     writeFileSync(join(root, "templates", "custom", "SKILL.md"), "custom");
+    writeFileSync(join(root, "template-state.json"), "{}\n");
     writeFileSync(join(root, "privacy.json"), "{}\n");
     clearUserTemplates(root);
     expect(existsSync(join(root, "templates"))).toBe(false);
+    expect(existsSync(join(root, "template-state.json"))).toBe(false);
     expect(existsSync(join(root, "privacy.json"))).toBe(true);
   });
 

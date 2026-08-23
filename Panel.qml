@@ -91,7 +91,7 @@ Panel {
     if (target === "digest-history") return "Delete every digest saved by OmaDigest? This cannot be undone."
     if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
     if (target === "integrations") return "Delete custom integrations, integration setup, enablement, and known integration secrets? Bundled integrations will be reset, not removed."
-    if (target === "templates") return "Delete every custom template? Bundled templates will remain available."
+    if (target === "templates") return "Delete every custom template and restore packaged defaults?"
     return "Delete all OmaDigest digest and notification history, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
   }
 
@@ -1622,12 +1622,17 @@ Panel {
                 model: OmaDigest.OmaDigestStore.templates
                 Rectangle {
                   required property var modelData
+                  property bool confirmingDelete: false
                   width: parent.width
                   height: templateRow.implicitHeight + Style.space(18)
                   radius: Style.cornerRadius
-                  color: templateMouse.containsMouse
+                  color: confirmingDelete
+                    ? Util.alpha(Color.urgent, 0.09)
+                    : templateMouse.containsMouse
                     ? Style.hoverFillFor(root.foreground, Color.accent)
                     : Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: confirmingDelete ? Style.spacing.hairline : 0
+                  border.color: Util.alpha(Color.urgent, 0.52)
 
                   Row {
                     id: templateRow
@@ -1639,7 +1644,7 @@ Panel {
 
                     Text {
                       textFormat: Text.PlainText
-                      width: parent.width - templateChevron.width - Style.space(10)
+                      width: parent.width - templateChevron.width - templateDelete.width - parent.spacing * 2
                       text: String(modelData.name) + "\n" + String(modelData.description)
                       color: root.foreground
                       font.family: root.fontFamily
@@ -1649,17 +1654,39 @@ Panel {
                     Text {
                       textFormat: Text.PlainText
                       id: templateChevron
+                      width: visible ? Style.space(16) : 0
+                      visible: !confirmingDelete
                       anchors.verticalCenter: parent.verticalCenter
+                      horizontalAlignment: Text.AlignHCenter
                       text: "󰅂"
                       color: Color.accent
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.body
                     }
+                    OmaDigest.InlineDeleteControl {
+                      id: templateDelete
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: implicitWidth
+                      confirming: confirmingDelete
+                      foreground: root.foreground
+                      accent: Color.urgent
+                      fontFamily: root.fontFamily
+                      onConfirmationRequested: confirmingDelete = true
+                      onCancelled: confirmingDelete = false
+                      onConfirmed: {
+                        confirmingDelete = false
+                        OmaDigest.OmaDigestStore.deleteTemplate(String(modelData.id || ""))
+                      }
+                    }
                   }
 
                   MouseArea {
                     id: templateMouse
-                    anchors.fill: parent
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.right: parent.right
+                    anchors.rightMargin: templateDelete.width + Style.space(18)
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.selectedTemplate = modelData
@@ -2071,10 +2098,15 @@ Panel {
                 model: OmaDigest.OmaDigestStore.privacy.rules || []
                 Rectangle {
                   required property var modelData
+                  property bool confirmingDelete: false
                   width: parent.width
                   height: Style.space(48)
                   radius: Style.cornerRadius
-                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  color: confirmingDelete
+                    ? Util.alpha(Color.urgent, 0.09)
+                    : Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: confirmingDelete ? Style.spacing.hairline : 0
+                  border.color: Util.alpha(Color.urgent, 0.52)
 
                   Row {
                     anchors.left: parent.left
@@ -2085,7 +2117,7 @@ Panel {
                     Text {
                       textFormat: Text.PlainText
                       anchors.verticalCenter: parent.verticalCenter
-                      width: parent.width - privacyRulePicker.width - Style.space(10)
+                      width: parent.width - privacyRulePicker.width - privacyRuleDelete.width - parent.spacing * 2
                       text: String(modelData.app)
                       color: root.foreground
                       font.family: root.fontFamily
@@ -2103,6 +2135,22 @@ Panel {
                       foreground: root.foreground
                       background: Color.background
                       onChanged: function(value) { OmaDigest.OmaDigestStore.setPrivacyRule(modelData.app, value) }
+                    }
+                    OmaDigest.InlineDeleteControl {
+                      id: privacyRuleDelete
+                      visible: String(modelData.source || "") === "user"
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: visible ? implicitWidth : 0
+                      confirming: confirmingDelete
+                      foreground: root.foreground
+                      accent: Color.urgent
+                      fontFamily: root.fontFamily
+                      onConfirmationRequested: confirmingDelete = true
+                      onCancelled: confirmingDelete = false
+                      onConfirmed: {
+                        confirmingDelete = false
+                        OmaDigest.OmaDigestStore.deletePrivacyRule(String(modelData.app || ""))
+                      }
                     }
                   }
                 }
@@ -2209,7 +2257,7 @@ Panel {
                   { id: "digest-history", title: "Delete digest history", description: "Remove all saved read and unread digests." },
                   { id: "notification-history", title: "Delete notification history", description: "Remove notification evidence retained by OmaDigest and prevent older Omarchy notifications from being re-imported." },
                   { id: "integrations", title: "Delete integrations", description: "Remove custom integrations and reset all integration setup, enablement, and known secrets." },
-                  { id: "templates", title: "Delete templates", description: "Remove custom templates. Bundled templates remain available." }
+                  { id: "templates", title: "Delete templates", description: "Remove custom templates and restore packaged defaults." }
                 ]
 
                 Rectangle {

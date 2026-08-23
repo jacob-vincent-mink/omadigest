@@ -102,7 +102,9 @@ OmaDigest checks its latest stable GitHub release in the background no more than
 
 ## Delete retained data
 
-Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, custom templates, or all four categories. Every action requires confirmation.
+App rules and templates can be deleted inline after a compact confirmation. Removing an app rule restores the global default (or the protected-app default). Removing a custom template deletes it; removing a packaged template hides it without changing plugin files.
+
+Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, or templates, or to delete all four categories. Every action requires confirmation. Template deletion here also restores packaged defaults hidden inline.
 
 Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** does not remove model authentication or privacy rules.
 

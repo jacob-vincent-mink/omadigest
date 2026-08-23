@@ -66,6 +66,23 @@ describe("PrivacyPolicy", () => {
     expect(new PrivacyPolicy(root).evidenceForHandoff([fixture("GitHub")])[0]?.body).toBe("Private body");
   });
 
+  it("deletes user rules and restores the correct application fallback", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-"));
+    roots.push(root);
+    const policy = new PrivacyPolicy(root);
+    policy.setRule("GitHub", "digest");
+    policy.setRule("Signal", "digest-and-handoff");
+    policy.deleteRule("GitHub");
+    policy.deleteRule("Signal");
+    const reloaded = new PrivacyPolicy(root);
+    expect(reloaded.filter(fixture("GitHub"))).toMatchObject({ title: "", body: "", contentAvailable: false });
+    expect(reloaded.filter(fixture("Signal"))).toBeUndefined();
+    expect(reloaded.status().rules.find((rule) => rule.app === "Signal")).toMatchObject({
+      mode: "ignore", source: "protected-default"
+    });
+    expect(reloaded.status().rules.some((rule) => rule.app === "github")).toBe(false);
+  });
+
   it("retroactively removes or sanitizes retained notification evidence", () => {
     const root = mkdtempSync(join(tmpdir(), "omadigest-privacy-state-"));
     roots.push(root);

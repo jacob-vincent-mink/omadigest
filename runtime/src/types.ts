@@ -206,6 +206,7 @@ export type BrokerCommand =
   | { type: "privacy_status"; id: string }
   | { type: "privacy_set_default"; id: string; mode: PrivacyMode }
   | { type: "privacy_set_rule"; id: string; app: string; mode: PrivacyMode }
+  | { type: "privacy_delete_rule"; id: string; app: string }
   | { type: "auth_begin"; id: string; methodId: string }
   | { type: "auth_response"; id: string; flowId: string; promptId: string; value: string }
   | { type: "auth_cancel"; id: string; flowId: string }
@@ -229,6 +230,7 @@ export type BrokerCommand =
   | { type: "digest_mark_read"; id: string; digestId: string }
   | { type: "digest_delete"; id: string; digestId: string }
   | { type: "digest_clear"; id: string }
+  | { type: "template_delete"; id: string; templateId: string }
   | { type: "data_delete"; id: string; target: DataDeletionTarget }
   | { type: "shutdown" };
 

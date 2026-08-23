@@ -50,7 +50,7 @@ ${XDG_CONFIG_HOME:-~/.config}/omadigest/templates/<id>/
 
 A user template with the same ID replaces the bundled template without modifying packaged files. Acceptance uses a sibling staging directory and atomic rename with rollback backup.
 
-This overlay rule also makes reset deterministic: deleting custom templates removes every user-created template and every edited bundled overlay, revealing the unchanged packaged defaults again.
+This overlay rule also makes reset deterministic. Inline deletion removes a custom template or hides a packaged default without modifying plugin files. **Settings → Data → Delete templates** removes every user-created template and every edited bundled overlay, clears hidden-default choices, and restores the unchanged packaged defaults.
 
 ## Drafting guardrails
 

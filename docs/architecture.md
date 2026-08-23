@@ -43,13 +43,13 @@ No built-in coding tools are enabled. Time, prompt, file, item, and output bound
 
 User policy, templates, integrations, declared permissions, enablement, category overrides, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. Source enablement and category overrides use bounded version-2 state; version-1 integration enablement is migrated on read and rewritten on the next state change. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
 
-Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable.
+Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes only OmaDigest attention evidence and persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable; inline deletion of a bundled template records only its bounded ID in user configuration.
 
 Release discovery is also broker-owned. It checks only GitHub's fixed `releases/latest` endpoint for this repository, at most once per 24 hours unless the user explicitly retries. Requests time out after five seconds; response and persisted state are each capped at 64 KiB. QML receives only the normalized current/latest versions, fixed release URL, check time, and per-version dismissal state.
 
 ## Templates
 
-Templates have readable `SKILL.md` instructions and a schema-validated compiled policy. TypeScript evaluates all triggers and displays reasons. Manual Quickshell edits and constrained-agent revisions both cross typed broker commands, preserve the template ID, and install atomically. Accepted user templates overlay bundled IDs from the XDG configuration directory; deleting custom templates resets edited defaults by removing those overlays.
+Templates have readable `SKILL.md` instructions and a schema-validated compiled policy. TypeScript evaluates all triggers and displays reasons. Manual Quickshell edits and constrained-agent revisions both cross typed broker commands, preserve the template ID, and install atomically. Accepted user templates overlay bundled IDs from the XDG configuration directory. Inline deletion removes an overlay and hides its packaged fallback when present; the bulk template reset removes overlays and restores hidden defaults.
 
 ## Integrations
 

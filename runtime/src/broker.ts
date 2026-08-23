@@ -19,7 +19,7 @@ import { PrivacyPolicy, privacyModeSchema } from "./privacy.js";
 import { automaticDigestDecision, classifyAttentionItem, enrichedGenerationContext, suggestTemplates } from "./intelligence.js";
 import { TemplateSuggestionStore } from "./template-suggestion-store.js";
 import { launchHerdrHandoff } from "./herdr.js";
-import { clearUserIntegrations, clearUserTemplates } from "./data-management.js";
+import { clearUserIntegrations, clearUserTemplates, removeUserTemplate } from "./data-management.js";
 import { installAuthoringSkillLinks } from "./skill-install.js";
 import {
   collectNativeSourceItems,
@@ -35,6 +35,7 @@ import { ReleaseUpdateService } from "./release-update.js";
 import { readOmarchyNotificationHistory } from "./notification-history.js";
 import { HandoffTransport } from "./handoff-transport.js";
 import { readBoundedProtocolLines } from "./protocol-lines.js";
+import { mergeVisibleTemplates, TemplateVisibilityStore, templateIdSchema } from "./template-visibility.js";
 import { PROTOCOL_VERSION, type AttentionItem, type BrokerEvent, type DigestTemplate, type PublicIntegration, type SourceStatus } from "./types.js";
 
 const contextSchema = z.object({
@@ -126,6 +127,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("privacy_status"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("privacy_set_default"), id: z.string().min(1).max(100), mode: privacyModeSchema }).strict(),
   z.object({ type: z.literal("privacy_set_rule"), id: z.string().min(1).max(100), app: z.string().min(1).max(120), mode: privacyModeSchema }).strict(),
+  z.object({ type: z.literal("privacy_delete_rule"), id: z.string().min(1).max(100), app: z.string().min(1).max(120) }).strict(),
   z.object({ type: z.literal("auth_begin"), id: z.string().min(1).max(100), methodId: z.string().regex(/^[a-z0-9-]+::(?:oauth|api_key)$/) }).strict(),
   z.object({ type: z.literal("auth_response"), id: z.string().min(1).max(100), flowId: z.string().uuid(), promptId: z.string().uuid(), value: z.string().max(32_768) }).strict(),
   z.object({ type: z.literal("auth_cancel"), id: z.string().min(1).max(100), flowId: z.string().uuid() }).strict(),
@@ -157,6 +159,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("digest_mark_read"), id: z.string().min(1).max(100), digestId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("digest_delete"), id: z.string().min(1).max(100), digestId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("digest_clear"), id: z.string().min(1).max(100) }).strict(),
+  z.object({ type: z.literal("template_delete"), id: z.string().min(1).max(100), templateId: templateIdSchema }).strict(),
   z.object({
     type: z.literal("data_delete"), id: z.string().min(1).max(100),
     target: z.enum(["digest-history", "notification-history", "integrations", "templates", "all"])
@@ -168,11 +171,14 @@ const pluginRoot = process.env.OMADIGEST_PLUGIN_DIR?.startsWith("/")
   ? process.env.OMADIGEST_PLUGIN_DIR
   : resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const configRoot = integrationConfigRoot();
+const bundledTemplateRoot = resolve(pluginRoot, "templates");
+const userTemplateRoot = resolve(configRoot, "templates");
+const templateVisibility = new TemplateVisibilityStore(configRoot);
 const releaseUpdates = new ReleaseUpdateService(currentPluginVersion());
 function loadAllTemplates() {
-  const byId = new Map(loadTemplates(resolve(pluginRoot, "templates")).map((template) => [template.manifest.id, template]));
-  for (const template of loadTemplates(resolve(configRoot, "templates"))) byId.set(template.manifest.id, template);
-  return [...byId.values()].sort((left, right) => left.manifest.id.localeCompare(right.manifest.id));
+  const bundled = loadTemplates(bundledTemplateRoot);
+  const user = loadTemplates(userTemplateRoot);
+  return mergeVisibleTemplates(bundled, user, templateVisibility.hidden());
 }
 let templates = loadAllTemplates();
 const pendingDrafts = new Map<string, DraftResult>();
@@ -363,6 +369,7 @@ const configWatcher = setInterval(() => {
 configWatcher.unref();
 
 async function reloadFileBackedConfiguration(): Promise<void> {
+  templateVisibility.reload();
   templates = loadAllTemplates();
   sourceStatuses.clear();
   privacy.reload();
@@ -454,10 +461,11 @@ async function handle(raw: string): Promise<boolean> {
     emit({ type: "privacy", id: command.id, policy: privacy.status() });
     return true;
   }
-  if (command.type === "privacy_set_default" || command.type === "privacy_set_rule") {
+  if (command.type === "privacy_set_default" || command.type === "privacy_set_rule" || command.type === "privacy_delete_rule") {
     try {
       if (command.type === "privacy_set_default") privacy.setDefault(command.mode);
-      else privacy.setRule(command.app, command.mode);
+      else if (command.type === "privacy_set_rule") privacy.setRule(command.app, command.mode);
+      else privacy.deleteRule(command.app);
       attention.applyPolicy((item) => {
         const filtered = privacy.filter(item);
         return filtered === undefined ? undefined : classifyAttentionItem(filtered);
@@ -467,6 +475,24 @@ async function handle(raw: string): Promise<boolean> {
       emitTemplateSuggestions(command.id);
     } catch (error) {
       emit({ type: "error", id: command.id, code: "privacy_invalid", message: error instanceof Error ? error.message : "Privacy settings could not be saved." });
+    }
+    return true;
+  }
+
+  if (command.type === "template_delete") {
+    try {
+      const template = templates.find((candidate) => candidate.manifest.id === command.templateId);
+      if (template === undefined) throw new Error("That template is no longer available.");
+      const packaged = loadTemplates(bundledTemplateRoot).some((candidate) => candidate.manifest.id === command.templateId);
+      removeUserTemplate(configRoot, command.templateId);
+      if (packaged) templateVisibility.hide(command.templateId);
+      else templateVisibility.show(command.templateId);
+      templates = loadAllTemplates();
+      configFingerprint = configurationFingerprint(configRoot);
+      emit({ type: "templates", id: command.id, templates: publicTemplates() });
+      emitTemplateSuggestions(command.id);
+    } catch (error) {
+      emit({ type: "error", id: command.id, code: "template_delete_failed", message: error instanceof Error ? error.message : "The template could not be deleted." });
     }
     return true;
   }
@@ -594,6 +620,7 @@ async function handle(raw: string): Promise<boolean> {
       }
       if (deleteAll || command.target === "templates") {
         clearUserTemplates(configRoot);
+        templateVisibility.clear();
         templateSuggestionStore.clear();
         pendingDrafts.clear();
         templates = loadAllTemplates();

@@ -69,6 +69,13 @@ export class PrivacyPolicy {
     this.#save();
   }
 
+  deleteRule(app: string): void {
+    const normalized = normalizeApplication(app);
+    if (normalized === "") throw new Error("Enter an application name.");
+    if (!this.#applications.delete(normalized)) return;
+    this.#save();
+  }
+
   modeFor(app: string): PrivacyMode {
     const normalized = normalizeApplication(app);
     const explicit = this.#applications.get(normalized);

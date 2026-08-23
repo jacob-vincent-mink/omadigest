@@ -190,6 +190,14 @@ Scope {
   function setPrivacyRule(app, mode) {
     send({ type: "privacy_set_rule", id: "privacy-" + nextId++, app: String(app || "").trim().slice(0, 120), mode: String(mode) })
   }
+  function deletePrivacyRule(app) {
+    clearError()
+    send({ type: "privacy_delete_rule", id: "privacy-delete-" + nextId++, app: String(app || "").trim().slice(0, 120) })
+  }
+  function deleteTemplate(templateId) {
+    clearError()
+    send({ type: "template_delete", id: "template-delete-" + nextId++, templateId: String(templateId || "") })
+  }
   function beginAuth(methodId) {
     clearError()
     send({ type: "auth_begin", id: "auth-" + nextId++, methodId: String(methodId) })
@@ -380,6 +388,7 @@ Scope {
     }
     if (event.type === "templates") {
       templates = event.templates || []
+      if (String(event.id || "").indexOf("template-delete-") === 0) status = "Template deleted"
       return
     }
     if (event.type === "template_suggestions") {
@@ -432,6 +441,7 @@ Scope {
     }
     if (event.type === "privacy") {
       privacy = event.policy || privacy
+      if (String(event.id || "").indexOf("privacy-delete-") === 0) status = "App rule deleted"
       return
     }
     if (event.type === "agent_status") {
@@ -501,7 +511,7 @@ Scope {
       dataDeleteMessage = dataDeleteTarget === "digest-history" ? "Digest history deleted"
         : dataDeleteTarget === "notification-history" ? "OmaDigest notification history deleted"
         : dataDeleteTarget === "integrations" ? "Integration data deleted"
-        : dataDeleteTarget === "templates" ? "Custom templates deleted"
+        : dataDeleteTarget === "templates" ? "Templates reset"
         : "OmaDigest history, integrations, and templates deleted"
       if (dataDeleteTarget === "digest-history" || dataDeleteTarget === "all") {
         digest = null

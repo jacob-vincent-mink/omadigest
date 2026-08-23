@@ -69,4 +69,14 @@ describe("QML untrusted-text boundary", () => {
     expect(editor).toContain("prepareDefaultAgentHandoff(request.text)");
     expect(editor).toContain("confirmDefaultAgentHandoff()");
   });
+
+  it("keeps app-rule and template deletion behind typed inline actions", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    const store = readFileSync(join(repositoryRoot, "components", "OmaDigestStore.qml"), "utf8");
+    expect(panel).toContain("OmaDigest.InlineDeleteControl");
+    expect(panel).toContain("OmaDigest.OmaDigestStore.deletePrivacyRule");
+    expect(panel).toContain("OmaDigest.OmaDigestStore.deleteTemplate");
+    expect(store).toContain('type: "privacy_delete_rule"');
+    expect(store).toContain('type: "template_delete"');
+  });
 });

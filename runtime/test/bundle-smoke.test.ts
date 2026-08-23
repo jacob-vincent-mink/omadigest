@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -39,7 +39,15 @@ describe("checked-in broker bundle", () => {
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => { stdout = (stdout + String(chunk)).slice(-2 * 1024 * 1024); });
     child.stderr.on("data", (chunk) => { stderr = (stderr + String(chunk)).slice(-64 * 1024); });
-    child.stdin.end(`${"x".repeat(MAX_PROTOCOL_LINE_BYTES + 1)}\n${JSON.stringify({ type: "initialize", protocolVersion: 2 })}\n${JSON.stringify({ type: "shutdown" })}\n`);
+    child.stdin.end([
+      "x".repeat(MAX_PROTOCOL_LINE_BYTES + 1),
+      JSON.stringify({ type: "initialize", protocolVersion: 2 }),
+      JSON.stringify({ type: "privacy_set_rule", id: "privacy-set", app: "Test App", mode: "digest" }),
+      JSON.stringify({ type: "privacy_delete_rule", id: "privacy-delete", app: "Test App" }),
+      JSON.stringify({ type: "template_delete", id: "template-delete", templateId: "general" }),
+      JSON.stringify({ type: "shutdown" }),
+      ""
+    ].join("\n"));
 
     const exitCode = await new Promise<number | null>((resolveExit, rejectExit) => {
       const timer = setTimeout(() => {
@@ -62,5 +70,19 @@ describe("checked-in broker bundle", () => {
       protocolVersion: 2,
       privacy: { defaultMode: "count-only" }
     });
+    expect(events.find((event) => event.id === "privacy-delete")).toMatchObject({
+      type: "privacy",
+      policy: { defaultMode: "count-only" }
+    });
+    const deletedPrivacy = events.find((event) => event.id === "privacy-delete") as {
+      policy: { rules: Array<{ app: string }> }
+    };
+    expect(deletedPrivacy.policy.rules.some((rule) => rule.app === "test app")).toBe(false);
+    const deletedTemplate = events.find((event) => event.id === "template-delete") as {
+      templates: Array<{ id: string }>
+    };
+    expect(deletedTemplate.templates.some((template) => template.id === "general")).toBe(false);
+    expect(JSON.parse(readFileSync(join(root, "config", "omadigest", "template-state.json"), "utf8")))
+      .toEqual({ version: 1, hidden: ["general"] });
   }, 15_000);
 });

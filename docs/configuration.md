@@ -18,6 +18,7 @@ omadigest/
 ├── templates/<id>/
 │   ├── SKILL.md                    # readable generation instructions
 │   └── template.compiled.json      # deterministic routing and output policy
+├── template-state.json             # bounded hidden packaged-template IDs
 ├── integrations/<id>/
 │   ├── manifest.json               # setup, capabilities, and permissions
 │   ├── connector.mjs
