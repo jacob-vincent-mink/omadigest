@@ -16,6 +16,22 @@ const INTENTS: AttentionIntent[] = [
 const HIGH_SIGNAL = new Set<AttentionIntent>([
   "failure", "review", "deadline", "assignment", "mention", "request"
 ]);
+const DYNAMIC_TEMPLATE_LABELS: Record<AttentionIntent, string> = {
+  failure: "issue watch",
+  review: "review queue",
+  deadline: "deadline brief",
+  meeting: "meeting brief",
+  assignment: "assignment queue",
+  mention: "mentions",
+  request: "requests",
+  completion: "completion brief",
+  system: "system pulse",
+  update: "update brief"
+};
+const APPLICATION_CASE = new Map([
+  ["github", "GitHub"], ["gitlab", "GitLab"], ["gmail", "Gmail"],
+  ["todoist", "Todoist"], ["figma", "Figma"], ["herdr", "Herdr"]
+]);
 
 export function classifyAttentionItem(item: AttentionItem): AttentionItem {
   if (!isActionableEvidence(item)) {
@@ -249,7 +265,7 @@ function dynamicTemplateSuggestions(
       : examples.map((title) => `• ${title.slice(0, 100)}`).join("\n").slice(0, 360);
     return [{
       id,
-      title: `Shape ${application} ${intent} updates`,
+      title: dynamicTemplateTitle(application, intent),
       description: `${cluster.length} related updates appeared across ${days.size} days. Turn the pattern into a focused briefing.`,
       prompt: [
         `Create a ${application} ${intent} template based on a recurring privacy-permitted notification pattern.`,
@@ -259,6 +275,12 @@ function dynamicTemplateSuggestions(
       applications: [application], intents: [intent], itemCount: cluster.length, example
     } satisfies TemplateSuggestion];
   });
+}
+
+function dynamicTemplateTitle(application: string, intent: AttentionIntent): string {
+  const displayApplication = application.split(" ").filter(Boolean).map((word) =>
+    APPLICATION_CASE.get(word) ?? titleCase(word)).join(" ");
+  return `${displayApplication || "Application"} ${DYNAMIC_TEMPLATE_LABELS[intent]}`.slice(0, 200);
 }
 
 function intentFromCategory(category: string, text: string): AttentionIntent | undefined {

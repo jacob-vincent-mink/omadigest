@@ -92,7 +92,10 @@ describe("attention intelligence", () => {
     ];
     const dynamic = suggestTemplates(recurring, [], new Set(), new Date(now))
       .find((suggestion) => suggestion.id.startsWith("pattern-"));
-    expect(dynamic).toMatchObject({ applications: ["figma"], intents: ["review"], itemCount: 4 });
+    expect(dynamic).toMatchObject({
+      title: "Figma review queue", applications: ["figma"], intents: ["review"], itemCount: 4
+    });
+    expect(dynamic?.title.startsWith("Shape ")).toBe(false);
     expect(dynamic?.example).toContain("Prototype review comment added");
   });
 });
