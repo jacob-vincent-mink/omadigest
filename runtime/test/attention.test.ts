@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AttentionStore } from "../src/attention.js";
+import { canonicalAttentionItem } from "../src/conversation.js";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -48,6 +49,22 @@ describe("AttentionStore", () => {
     expect(attention.ingestWithResult([item]).changedIds).toEqual([item.id]);
     expect(attention.ingestWithResult([item]).changedIds).toEqual([]);
     expect(attention.ingestWithResult([{ ...item, body: "PR #42 approved" }]).changedIds).toEqual([item.id]);
+  });
+
+  it("deduplicates legacy live/history notification IDs during policy rewrite", () => {
+    const attention = store();
+    const base = {
+      source: "notifications", app: "Signal", title: "Ada Lovelace", body: "Hello",
+      urgency: "normal" as const, occurredAt: "2026-08-24T12:30:53.874Z"
+    };
+    attention.ingest([
+      { ...base, id: "notification:1787574653874:1" },
+      { ...base, id: "notification:1787574653874-1" }
+    ]);
+    attention.acknowledge(["notification:1787574653874:1"]);
+    attention.applyPolicy(canonicalAttentionItem);
+    expect(attention.recent(10).map((entry) => entry.id)).toEqual(["notification:1787574653874-1"]);
+    expect(attention.acknowledgedIds()).toEqual(["notification:1787574653874-1"]);
   });
 
   it("compacts attention persistence below the hard segment byte limit", () => {

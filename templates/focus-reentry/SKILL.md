@@ -12,7 +12,8 @@ Help the user return to the outside world without turning every interruption int
 - Name the digest for the specific work, release, event, or blocker set the user is returning to.
 - Lead with explicit questions, deadlines, failures, and direct requests.
 - Explain what changed during the focus period, not the full history of each source.
-- Merge repeated updates to the same underlying item.
+- Collapse repeated updates and conversations to the final meaningful state; never replay a message-by-message timeline.
+- Use one entry for one outcome, request, decision, or blocker even when it has many sources.
 - Every factual entry must cite at least one supplied source ID.
 - Put items that need no response in the final section.
 

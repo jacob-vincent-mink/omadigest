@@ -37,4 +37,29 @@ describe("DigestHistory", () => {
     history.clear();
     expect(history.list()).toEqual([]);
   });
+
+  it("retains bounded source destinations with the digest", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-history-sources-"));
+    roots.push(root);
+    const history = new DigestHistory({ XDG_STATE_HOME: root, HOME: root });
+    history.save({
+      ...fixture("00000000-0000-4000-8000-000000000003"),
+      sources: [{
+        sourceId: "github:42", targetId: "web-0", kind: "web", label: "GitHub",
+        detail: "Review PR #42", destination: "github.com", url: "https://github.com/acme/repo/pull/42"
+      }]
+    });
+    expect(history.list()[0]?.sources?.[0]).toMatchObject({ kind: "web", destination: "github.com" });
+  });
+
+  it("atomically replaces collated conversation digests", () => {
+    const root = mkdtempSync(join(tmpdir(), "omadigest-history-replace-"));
+    roots.push(root);
+    const history = new DigestHistory({ XDG_STATE_HOME: root, HOME: root });
+    const first = fixture("00000000-0000-4000-8000-000000000004");
+    const second = fixture("00000000-0000-4000-8000-000000000005");
+    history.save(first);
+    history.save(second, [first.id]);
+    expect(history.list().map((item) => item.id)).toEqual([second.id]);
+  });
 });

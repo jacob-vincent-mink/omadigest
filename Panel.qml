@@ -32,6 +32,7 @@ Panel {
 
   property string page: "list"
   property bool timelineThreadsOpen: false
+  property string digestSourcesOpenKey: ""
   property string digestTab: "unread"
   property string preparedDraftKind: ""
   property string settingsPage: "integrations"
@@ -219,10 +220,21 @@ Panel {
 
   function openSavedDigest(saved) {
     if (!saved) return
+    root.digestSourcesOpenKey = ""
     OmaDigest.OmaDigestStore.openDigestFromHistory(saved)
     root.page = "detail"
     root.scrollToTop()
     root.markCurrentDigestRead()
+  }
+
+  function toggleDigestSources(digestId, sectionIndex, entryIndex) {
+    var key = OmaDigest.OmaDigestStore.digestEntryKey(digestId, sectionIndex, entryIndex)
+    if (root.digestSourcesOpenKey === key) {
+      root.digestSourcesOpenKey = ""
+      return
+    }
+    root.digestSourcesOpenKey = key
+    OmaDigest.OmaDigestStore.requestDigestSources(digestId, sectionIndex, entryIndex)
   }
 
   function openAttentionTimeline(threadId, threadLabel) {
@@ -272,7 +284,7 @@ Panel {
     var nativeId = String(row.originalId || row.id || "").slice(0, 40)
     var occurred = Number(timestamp || 0)
     if (isFinite(occurred) && occurred > 0)
-      return (String(Math.floor(occurred)) + ":" + nativeId).slice(0, 180)
+      return (String(Math.floor(occurred)) + "-" + nativeId).slice(0, 180)
     return (nativeId || (String(app) + ":" + String(title))).slice(0, 180)
   }
 
@@ -462,8 +474,14 @@ Panel {
     }
     function onDigestReadyRevisionChanged() {
       if (!OmaDigest.OmaDigestStore.digest) return
+      root.digestSourcesOpenKey = ""
       root.page = "detail"
       if (root.opened) root.markCurrentDigestRead()
+    }
+
+    function onDigestSourceResultRevisionChanged() {
+      var result = OmaDigest.OmaDigestStore.lastDigestSourceResult
+      if (result && String(result.state || "") === "opened") root.close()
     }
 
     function onTemplatesChanged() {
@@ -1767,6 +1785,7 @@ Panel {
                 id: sectionDelegate
                 required property var modelData
                 required property int index
+                visible: (modelData.entries || []).length > 0
                 width: parent.width
                 spacing: Style.space(6)
 
@@ -1796,24 +1815,66 @@ Panel {
                       anchors.margins: Style.space(9)
                       spacing: Style.space(7)
 
-                      Text {
-                        textFormat: Text.PlainText
+                      Column {
                         width: parent.width
-                        text: String(modelData.headline) + "\n" + String(modelData.explanation)
-                        color: root.foreground
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.bodySmall
-                        wrapMode: Text.WordWrap
+                        spacing: Style.space(2)
+
+                        Text {
+                          textFormat: Text.PlainText
+                          width: parent.width
+                          text: String(modelData.headline)
+                          color: root.foreground
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.bodySmall
+                          font.weight: Font.DemiBold
+                          wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                          textFormat: Text.PlainText
+                          width: parent.width
+                          text: String(modelData.explanation)
+                          color: Qt.darker(root.foreground, 1.15)
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.bodySmall
+                          wrapMode: Text.WordWrap
+                        }
                       }
 
                       Row {
                         x: parent.width - width
-                        width: Style.space(280)
+                        width: Math.min(parent.width, Style.space(360))
                         height: Style.space(30)
                         spacing: Style.space(6)
 
                         Rectangle {
-                          width: (parent.width - parent.spacing) * 0.38
+                          width: (parent.width - parent.spacing * 2) * 0.26
+                          height: parent.height
+                          radius: Style.cornerRadius
+                          color: sourcesMouse.containsMouse
+                            ? Style.hoverFillFor(root.foreground, Color.accent)
+                            : Style.normalFillFor(root.foreground, Color.accent)
+                          Text {
+                            textFormat: Text.PlainText
+                            anchors.centerIn: parent
+                            text: "Sources  " + (modelData.sourceIds || []).length
+                            color: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                          }
+                          MouseArea {
+                            id: sourcesMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.toggleDigestSources(
+                              OmaDigest.OmaDigestStore.digest.id, sectionDelegate.index, index)
+                          }
+                        }
+
+                        Rectangle {
+                          width: (parent.width - parent.spacing * 2) * 0.26
                           height: parent.height
                           radius: Style.cornerRadius
                           color: explainMouse.containsMouse
@@ -1839,7 +1900,8 @@ Panel {
                         }
 
                         Rectangle {
-                          width: parent.width - parent.spacing - (parent.width - parent.spacing) * 0.38
+                          width: parent.width - parent.spacing * 2
+                            - (parent.width - parent.spacing * 2) * 0.52
                           height: parent.height
                           radius: Style.cornerRadius
                           color: agentMouse.containsMouse
@@ -1863,6 +1925,17 @@ Panel {
                               OmaDigest.OmaDigestStore.digest.id, sectionDelegate.index, index)
                           }
                         }
+                      }
+
+                      OmaDigest.DigestSourceList {
+                        id: sourceList
+                        width: parent.width
+                        digestId: String(OmaDigest.OmaDigestStore.digest.id || "")
+                        sectionIndex: sectionDelegate.index
+                        entryIndex: index
+                        foreground: root.foreground
+                        fontFamily: root.fontFamily
+                        opened: root.digestSourcesOpenKey === entryKey
                       }
 
                       Rectangle {

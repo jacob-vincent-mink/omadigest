@@ -14,8 +14,22 @@ export type AttentionItem = {
   category?: string | undefined;
   intent?: AttentionIntent | undefined;
   contentAvailable?: boolean | undefined;
+  urls?: string[] | undefined;
   urgency: "low" | "normal" | "critical";
   occurredAt: string;
+};
+
+export type DigestSource = {
+  sourceId: string;
+  targetId: string;
+  kind: "web" | "application" | "local" | "expired";
+  label: string;
+  detail: string;
+  occurredAt?: string;
+  destination?: string;
+  message?: string;
+  url?: string;
+  appTarget?: string;
 };
 
 export type DigestEntry = {
@@ -34,6 +48,7 @@ export type Digest = {
   readAt?: string;
   feedback?: "useful" | "not-useful";
   sections: Array<{ title: string; entries: DigestEntry[] }>;
+  sources?: DigestSource[];
 };
 
 export type GenerationContext = {
@@ -62,6 +77,7 @@ export type TemplateMatch = {
 
 export type EvidenceGroup = {
   id: string;
+  kind: "conversation" | "entity" | "title" | "single";
   intent: AttentionIntent;
   subject: string;
   reason: "shared-reference" | "shared-entity" | "same-title" | "single";
@@ -484,6 +500,8 @@ export type BrokerCommand =
   | { type: "attention_timeline_query"; id: string; mode: AttentionTimelineMode; threadId?: string; cursor?: string; limit?: number }
   | { type: "attention_timeline_zoom"; id: string; nodeId: string }
   | { type: "attention_explain"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
+  | { type: "digest_sources"; id: string; digestId: string; sectionIndex: number; entryIndex: number }
+  | { type: "digest_source_open"; id: string; digestId: string; sectionIndex: number; entryIndex: number; sourceId: string; targetId: string }
   | { type: "attention_policy_create"; id: string; request: string }
   | { type: "attention_policy_accept"; id: string; previewId: string }
   | { type: "attention_policy_reject"; id: string; previewId: string }
@@ -532,6 +550,8 @@ export type BrokerEvent =
   | { type: "attention_timeline"; id: string; page: AttentionTimelinePage; append: boolean }
   | { type: "attention_timeline_zoomed"; id: string; parentId: string; items: AttentionTimelineItem[] }
   | { type: "attention_explanation"; id: string; explanation: AttentionExplanation }
+  | { type: "digest_sources"; id: string; digestId: string; sectionIndex: number; entryIndex: number; sources: DigestSource[] }
+  | { type: "digest_source_result"; id: string; digestId: string; sourceId: string; targetId: string; state: "opened" | "unavailable"; message: string }
   | { type: "attention_policies"; id: string; policies: AttentionPolicy[] }
   | { type: "attention_policy_preview"; id: string; preview: AttentionPolicyPreview }
   | { type: "attention_policy_state"; id: string; state: "working" | "preview" | "saved" | "idle"; message: string }

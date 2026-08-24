@@ -17,6 +17,12 @@ export const attentionItemSchema = z.object({
   category: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/).optional(),
   intent: z.enum(["failure", "review", "deadline", "meeting", "assignment", "mention", "request", "completion", "system", "update"]).optional(),
   contentAvailable: z.boolean().optional(),
+  urls: z.array(z.string().url().max(2_048).refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.username === "" && url.password === "";
+    } catch { return false; }
+  }, "Attention source URLs require credential-free HTTPS")).max(4).optional(),
   urgency: z.enum(["low", "normal", "critical"]),
   occurredAt: z.string().datetime()
 }).strict();
@@ -157,12 +163,16 @@ export class AttentionStore {
             rmSync(path, { force: true });
             continue;
           }
-          const filtered = readFileSync(path, "utf8").split("\n").flatMap((line) => {
-            if (line === "") return [];
+          const byId = new Map<string, AttentionItem>();
+          for (const line of readFileSync(path, "utf8").split("\n")) {
+            if (line === "") continue;
             const item = attentionItemSchema.parse(JSON.parse(line));
             const presented = mapper(item);
-            return presented === undefined ? [] : [JSON.stringify(presented)];
-          });
+            if (presented === undefined) continue;
+            byId.delete(presented.id);
+            byId.set(presented.id, presented);
+          }
+          const filtered = [...byId.values()].map((item) => JSON.stringify(item));
           const temporary = `${path}.${randomUUID()}.tmp`;
           const bounded = this.#boundedLines(filtered.reverse()).reverse();
           writeFileSync(temporary, bounded.length === 0 ? "" : `${bounded.join("\n")}\n`, { mode: 0o600 });
@@ -174,8 +184,12 @@ export class AttentionStore {
     this.#items.clear();
     for (const item of current) {
       const presented = mapper(item);
-      if (presented !== undefined) this.#items.set(presented.id, presented);
+      if (presented === undefined) continue;
+      if (this.#seen.has(item.id)) this.#seen.add(presented.id);
+      this.#items.set(presented.id, presented);
     }
+    for (const id of this.#seen) if (!this.#items.has(id)) this.#seen.delete(id);
+    this.#saveSeen();
     this.#pruneFiles();
   }
 

@@ -76,4 +76,6 @@ Status states returned by connectors are `ready`, `authentication-required`, `se
 
 `category` must match one of the manifest's declared categories. For backward compatibility only, a manifest without `categories` has one implicit category: `{ "id": "default", "label": "All items", "description": "All items provided by this source.", "defaultEnabled": true }`; category-less items from that manifest map to `default`. Items in undeclared, disabled, or unrequested categories are discarded before attention persistence and model context.
 
+`url` is optional. When present it must be credential-free HTTPS; the broker retains it as a bounded source destination only when a completed digest cites that item. The digest UI can then request that exact saved target through the broker without receiving authority to execute connector-controlled actions.
+
 Maximum defaults: 50 items, 64 KiB final response JSON, 12 KiB per text field, eight broker HTTPS requests, and 20 seconds per connector operation. The broker may enforce stricter template limits.

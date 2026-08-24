@@ -41,6 +41,21 @@ describe("checked-in broker bundle", () => {
         summary: "GitHub: Review requested on PR #184", sources: [{ id: "pr-184", source: "github", app: "GitHub" }]
       }]
     }));
+    const digestId = "00000000-0000-4000-8000-000000000018";
+    writeFileSync(join(releaseDirectory, "digests.json"), JSON.stringify({
+      version: 1,
+      digests: [{
+        id: digestId, templateId: "general", title: "PR #184 report", generatedAt: now.toISOString(),
+        sections: [{ title: "Act now", entries: [{
+          headline: "Review PR #184", explanation: "Review requested", importance: "normal",
+          sourceIds: ["pr-184"], confidence: 1
+        }] }],
+        sources: [{
+          sourceId: "pr-184", targetId: "local", kind: "local", label: "GitHub CLI",
+          detail: "Review requested", message: "This fixture has no destination."
+        }]
+      }]
+    }));
 
     const child = spawn(process.execPath, [resolve("runtime/dist/omadigest-broker.mjs")], {
       cwd: process.cwd(),
@@ -64,9 +79,27 @@ describe("checked-in broker bundle", () => {
       JSON.stringify({ type: "initialize", protocolVersion: 2 }),
       JSON.stringify({ type: "privacy_set_rule", id: "privacy-set", app: "Test App", mode: "digest" }),
       JSON.stringify({ type: "privacy_delete_rule", id: "privacy-delete", app: "Test App" }),
+      JSON.stringify({ type: "privacy_set_rule", id: "privacy-signal", app: "Signal", mode: "digest" }),
+      JSON.stringify({
+        type: "attention_ingest", id: "signal-burst", items: [
+          {
+            id: "notification:1787574653874:1", source: "notifications", app: "Signal",
+            title: "Ada Lovelace", body: "Hello", urgency: "normal", occurredAt: "2026-08-24T12:30:53.874Z"
+          },
+          {
+            id: "notification:1787574653874-1", source: "notifications", app: "Signal",
+            title: "Ada Lovelace", body: "Hello", urgency: "normal", occurredAt: "2026-08-24T12:30:53.874Z"
+          }
+        ]
+      }),
       JSON.stringify({ type: "attention_focus", id: "focus-on", active: true }),
       JSON.stringify({ type: "attention_memory_search", id: "memory-search", query: "PR #184" }),
       JSON.stringify({ type: "attention_timeline_query", id: "timeline", mode: "events", limit: 12 }),
+      JSON.stringify({ type: "digest_sources", id: "digest-sources", digestId, sectionIndex: 0, entryIndex: 0 }),
+      JSON.stringify({
+        type: "digest_source_open", id: "digest-source-open", digestId, sectionIndex: 0, entryIndex: 0,
+        sourceId: "pr-184", targetId: "local"
+      }),
       JSON.stringify({ type: "attention_watch_dismiss", id: "watch-dismiss", watchId }),
       JSON.stringify({ type: "attention_watch_show", id: "watch-show", watchId }),
       JSON.stringify({ type: "attention_watch_cancel", id: "watch-cancel", watchId }),
@@ -101,6 +134,9 @@ describe("checked-in broker bundle", () => {
       type: "attention_activity",
       activity: { state: "holding", message: "Holding updates while you focus" }
     });
+    expect(events.find((event) => event.type === "attention" && event.id === "signal-burst")).toMatchObject({
+      digestibleCount: 1
+    });
     expect(events.find((event) => event.type === "attention_state" && event.id === "initialize")).toMatchObject({
       memory: { episodeCount: 1 }, watches: [{ id: watchId, subject: "PR #184" }]
     });
@@ -120,9 +156,16 @@ describe("checked-in broker bundle", () => {
       append: false,
       page: {
         mode: "events",
-        items: [expect.objectContaining({ subject: "PR #184", kind: "evidence" })],
-        threads: [expect.objectContaining({ label: "PR #184", episodeCount: 1 })]
+        items: expect.arrayContaining([expect.objectContaining({ subject: "PR #184", kind: "evidence" })]),
+        threads: expect.arrayContaining([expect.objectContaining({ label: "PR #184", episodeCount: 1 })])
       }
+    });
+    expect(events.find((event) => event.type === "digest_sources" && event.id === "digest-sources")).toMatchObject({
+      digestId,
+      sources: [{ sourceId: "pr-184", targetId: "local", kind: "local", label: "GitHub CLI" }]
+    });
+    expect(events.find((event) => event.type === "digest_source_result" && event.id === "digest-source-open")).toMatchObject({
+      state: "unavailable", message: "This fixture has no destination."
     });
     expect(events.find((event) => event.id === "privacy-delete")).toMatchObject({
       type: "privacy",

@@ -21,7 +21,7 @@ describe("digest evidence validation", () => {
     headline: "Headline", explanation: "Explanation", importance: "normal", confidence: 1, sourceIds
   });
   const groups = [{
-    id: "group-1", intent: "review", subject: "pr-482", reason: "shared-reference",
+    id: "group-1", kind: "entity", intent: "review", subject: "pr-482", reason: "shared-reference",
     sourceIds: ["one", "two"], items: []
   }] satisfies EvidenceGroup[];
 
@@ -32,5 +32,16 @@ describe("digest evidence validation", () => {
 
   it("accepts one merged entry", () => {
     expect(validateDigestEvidence([entry(["one", "two"])], groups)).toBeUndefined();
+  });
+
+  it("requires a used correlation block to retain all of its provenance", () => {
+    expect(validateDigestEvidence([entry(["one"])], groups)).toContain("complete block");
+    expect(validateDigestEvidence([], groups)).toBeUndefined();
+  });
+
+  it("rejects model-facing compilation chatter", () => {
+    expect(validateDigestEvidence([{
+      ...entry(["one", "two"]), explanation: "These updates are one combined outcome."
+    }], groups)).toContain("compilation process");
   });
 });

@@ -110,4 +110,19 @@ describe("QML untrusted-text boundary", () => {
     expect(action).toContain("root.markCurrentDigestRead()");
     expect(panel).toContain("onClicked: root.openSavedDigest(modelData)");
   });
+
+  it("keeps digest source navigation typed and shows unavailable feedback", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    const sourceList = readFileSync(join(repositoryRoot, "components", "DigestSourceList.qml"), "utf8");
+    const store = readFileSync(join(repositoryRoot, "components", "OmaDigestStore.qml"), "utf8");
+    expect(panel).toContain("OmaDigest.DigestSourceList");
+    expect(panel).toContain("OmaDigest.OmaDigestStore.requestDigestSources");
+    expect(sourceList).toContain("OmaDigestStore.openDigestSource");
+    expect(sourceList).toContain('String(sourceCard.result.state || "") === "unavailable"');
+    expect(store).toContain('type: "digest_sources"');
+    expect(store).toContain('type: "digest_source_open"');
+    expect(panel).toContain('String(result.state || "") === "opened"');
+    expect(panel).toContain("root.close()");
+    expect(sourceList).not.toContain("Qt.openUrlExternally");
+  });
 });

@@ -45,7 +45,11 @@ The broker groups only high-confidence relationships:
 - a shared stable entity such as a repository-qualified PR or issue, task reference, URL, or CVE across applications and sources; or
 - the same sufficiently specific title from the same application.
 
-Generic titles such as “New message” never group by title. Group size, group count, item size, total model bytes, and retained history are all bounded. The digest validator prevents one source item from supporting conflicting entries and prevents a multi-update evidence group from being split across entries.
+Generic titles such as “New message” never group by title. Recognized chat applications are the narrow exception for short specific titles: the application and conversation title form a deterministic thread key, so a Signal-style burst becomes one evolving group even when the sender name is only one or two words. If the attention agent selects any part of a group for a digest, the broker expands that selection to the complete bounded group.
+
+The digest is compiled around semantic outcomes rather than source cadence. One entry represents one distinct request, decision, blocker, changed state, or useful conclusion. The model is instructed to drop greetings, acknowledgements, reactions, repetition, and superseded intermediate states; it may merge several evidence groups only when they support the same outcome or dependency. Deterministic validation prevents source reuse, prevents a group from being split across entries, and requires a used multi-item group to retain all of its source IDs. The compact entry is the product surface; the raw contributing records remain available behind **Sources** for provenance.
+
+Group size, group count, selected item count, item size, total model bytes, source snapshots, and retained history are all bounded.
 
 ## Progressive attention memory
 
@@ -61,7 +65,9 @@ This design is inspired by [OptMem](https://github.com/VictorTaelin/OptMem): par
 
 ## Attention loop and follow-ups
 
-The broker wakes the attention loop after a quiet notification batch, enabled-source polling, native telemetry changes, DND re-entry, a daily schedule, startup, an explicit **+** request, or a due follow-up. Focus mode suppresses autonomous reviews; it never suppresses the explicit re-entry review when focus ends.
+The broker wakes the attention loop after a quiet notification batch, enabled-source polling, native telemetry changes, DND re-entry, a daily schedule, startup, an explicit **+** request, or a due follow-up. Ordinary notifications settle for 45 seconds; recognized conversations get an independently reset five-minute quiet window and do not inherit urgency authority from chat applications. Live and history copies of the same native notification are canonicalized to one ID before persistence. Focus mode suppresses autonomous reviews; it never suppresses the explicit re-entry review when focus ends.
+
+When a quiet conversation eventually merits a digest, the broker may include retained evidence from one matching recent digest and replace it atomically. Unread conversation digests remain eligible for one hour and read digests for 15 minutes. Digests containing unrelated evidence, explicit feedback, expired evidence, or a different thread are never consolidated.
 
 The model can submit exactly one typed proposal. A hold proposes a subject, cited sources, a fallback deadline, and one or more fixed wake conditions: new evidence for the subject, a cited source changing, or the deadline arriving. The broker records that proposal as a watch lease, matches normalized subjects, and owns every event wake and timer. Hiding its main-page notice changes only bounded presentation state; the lease keeps running and can be restored or explicitly cancelled under **Settings → Behavior**. A newly scheduled follow-up surfaces the notice again. Automatic deliberations are separated by at least 60 seconds and capped at 24 per UTC day. At most 16 watches and 64 recent decisions are retained in a 256 KiB ledger. A watch can be revisited at most three times, cannot schedule more than 24 hours ahead, and expires after 48 hours. Evidence remains pending while held and is acknowledged only after a cited digest or alert succeeds.
 

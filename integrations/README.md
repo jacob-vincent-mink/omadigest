@@ -17,3 +17,5 @@ The v0.1 bundled connector catalog contains GitHub, which uses the ordinary auth
 Google Calendar, Linear, Slack, Todoist, X, and RSS/Atom prototypes are intentionally not shipped as defaults. The credentialed services were not connected and synced during v0.1 release validation. RSS needs a tested repeatable-instance contract and broader real-feed compatibility before it can honestly represent multiple subscriptions. Native application notifications remain available under the user's privacy rules, and the integration-authoring skill can build separately reviewed local connectors.
 
 See [`../skills/integration-authoring/references/connector-protocol.md`](../skills/integration-authoring/references/connector-protocol.md) and [`../docs/integrations.md`](../docs/integrations.md).
+
+Connectors should include a credential-free HTTPS `url` for any item with a stable browser destination. OmaDigest snapshots cited destinations into the saved digest so the reader can return to the originating page later.

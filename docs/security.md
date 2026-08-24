@@ -15,7 +15,7 @@ OmaDigest processes private notification, calendar, model, and speech data. Its 
 
 Notification, connector, search-result, and public-page strings are framed as untrusted evidence. They never become system instructions or add tools. Attention sessions expose only the action variants currently permitted by broker policy and may select only a broker-eligible template; digest sessions expose only `emit_digest`; standing-policy compilation exposes only `emit_attention_policy`; drafting sessions expose one matching emitter and `out_of_scope`. Research sessions expose only three broker-owned tools: bounded search, bounded public-HTTPS read, and cited snapshot submission.
 
-Structured output does not prove that model classification is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, and unsupported actions cannot execute.
+Structured output does not prove that model classification or summarization is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, one correlated group cannot be split or partially cited, and unsupported actions cannot execute.
 
 ## Display boundary
 
@@ -27,6 +27,8 @@ host controls whose rendering policy OmaDigest does not own. Action labels that
 carry setup authority are fixed by OmaDigest rather than accepted from a
 generated manifest. This prevents markup-shaped data from becoming rich text or
 causing local or remote resource loads in the long-running Quickshell process.
+
+Digest source actions are also data-free at the QML boundary: the panel sends only bounded digest, entry, source, and target identifiers. The broker looks up the saved reference, revalidates credential-free HTTPS before opening a web page, and uses one fixed Omarchy focus helper for application sources. Notification contents and connector-controlled commands are never executed. Missing retained evidence, a closed originating app, or a failed browser launch returns a visible unavailable result.
 
 ## Credentials
 
@@ -69,6 +71,8 @@ individual deletion and clear-all through the broker protocol.
 Attention memory is a separate derived store capped at 512 episodes, 512 KiB, and 90 days. Episodes retain bounded source provenance and cover only policy-permitted evidence, broker-validated decisions, completed digests, and observable user outcomes; hidden reasoning is never stored. Temporal summary nodes are rebuilt from episodes rather than treated as canonical facts. Search/zoom results are capped at four reads and 48 KiB per attention session, remain labeled as untrusted evidence, and cannot support an action without at least one current cited source. Privacy tightening and history deletion cascade through affected episodes before summaries are rebuilt.
 
 The attention agent cannot create a timer or execute an alert. It submits one cited `hold`, `digest`, or `notify` proposal. A hold may request only fixed wake conditions—related evidence, cited-source change, or deadline—and the broker owns subject matching, scheduling, template eligibility, interruption and digest thresholds, source-ID validation, execution, acknowledgement, and cancellation. Automatic deliberations have a 60-second minimum interval and a 24-per-day budget; watches are capped at 16, three attempts, 24 hours per follow-up, 48 hours of life, and a 256-KiB ledger.
+
+Known chat applications receive no automatic interruption authority from urgency alone. The broker canonicalizes duplicate live/history notification IDs, groups only a specific application/title thread, waits through a fixed five-minute quiet window, and requires either the normal item threshold or an explicit user policy before digesting. Recent-digest consolidation is limited to fully retained evidence from the same conversation, one hour while unread or 15 minutes after reading, at most eight replaced records; explicit feedback and mixed-topic digests are excluded.
 
 Standing policies do not grant new evidence or execution authority. Their compiler receives one bounded user request, has one typed output tool, and cannot access notification history. The broker caps, validates, stores, deterministically matches, enables, disables, and deletes policies. Broad notify policies fail validation. Outcome-derived preference hints come only from observable UI actions and remain soft evidence; they cannot override privacy, standing policy, urgency gates, or current-source citation requirements.
 

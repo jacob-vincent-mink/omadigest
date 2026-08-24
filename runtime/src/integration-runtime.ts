@@ -27,7 +27,13 @@ const connectorItemSchema = z.object({
   occurredAt: z.string().datetime(),
   title: boundedString(2_000, 4_000),
   body: boundedString(8_000, 12_000).optional(),
-  url: z.string().url().max(2_048).refine((value) => Buffer.byteLength(value, "utf8") <= 4_096, "Connector URL is too large").optional(),
+  url: z.string().url().max(2_048).refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.username === "" && url.password === ""
+        && Buffer.byteLength(value, "utf8") <= 4_096;
+    } catch { return false; }
+  }, "Connector item URLs require credential-free HTTPS").optional(),
   sensitivity: z.enum(["public", "personal", "work", "unknown"]),
   derivedFrom: z.array(boundedString(240, 480).pipe(z.string().min(1))).min(1).max(20)
 }).strict();
@@ -171,6 +177,7 @@ export function filterConnectorItems(
       category,
       title: parsed.data.title,
       body: parsed.data.body || "",
+      ...(parsed.data.url === undefined ? {} : { urls: [parsed.data.url] }),
       urgency: "normal",
       occurredAt: parsed.data.occurredAt
     }];

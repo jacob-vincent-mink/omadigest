@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Digest } from "./types.js";
+import { isDigestSource, MAX_DIGEST_SOURCES } from "./digest-sources.js";
 
 const MAX_HISTORY_BYTES = 5 * 1024 * 1024;
 const MAX_DIGESTS = 30;
@@ -21,8 +22,9 @@ export class DigestHistory {
   list(): Digest[] { return this.#read().digests; }
   get(id: string): Digest | undefined { return this.#read().digests.find((digest) => digest.id === id); }
 
-  save(digest: Digest): void {
-    const current = this.#read().digests.filter((item) => item.id !== digest.id);
+  save(digest: Digest, replacedDigestIds: string[] = []): void {
+    const replaced = new Set(replacedDigestIds.slice(0, 8));
+    const current = this.#read().digests.filter((item) => item.id !== digest.id && !replaced.has(item.id));
     this.#write({ version: 1, digests: [digest, ...current].slice(0, MAX_DIGESTS) });
   }
 
@@ -71,7 +73,9 @@ function isDigest(value: unknown): value is Digest {
     || typeof value.title !== "string" || typeof value.generatedAt !== "string"
     || (value.readAt !== undefined && typeof value.readAt !== "string")
     || (value.feedback !== undefined && value.feedback !== "useful" && value.feedback !== "not-useful")
-    || !Array.isArray(value.sections)) return false;
+    || !Array.isArray(value.sections)
+    || (value.sources !== undefined && (!Array.isArray(value.sources) || value.sources.length > MAX_DIGEST_SOURCES
+      || !value.sources.every(isDigestSource)))) return false;
   return value.sections.every((section) => isObject(section) && typeof section.title === "string" && Array.isArray(section.entries));
 }
 function isObject(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

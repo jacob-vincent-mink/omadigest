@@ -8,6 +8,7 @@ import type {
   TemplateSuggestion
 } from "./types.js";
 import { isActionableEvidence, normalizeApplication } from "./privacy.js";
+import { conversationSubject, conversationThreadKey } from "./conversation.js";
 
 const INTENTS: AttentionIntent[] = [
   "failure", "review", "deadline", "meeting", "assignment", "mention",
@@ -15,6 +16,9 @@ const INTENTS: AttentionIntent[] = [
 ];
 const HIGH_SIGNAL = new Set<AttentionIntent>([
   "failure", "review", "deadline", "assignment", "mention", "request"
+]);
+const ATTENTION_DIGEST_SIGNAL = new Set<AttentionIntent>([
+  "failure", "review", "deadline", "meeting", "assignment", "mention", "request"
 ]);
 const DYNAMIC_TEMPLATE_LABELS: Record<AttentionIntent, string> = {
   failure: "issue watch",
@@ -47,6 +51,7 @@ export function classifyAttentionItem(item: AttentionItem): AttentionItem {
 export function groupAttentionItems(items: AttentionItem[]): EvidenceGroup[] {
   const groups: Array<{
     key: string;
+    kind: EvidenceGroup["kind"];
     reason: EvidenceGroup["reason"];
     subject: string;
     items: AttentionItem[];
@@ -60,21 +65,30 @@ export function groupAttentionItems(items: AttentionItem[]): EvidenceGroup[] {
     const correlationKeys = new Set(strongEntities.length > 0
       ? strongEntities
       : entityKeys.filter((entity) => entity.startsWith("ref:")));
+    const conversationKey = conversationThreadKey(classified);
     const reference = subjectReference(`${classified.title}\n${classified.body}`, app);
     const normalizedTitle = normalizeTitle(classified.title);
     const exactTitle = isSpecificTitle(normalizedTitle) ? normalizedTitle : "";
-    const groupingKey = correlationKeys.size > 0 ? [...correlationKeys].sort()[0]!
+    const groupingKey = conversationKey !== undefined ? conversationKey
+      : correlationKeys.size > 0 ? [...correlationKeys].sort()[0]!
       : reference !== "" ? `reference:${app}:${reference}`
       : exactTitle !== "" ? `title:${app}:${exactTitle}` : `item:${classified.id}`;
-    const reason: EvidenceGroup["reason"] = correlationKeys.size > 0 ? "shared-entity"
+    const reason: EvidenceGroup["reason"] = conversationKey !== undefined ? "same-title"
+      : correlationKeys.size > 0 ? "shared-entity"
       : reference !== "" ? "shared-reference"
       : exactTitle !== "" ? "same-title" : "single";
-    const subject = entitySubject(entityKeys, classified, reference);
-    const matches = groups.filter((group) => correlationKeys.size > 0
-      ? [...correlationKeys].some((key) => group.entities.has(key))
-      : group.key === groupingKey);
+    const kind: EvidenceGroup["kind"] = conversationKey !== undefined ? "conversation"
+      : correlationKeys.size > 0 || reference !== "" ? "entity"
+      : exactTitle !== "" ? "title" : "single";
+    const subject = conversationKey === undefined
+      ? entitySubject(entityKeys, classified, reference) : conversationSubject(classified);
+    const matches = groups.filter((group) => conversationKey !== undefined
+      ? group.key === groupingKey
+      : correlationKeys.size > 0
+        ? [...correlationKeys].some((key) => group.entities.has(key))
+        : group.key === groupingKey);
     if (matches.length === 0) {
-      groups.push({ key: groupingKey, reason, subject, items: [classified], entities: correlationKeys });
+      groups.push({ key: groupingKey, kind, reason, subject, items: [classified], entities: correlationKeys });
       continue;
     }
     const current = matches[0]!;
@@ -89,12 +103,32 @@ export function groupAttentionItems(items: AttentionItem[]): EvidenceGroup[] {
 
   return groups.slice(0, 80).map((value) => ({
     id: `group-${createHash("sha256").update(`${value.key}\u0000${[...value.entities].sort().join("\u0000")}`).digest("hex").slice(0, 12)}`,
+    kind: value.kind,
     intent: dominantIntent(value.items),
     subject: value.subject,
     reason: value.items.length > 1 ? value.reason : "single",
     sourceIds: value.items.map((item) => item.id),
     items: value.items
   }));
+}
+
+export function expandCorrelatedSelection(
+  items: AttentionItem[],
+  selectedIds: string[],
+  maximumItems: number
+): string[] {
+  const maximum = Math.max(1, Math.min(100, maximumItems));
+  const selected = new Set(selectedIds.slice(0, maximum));
+  const expanded = [...selected];
+  for (const group of groupAttentionItems(items)) {
+    if (!group.sourceIds.some((id) => selected.has(id))) continue;
+    for (const id of group.sourceIds) {
+      if (selected.has(id) || expanded.length >= maximum) continue;
+      selected.add(id);
+      expanded.push(id);
+    }
+  }
+  return expanded.slice(0, maximum);
 }
 
 export function attentionEntityKeys(item: AttentionItem): string[] {
@@ -159,6 +193,19 @@ export function automaticDigestDecision(context: GenerationContext, items: Atten
   if (context.focusMinutes >= 20 && highSignal > 0)
     return { generate: true, reason: "A meaningful focus session has actionable updates" };
   return { generate: false, reason: "Only low-signal updates arrived during focus" };
+}
+
+export function automaticAttentionSignal(
+  items: AttentionItem[], minimumItems: number
+): { allowDigest: boolean; allowNotify: boolean } {
+  const current = items.filter(isActionableEvidence).slice(0, 200).map(classifyAttentionItem);
+  const minimum = Math.max(1, Math.min(200, minimumItems));
+  const highSignal = current.some((item) => conversationThreadKey(item) === undefined
+    && item.intent !== undefined && ATTENTION_DIGEST_SIGNAL.has(item.intent));
+  return {
+    allowDigest: current.length >= minimum || highSignal,
+    allowNotify: current.some((item) => item.urgency === "critical" && conversationThreadKey(item) === undefined)
+  };
 }
 
 type SuggestionRecipe = Omit<TemplateSuggestion, "itemCount"> & {

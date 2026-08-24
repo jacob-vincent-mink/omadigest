@@ -65,6 +65,12 @@ Scope {
   property string attentionMemoryQuery: ""
   property var attentionMemoryResults: []
   property var attentionExplanation: null
+  property string digestSourcesKey: ""
+  property var digestSources: []
+  property string digestSourcesState: "idle"
+  property var digestSourceResults: ({})
+  property var lastDigestSourceResult: null
+  property int digestSourceResultRevision: 0
   property string attentionTimelineMode: "events"
   property var attentionTimelineItems: []
   property var attentionTimelineThreads: []
@@ -355,6 +361,39 @@ Scope {
     })
   }
 
+  function digestEntryKey(digestId, sectionIndex, entryIndex) {
+    return String(digestId || "") + ":" + Math.max(0, Number(sectionIndex) || 0)
+      + ":" + Math.max(0, Number(entryIndex) || 0)
+  }
+
+  function requestDigestSources(digestId, sectionIndex, entryIndex) {
+    var key = digestEntryKey(digestId, sectionIndex, entryIndex)
+    digestSourcesKey = key
+    digestSources = []
+    digestSourcesState = "loading"
+    send({
+      type: "digest_sources", id: "digest-sources-" + nextId++, digestId: String(digestId),
+      sectionIndex: Math.max(0, Number(sectionIndex) || 0), entryIndex: Math.max(0, Number(entryIndex) || 0)
+    })
+  }
+
+  function openDigestSource(digestId, sectionIndex, entryIndex, sourceId, targetId) {
+    var key = String(digestId || "") + ":" + String(sourceId || "") + ":" + String(targetId || "")
+    var nextResults = Object.assign({}, digestSourceResults)
+    nextResults[key] = ({ state: "opening", message: "Opening source…" })
+    digestSourceResults = nextResults
+    send({
+      type: "digest_source_open", id: "digest-source-open-" + nextId++, digestId: String(digestId),
+      sectionIndex: Math.max(0, Number(sectionIndex) || 0), entryIndex: Math.max(0, Number(entryIndex) || 0),
+      sourceId: String(sourceId), targetId: String(targetId)
+    })
+  }
+
+  function digestSourceResult(digestId, sourceId, targetId) {
+    var key = String(digestId || "") + ":" + String(sourceId || "") + ":" + String(targetId || "")
+    return digestSourceResults[key] || null
+  }
+
   function createAttentionPolicy(request) {
     var text = String(request || "").trim().slice(0, 2000)
     if (!text || attentionPolicyState === "working") return
@@ -468,6 +507,11 @@ Scope {
 
   function openDigestFromHistory(saved) {
     if (!saved) return
+    digestSourcesKey = ""
+    digestSources = []
+    digestSourcesState = "idle"
+    digestSourceResults = ({})
+    lastDigestSourceResult = null
     digest = saved
     digestState = "ready"
   }
@@ -499,8 +543,9 @@ Scope {
     var text = String(digest.title || "")
     var sections = digest.sections || []
     for (var i = 0; i < sections.length; i++) {
-      text += ". " + String(sections[i].title || "")
       var entries = sections[i].entries || []
+      if (entries.length === 0) continue
+      text += ". " + String(sections[i].title || "")
       for (var j = 0; j < entries.length; j++)
         text += ". " + String(entries[j].headline || "") + ". " + String(entries[j].explanation || "")
     }
@@ -736,6 +781,26 @@ Scope {
     }
     if (event.type === "attention_explanation") {
       attentionExplanation = event.explanation || null
+      return
+    }
+    if (event.type === "digest_sources") {
+      digestSourcesKey = digestEntryKey(event.digestId, event.sectionIndex, event.entryIndex)
+      digestSources = (event.sources || []).slice(0, 64)
+      digestSourcesState = "ready"
+      return
+    }
+    if (event.type === "digest_source_result") {
+      var resultKey = String(event.digestId || "") + ":" + String(event.sourceId || "") + ":" + String(event.targetId || "")
+      var nextSourceResults = Object.assign({}, digestSourceResults)
+      nextSourceResults[resultKey] = ({
+        state: String(event.state || "unavailable"), message: String(event.message || "Source unavailable")
+      })
+      digestSourceResults = nextSourceResults
+      lastDigestSourceResult = ({
+        state: String(event.state || "unavailable"), message: String(event.message || "Source unavailable")
+      })
+      digestSourceResultRevision += 1
+      status = String(event.message || "Source updated")
       return
     }
     if (event.type === "attention_policies") {

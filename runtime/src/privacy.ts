@@ -149,7 +149,7 @@ export function normalizeApplication(value: string): string {
 }
 
 function hiddenItem(item: AttentionItem): AttentionItem {
-  const { intent: _intent, ...safe } = item;
+  const { intent: _intent, urls: _urls, ...safe } = item;
   return { ...safe, title: "", body: "", contentAvailable: false };
 }
 

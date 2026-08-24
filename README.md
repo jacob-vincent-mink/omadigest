@@ -27,8 +27,11 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Briefings, not another inbox** — answer “what needs me?” instead of replaying every popup.
 - **Privacy before persistence** — protected apps such as Signal start at **Ignore**; unknown apps start at **Count only**, with content erased.
 - **Citations by construction** — every factual digest entry must cite a supplied notification or connector source ID.
+- **Source jump-backs** — expand a digest entry's sources to open its retained HTTPS page or focus the originating application, with an explicit unavailable state when an app notification has expired.
 - **Deterministic templates** — TypeScript, not the model, chooses the governing briefing skill.
 - **Attention intelligence** — conservative subject grouping plus a bounded attention agent can recall prior episodes, watch an evolving subject, create the right digest, or surface a time-sensitive alert without granting notification text execution authority.
+- **Conversation-aware calm** — known chat notifications wait for a per-thread quiet window, collate into one conversation group, and refresh a recent matching digest instead of producing one digest per message.
+- **Outcome-first compression** — conversations and correlated feeds become the smallest useful set of requests, decisions, blockers, and changes while raw provenance stays behind **Sources**.
 - **Progressive memory** — a provenance-preserving temporal memory keeps recent episodes detailed, compresses older context into rebuildable summaries, and lets the agent search or zoom before deciding.
 - **Attention timeline** — inspect received evidence, holds, digests, alerts, handoffs, and feedback as subject threads, then switch to a time-decayed memory view and open compressed spans back toward their source moments.
 - **Recurring research** — keep a question warm on an hourly, daily, or weekly cadence; choose focused, broad, or deep web research plus a change window, then receive a compact cited brief only when current evidence supports a meaningful change.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  automaticAttentionSignal,
   automaticDigestDecision,
   classifyAttentionItem,
+  expandCorrelatedSelection,
   explicitAttentionRecallQuery,
   groupAttentionItems,
   suggestTemplates
@@ -52,6 +54,28 @@ describe("attention intelligence", () => {
     expect(groupAttentionItems([item("1", "New message"), item("2", "New message")])).toHaveLength(2);
   });
 
+  it("collates a chat burst by its short conversation title", () => {
+    const groups = groupAttentionItems([
+      item("1", "Ada Lovelace", { app: "Signal", body: "First" }),
+      item("2", "Ada Lovelace", { app: "Signal", body: "Second" }),
+      item("3", "Grace Hopper", { app: "Signal", body: "Separate thread" })
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups.find((group) => group.subject === "Ada Lovelace")).toMatchObject({
+      kind: "conversation", sourceIds: ["1", "2"]
+    });
+  });
+
+  it("expands a selected message to its complete bounded conversation", () => {
+    const messages = [
+      item("1", "Ada Lovelace", { app: "Signal", body: "First" }),
+      item("2", "Ada Lovelace", { app: "Signal", body: "Second" }),
+      item("3", "A different subject", { app: "GitHub", body: "Unrelated" })
+    ];
+    expect(expandCorrelatedSelection(messages, ["2"], 10)).toEqual(["2", "1"]);
+    expect(expandCorrelatedSelection(messages, ["2"], 1)).toEqual(["2"]);
+  });
+
   it("requests precise recall only for explicit recurrence", () => {
     expect(explicitAttentionRecallQuery([
       item("1", "CI failed on jacob/omadigest PR #184", { body: "The same failure happened again" })
@@ -69,6 +93,19 @@ describe("attention intelligence", () => {
   it("generates after meaningful focus when several items include action", () => {
     const items = [item("1", "PR #1 review requested"), item("2", "Docs published"), item("3", "Release updated")];
     expect(automaticDigestDecision(context("dnd-ended", 12), items)).toMatchObject({ generate: true });
+  });
+
+  it("requires a collated chat burst instead of treating one message as an interruption", () => {
+    const one = item("1", "Ada Lovelace", {
+      app: "Signal", body: "Please take a look", urgency: "critical"
+    });
+    expect(automaticAttentionSignal([one], 3)).toEqual({ allowDigest: false, allowNotify: false });
+    expect(automaticAttentionSignal([
+      one,
+      item("2", "Ada Lovelace", { app: "Signal", body: "Second" }),
+      item("3", "Ada Lovelace", { app: "Signal", body: "Third" })
+    ], 3)).toEqual({ allowDigest: true, allowNotify: false });
+    expect(automaticAttentionSignal([item("4", "PR #42 review requested")], 3).allowDigest).toBe(true);
   });
 
   it("suggests only fixed recipes supported by repeated safe evidence", () => {

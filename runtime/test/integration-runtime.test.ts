@@ -164,6 +164,19 @@ describe("integration runtime source contract", () => {
     expect(filtered[0]).toMatchObject({ id: "kept", category: "mentions", source: "local.source" });
   });
 
+  it("preserves only credential-free HTTPS item destinations", () => {
+    const source = integration();
+    expect(filterConnectorItems(source, ["mentions"], [
+      { ...item("web", "mentions"), url: "https://example.com/thread/42" }
+    ])[0]).toMatchObject({ urls: ["https://example.com/thread/42"] });
+    expect(filterConnectorItems(source, ["mentions"], [
+      { ...item("file", "mentions"), url: "file:///etc/passwd" }
+    ])).toEqual([]);
+    expect(filterConnectorItems(source, ["mentions"], [
+      { ...item("credential", "mentions"), url: "https://user:secret@example.com/private" }
+    ])).toEqual([]);
+  });
+
   it("maps legacy category-less connector items to the implicit default category", () => {
     const source = integration();
     delete source.manifest.categories;

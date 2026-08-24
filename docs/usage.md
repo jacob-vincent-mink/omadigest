@@ -8,7 +8,7 @@ The bar's quill opens a deliberately small digest list. The header actions are:
 - **✓** — mark the current backlog seen without deleting policy-permitted retained evidence;
 - **Settings** — open sources, templates, privacy, connections, and retained data controls.
 
-Select a digest to open its focused reader. Each entry includes source citations and, where policy allows, **Send to agent**.
+Select a digest to open its focused reader. Each entry includes **Sources**, **Why this?**, and, where policy allows, **Send to agent**. **Sources** shows the retained pages or originating applications behind that entry. A web source opens its saved HTTPS address; a notification source makes a best-effort attempt to focus a matching open application. If that app is no longer available, the source stays visible and reports that its notification action has expired instead of failing silently.
 
 ## Connect a model
 
@@ -37,7 +37,7 @@ Protected private applications such as Signal start at **Ignore**. Unknown appli
 
 OmaDigest has three trigger paths:
 
-1. **Notification quiet window** — review a changed batch after notifications settle.
+1. **Notification quiet window** — review a changed batch after notifications settle. Known chat apps use a five-minute per-conversation quiet window; one message cannot bypass the digest threshold merely because its text resembles a request.
 2. **Enabled sources** — poll connectors and native Omarchy sources in the background and review new evidence.
 3. **Native events** — react to configured power, battery, network, and Herdr transitions.
 4. **DND ended** — review what changed when Do Not Disturb ends.
@@ -46,6 +46,10 @@ OmaDigest has three trigger paths:
 7. **Manual** — press **+** to check all sources and require a digest now.
 
 The panel's compact activity strip shows whether OmaDigest is checking sources, weighing evidence, holding related updates, generating, or surfacing an alert. Active reviews list their subject, wake conditions, and deadline. The main-page **×** hides that notice without stopping the review; **Settings → Behavior → Next reviews** shows hidden and visible reviews, restores a hidden notice, and provides the explicit cancellation action. Automatic reviews are rate-limited and daily-budgeted. The model cannot create its own timer or call notification, shell, filesystem, browser, or connector tools.
+
+Signal and other recognized chat notifications are grouped by application and conversation title. If the same conversation already has an unread OmaDigest digest, later evidence can refresh that digest for up to one hour; after it is read, the refresh window is 15 minutes. A mixed-topic digest and any digest with explicit usefulness feedback are never replaced. Manual generation, DND re-entry, and explicit attention rules retain their normal behavior.
+
+Within the resulting briefing, messages are not rendered as equal-weight cards. OmaDigest derives the smallest useful set of outcomes, requests, decisions, blockers, or unresolved points from each correlated thread. Open **Sources** on an entry when you need the individual retained notifications or originating application.
 
 Before deciding, the attention agent receives a bounded time-decayed view of its recent episodes and may make up to four typed, read-only calls to search, read one broker-supplied subject thread, or zoom into a coarse summary. Recalled history remains cited data, and the final action must include current evidence. This lets OmaDigest compare an evolving PR, meeting, incident, or agent task with what it previously saw without replaying its full history into every model call.
 
