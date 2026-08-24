@@ -244,6 +244,67 @@ export type AttentionActivity = {
   dailyLimit: number;
 };
 
+export type ResearchCadence = "hourly" | "six-hourly" | "daily" | "weekly";
+
+export type ResearchWatch = {
+  id: string;
+  name: string;
+  question: string;
+  cadence: ResearchCadence;
+  sourceUrls: string[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  nextRunAt: string;
+  lastRunAt?: string;
+};
+
+export type ResearchEvidence = {
+  url: string;
+  title: string;
+  retrievedAt: string;
+  excerptHash: string;
+};
+
+export type ResearchClaim = {
+  key: string;
+  statement: string;
+  significance: string;
+  confidence: number;
+  evidence: ResearchEvidence[];
+};
+
+export type ResearchChange = {
+  kind: "new" | "changed" | "no-longer-supported";
+  key: string;
+  statement: string;
+  previousStatement?: string;
+  significance: string;
+  confidence: number;
+  evidence: ResearchEvidence[];
+};
+
+export type ResearchRun = {
+  id: string;
+  watchId: string;
+  watchName: string;
+  startedAt: string;
+  completedAt: string;
+  status: "complete" | "error";
+  summary: string;
+  baseline: boolean;
+  meaningfulChange: boolean;
+  claims: ResearchClaim[];
+  changes: ResearchChange[];
+  error?: string;
+};
+
+export type ResearchActivity = {
+  state: "idle" | "searching" | "reading" | "synthesizing" | "error";
+  message: string;
+  watchId?: string;
+};
+
 export type CompiledTemplate = {
   version: 1;
   id: string;
@@ -336,7 +397,7 @@ export type PublicPrivacyPolicy = {
   rules: Array<{ app: string; mode: PrivacyMode; source: "protected-default" | "user" }>;
 };
 
-export type DataDeletionTarget = "digest-history" | "notification-history" | "integrations" | "templates" | "all";
+export type DataDeletionTarget = "digest-history" | "notification-history" | "research" | "integrations" | "templates" | "all";
 
 export type ReleaseUpdateStatus = {
   state: "unknown" | "checking" | "current" | "available";
@@ -353,6 +414,10 @@ export type BrokerCommand =
   | { type: "update_check"; id: string }
   | { type: "update_dismiss"; id: string }
   | { type: "update_open"; id: string }
+  | { type: "research_create"; id: string; name: string; question: string; cadence: ResearchCadence; sourceUrls: string[] }
+  | { type: "research_set_enabled"; id: string; watchId: string; enabled: boolean }
+  | { type: "research_run"; id: string; watchId: string }
+  | { type: "research_delete"; id: string; watchId: string }
   | { type: "select_template"; id: string; context: GenerationContext }
   | { type: "integration_set_enabled"; id: string; integrationId: string; enabled: boolean }
   | { type: "integration_set_category_enabled"; id: string; integrationId: string; categoryId: string; enabled: boolean }
@@ -415,7 +480,8 @@ export type BrokerCommand =
   | { type: "shutdown" };
 
 export type BrokerEvent =
-  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; policies: AttentionPolicy[]; templateSuggestions: TemplateSuggestion[]; update: ReleaseUpdateStatus }
+  | { type: "ready"; protocolVersion: number; templates: PublicTemplate[]; integrations: PublicIntegration[]; authMethods: AgentAuthMethod[]; privacy: PublicPrivacyPolicy; policies: AttentionPolicy[]; templateSuggestions: TemplateSuggestion[]; update: ReleaseUpdateStatus; researchWatches: ResearchWatch[]; researchRuns: ResearchRun[] }
+  | { type: "research_state"; id: string; watches: ResearchWatch[]; runs: ResearchRun[]; activity: ResearchActivity }
   | { type: "update_status"; id: string; status: ReleaseUpdateStatus }
   | { type: "templates"; id: string; templates: PublicTemplate[] }
   | { type: "template_selected"; id: string; selection: TemplateSelection }

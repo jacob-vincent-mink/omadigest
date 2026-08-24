@@ -3,3 +3,4 @@ OmaDigestMark 1.0 OmaDigestMark.qml
 IntegrationCard 1.0 IntegrationCard.qml
 DraftEditor 1.0 DraftEditor.qml
 InlineDeleteControl 1.0 InlineDeleteControl.qml
+ResearchWatchCard 1.0 ResearchWatchCard.qml

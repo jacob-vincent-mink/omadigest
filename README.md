@@ -31,6 +31,7 @@ It does **not** replace the notification daemon or put a general-purpose agent i
 - **Attention intelligence** — conservative subject grouping plus a bounded attention agent can recall prior episodes, watch an evolving subject, create the right digest, or surface a time-sensitive alert without granting notification text execution authority.
 - **Progressive memory** — a provenance-preserving temporal memory keeps recent episodes detailed, compresses older context into rebuildable summaries, and lets the agent search or zoom before deciding.
 - **Attention timeline** — inspect received evidence, holds, digests, alerts, handoffs, and feedback as subject threads, then switch to a time-decayed memory view and open compressed spans back toward their source moments.
+- **Research watches** — keep a question warm on an hourly, daily, or weekly cadence; OmaDigest builds a cited baseline, compares stable claims, and creates a new brief only when the answer meaningfully changes.
 - **Cross-source correlation** — stable PR, issue, repository, URL, and CVE entities join related notifications, CI results, connector evidence, and agent activity without relying on matching app names.
 - **Just-in-time context packs** — approaching meetings and deadlines can schedule a bounded pre-event checkback, recall related history, and produce a focused context pack.
 - **Standing attention policies** — describe what should interrupt, wait, become a digest, or stay quiet; a scoped compiler previews current matches and priority conflicts before the deterministic policy is saved.
@@ -123,6 +124,7 @@ Quickshell panel ◄─────┘                           ▼
 TypeScript broker ◄───────────────────────┘
        ├─ searchable episodic memory + temporal summary tree
        ├─ bounded conditional-watch ledger
+       ├─ scheduled cited research + claim ledger
        ├─ scoped digest Pi session ─────► validated cited digest
        ├─ Secret Service
        ├─ Voxtype
@@ -141,8 +143,9 @@ OmaDigest gives each model session only the structured submission tool needed fo
 | Digest generation | `emit_digest` |
 | Standing-policy compilation | `emit_attention_policy` |
 | Template drafting | `emit_template_draft`, `out_of_scope` |
+| Research watch | `search_web`, `read_url`, `emit_research_snapshot` |
 
-These Pi sessions receive no `bash`, `read`, `write`, `edit`, browser, web, or device tools. Integration authoring is deliberately different: OmaDigest opens the default coding agent with its authoring skill, which builds in a temporary directory and must pass the standalone package validator before an atomic, disabled install. Broader work starts only after **Build in default agent**, **Open in default agent**, **Send to agent**, or **Continue in Herdr** is clicked.
+These Pi sessions receive no `bash`, filesystem mutation, browser automation, or device tools. Research is the narrow exception for network evidence: its broker-owned tools allow at most three searches and eight validated public HTTPS reads, with no credentials, private addresses, or source-defined actions. Integration authoring is deliberately different: OmaDigest opens the default coding agent with its authoring skill, which builds in a temporary directory and must pass the standalone package validator before an atomic, disabled install. Broader work starts only after **Build in default agent**, **Open in default agent**, **Send to agent**, or **Continue in Herdr** is clicked.
 
 Generated integrations are schema-validated, syntax-checked, tested in the connector sandbox, probed with mocked inputs, installed atomically, and remain disabled until separately configured and enabled. Connectors use Node's permission model, a minimal environment, bounded I/O, and timeouts. Omarchy plugins themselves share the user's long-running shell process and are not an OS security boundary; review plugin code before installing it.
 

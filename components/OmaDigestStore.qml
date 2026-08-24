@@ -47,6 +47,7 @@ Scope {
   property string handoffPreview: ""
   property string handoffToken: ""
   property var digest: null
+  property int digestReadyRevision: 0
   property var digestHistory: []
   property string digestState: "idle"
   property int attentionCount: 0
@@ -54,6 +55,9 @@ Scope {
   property var attentionWatches: []
   property var attentionMemory: ({ episodeCount: 0, summaryCount: 0 })
   property var attentionCalibration: ({ outcomeCount: 0, readCount: 0, handoffCount: 0, usefulCount: 0, notUsefulCount: 0, subjects: [] })
+  property var researchWatches: []
+  property var researchRuns: []
+  property var researchActivity: ({ state: "idle", message: "Research watches are ready" })
   property var attentionPolicies: []
   property string attentionPolicyState: "idle"
   property string attentionPolicyMessage: ""
@@ -374,6 +378,34 @@ Scope {
     send({ type: "attention_policy_delete", id: "attention-policy-" + nextId++, policyId: String(policyId) })
   }
 
+  function createResearchWatch(name, question, cadence, sourceUrls) {
+    var title = String(name || "").trim().slice(0, 100)
+    var request = String(question || "").trim().slice(0, 1000)
+    if (!title || request.length < 3) return
+    clearError()
+    researchActivity = ({ state: "searching", message: "Starting " + title })
+    send({
+      type: "research_create", id: "research-" + nextId++, name: title, question: request,
+      cadence: ["hourly", "six-hourly", "daily", "weekly"].indexOf(String(cadence)) >= 0 ? String(cadence) : "daily",
+      sourceUrls: (sourceUrls || []).map(function(url) { return String(url || "").trim().slice(0, 2048) })
+        .filter(function(url) { return url !== "" }).slice(0, 8)
+    })
+  }
+
+  function setResearchWatchEnabled(watchId, enabled) {
+    send({ type: "research_set_enabled", id: "research-" + nextId++, watchId: String(watchId), enabled: enabled === true })
+  }
+
+  function runResearchWatch(watchId) {
+    clearError()
+    send({ type: "research_run", id: "research-" + nextId++, watchId: String(watchId) })
+  }
+
+  function deleteResearchWatch(watchId) {
+    clearError()
+    send({ type: "research_delete", id: "research-" + nextId++, watchId: String(watchId) })
+  }
+
   function wakeAttention(reason, focusMinutes, minimumItems) {
     clearError()
     send({
@@ -516,12 +548,22 @@ Scope {
       integrations = event.integrations || []
       privacy = event.privacy || ({ defaultMode: "count-only", rules: [] })
       attentionPolicies = (event.policies || []).slice(0, 32)
+      researchWatches = (event.researchWatches || []).slice(0, 16)
+      researchRuns = (event.researchRuns || []).slice(0, 192)
       updateStatus = event.update || updateStatus
       authMethods = event.authMethods || []
       root.requestAgentStatus()
       root.requestDictationStatus()
       root.requestTtsStatus()
       root.requestDigestHistory()
+      return
+    }
+    if (event.type === "research_state") {
+      researchWatches = (event.watches || []).slice(0, 16)
+      researchRuns = (event.runs || []).slice(0, 192)
+      researchActivity = event.activity || researchActivity
+      var researchMessage = String(researchActivity.message || "")
+      if (researchMessage) status = researchMessage
       return
     }
     if (event.type === "update_status") {
@@ -691,6 +733,7 @@ Scope {
     }
     if (event.type === "digest") {
       digest = event.digest || null
+      digestReadyRevision += 1
       digestState = "ready"
       root.requestDigestHistory()
       status = "Digest ready"
@@ -710,6 +753,7 @@ Scope {
       dataDeleteMessage = dataDeleteTarget === "digest-history" ? "Digest history deleted"
         : dataDeleteTarget === "notification-history" ? "OmaDigest notification history deleted"
         : dataDeleteTarget === "integrations" ? "Integration data deleted"
+        : dataDeleteTarget === "research" ? "Research watches deleted"
         : dataDeleteTarget === "templates" ? "Templates reset"
         : "OmaDigest history, integrations, and templates deleted"
       if (dataDeleteTarget === "digest-history" || dataDeleteTarget === "all") {
@@ -724,6 +768,11 @@ Scope {
         attentionMemory = ({ episodeCount: 0, summaryCount: 0 })
       }
       if (dataDeleteTarget === "integrations" || dataDeleteTarget === "all") integrationSetup = ({})
+      if (dataDeleteTarget === "research" || dataDeleteTarget === "all") {
+        researchWatches = []
+        researchRuns = []
+        researchActivity = ({ state: "idle", message: "Research watches are ready" })
+      }
       dataDeleteRevision += 1
       status = dataDeleteMessage
       return

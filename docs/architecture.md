@@ -13,6 +13,7 @@ live popupModel ─► bounded QML snapshot ─► attention_ingest
 Omarchy history ─► bounded broker reader ─► attention store
                                               │
 enabled connector ─► normalized context ──────┤
+scheduled research ─► cited claim changes ─────┤
                                               ▼
                                       bounded attention store
                                               ├─► standing policy matcher
@@ -41,12 +42,15 @@ Every Pi operation uses an in-memory session and settings. Digest and template i
 - Attention: bounded read-only `search_attention_memory`, `read_attention_thread`, and `zoom_attention_memory`, then exactly one `propose_attention_action` (`hold`, `digest`, or `notify`).
 - Standing-policy compilation: `emit_attention_policy`.
 - Template draft: `emit_template_draft`, `out_of_scope`.
+- Research: at most three `search_web` calls, eight `read_url` calls, then `emit_research_snapshot`.
 
 No built-in coding tools are enabled. Time, prompt, file, item, and output bounds are enforced outside the model.
 
 ## File-backed control plane
 
 User privacy rules, standing attention policies, templates, integrations, declared permissions, enablement, category overrides, and non-secret setup live under `${XDG_CONFIG_HOME:-~/.config}/omadigest`. Standing policies are schema-validated, capped at 32 records and 128 KiB, and matched deterministically. Source enablement and category overrides use bounded version-2 state; version-1 integration enablement is migrated on read and rewritten on the next state change. The broker fingerprints this bounded tree every two seconds. Valid edits made by the default Omarchy agent or another editor are reloaded and published to QML without restarting the shell. Secrets remain outside this control plane in Secret Service, and provider account changes remain behind typed authentication.
+
+Research watch definitions also live in that bounded control plane. The broker owns cadence, one-at-a-time execution, a 24-run daily automatic budget, public-HTTPS/DNS validation, response limits, and a 90-day claim ledger capped at 12 runs per watch. The model emits stable cited claims; TypeScript computes new, changed, and no-longer-supported claims and turns a baseline or meaningful delta into a normal unread digest.
 
 Destructive data controls are typed broker commands with UI confirmation. Notification-history deletion removes OmaDigest attention evidence, notification-derived memory episodes, and the attention-loop ledger, then persists a bounded cutoff that rejects replayed older Omarchy notifications; it never mutates Omarchy notification state. Privacy tightening removes affected raw evidence and every dependent episode before rebuilding derived memory summaries. Integration deletion removes user packages, setup, enablement, and known integration secrets. Bundled templates and integrations remain immutable; inline deletion of a bundled template records only its bounded ID in user configuration.
 
@@ -89,6 +93,7 @@ Protocol 2 currently includes:
 - integration setup, structured status refresh, source enablement, and category enablement;
 - deletion of OmaDigest digest history, retained notification evidence, custom integrations, and custom templates;
 - bounded release-update check, per-version dismissal, and fixed release-page launch;
+- research-watch create, pause/resume, run-now, delete, and bounded state;
 - dictation status/start/stop/cancel;
 - TTS status/configure/speak/pause/stop.
 

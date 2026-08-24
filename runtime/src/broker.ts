@@ -40,6 +40,8 @@ import { readOmarchyNotificationHistory } from "./notification-history.js";
 import { HandoffTransport } from "./handoff-transport.js";
 import { readBoundedProtocolLines } from "./protocol-lines.js";
 import { mergeVisibleTemplates, TemplateVisibilityStore, templateIdSchema } from "./template-visibility.js";
+import { diffResearchClaims, ResearchWatchStore } from "./research-watches.js";
+import { readResearchUrl, searchResearchWeb } from "./research-network.js";
 import {
   PROTOCOL_VERSION,
   type AttentionActivity,
@@ -48,9 +50,14 @@ import {
   type AttentionWatch,
   type AttentionWakeReason,
   type BrokerEvent,
+  type Digest,
   type DigestTemplate,
   type GenerationTrigger,
   type PublicIntegration,
+  type ResearchActivity,
+  type ResearchClaim,
+  type ResearchRun,
+  type ResearchWatch,
   type SourceStatus
 } from "./types.js";
 
@@ -78,6 +85,15 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("update_check"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("update_dismiss"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("update_open"), id: z.string().min(1).max(100) }).strict(),
+  z.object({
+    type: z.literal("research_create"), id: z.string().min(1).max(100),
+    name: z.string().trim().min(1).max(100), question: z.string().trim().min(3).max(1_000),
+    cadence: z.enum(["hourly", "six-hourly", "daily", "weekly"]),
+    sourceUrls: z.array(z.string().url().max(2_048)).max(8)
+  }).strict(),
+  z.object({ type: z.literal("research_set_enabled"), id: z.string().min(1).max(100), watchId: z.string().uuid(), enabled: z.boolean() }).strict(),
+  z.object({ type: z.literal("research_run"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("research_delete"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("select_template"), id: z.string().min(1).max(100), context: contextSchema }).strict(),
   z.object({
     type: z.literal("integration_set_enabled"),
@@ -215,7 +231,7 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("template_delete"), id: z.string().min(1).max(100), templateId: templateIdSchema }).strict(),
   z.object({
     type: z.literal("data_delete"), id: z.string().min(1).max(100),
-    target: z.enum(["digest-history", "notification-history", "integrations", "templates", "all"])
+    target: z.enum(["digest-history", "notification-history", "research", "integrations", "templates", "all"])
   }).strict(),
   z.object({ type: z.literal("shutdown") }).strict()
 ]);
@@ -241,6 +257,7 @@ const attention = new AttentionStore();
 const attentionLedger = new AttentionLedger();
 const attentionMemory = new AttentionMemory();
 const attentionPolicies = new AttentionPolicyStore();
+const research = new ResearchWatchStore();
 const privacy = new PrivacyPolicy(configRoot);
 attention.applyPolicy((item) => {
   const filtered = privacy.filter(item);
@@ -270,6 +287,8 @@ let attentionActivity = attentionLedger.activity("observing", "Watching enabled 
 let attentionCycleRunning = false;
 let queuedAttentionCycle: AttentionCycleRequest | undefined;
 let notificationQuietTimer: NodeJS.Timeout | undefined;
+let researchActivity: ResearchActivity = { state: "idle", message: "Research watches are ready" };
+let researchRunning = false;
 
 type AttentionCycleRequest = {
   id: string;
@@ -406,6 +425,128 @@ nativeSourceSampler.unref();
 
 function emit(event: BrokerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
+}
+
+function emitResearchState(id: string): void {
+  emit({ type: "research_state", id, watches: research.watches(), runs: research.runs(), activity: researchActivity });
+}
+
+function setResearchActivity(activity: ResearchActivity, id: string): void {
+  researchActivity = activity;
+  emitResearchState(id);
+}
+
+async function runResearchWatch(watch: ResearchWatch, id: string, automatic: boolean): Promise<void> {
+  if (researchRunning) {
+    if (!automatic) emit({ type: "error", id, code: "research_busy", message: "Another research watch is already running." });
+    return;
+  }
+  if (automatic) {
+    const recentRuns = research.runs().filter((run) => Date.parse(run.startedAt) >= Date.now() - 86_400_000).length;
+    if (recentRuns >= 24) return;
+  }
+  researchRunning = true;
+  const startedAt = new Date();
+  const previous = research.latestRun(watch.id);
+  try {
+    setResearchActivity({ state: "searching", message: `Researching ${watch.name}`, watchId: watch.id }, id);
+    const snapshot = await (await agentModule()).runResearchAgent({
+      watch,
+      previousClaims: previous?.claims ?? [],
+      search: searchResearchWeb,
+      read: readResearchUrl
+    }, 90_000, (state, message) => setResearchActivity({ state, message, watchId: watch.id }, id));
+    const completedAt = new Date();
+    const baseline = previous === undefined;
+    const changes = baseline ? [] : diffResearchClaims(previous.claims, snapshot.claims);
+    const run: ResearchRun = {
+      id: randomUUID(), watchId: watch.id, watchName: watch.name,
+      startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString(), status: "complete",
+      summary: snapshot.summary, baseline, meaningfulChange: !baseline && changes.length > 0,
+      claims: snapshot.claims, changes
+    };
+    research.record(run, completedAt);
+    if (baseline || changes.length > 0) {
+      const { digest, items } = researchBrief(watch, run);
+      ingestAttentionItems(items.map(classifyAttentionItem));
+      digestHistory.save(digest);
+      attention.acknowledge(items.map((item) => item.id));
+      attentionMemory.recordDigest(digest, items);
+      emit({ type: "digest", id, digest });
+      emitAttention(id);
+      emitAttentionState(id);
+    }
+    setResearchActivity({
+      state: "idle",
+      message: baseline ? `Baseline ready for ${watch.name}`
+        : changes.length > 0 ? `${changes.length} meaningful ${changes.length === 1 ? "change" : "changes"} found`
+          : `No meaningful change for ${watch.name}`
+    }, id);
+  } catch (error) {
+    const completedAt = new Date();
+    const message = boundedMessage(error, "Research watch failed");
+    research.record({
+      id: randomUUID(), watchId: watch.id, watchName: watch.name,
+      startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString(), status: "error",
+      summary: "", baseline: previous === undefined, meaningfulChange: false, claims: [], changes: [], error: message
+    }, completedAt);
+    setResearchActivity({ state: "error", message, watchId: watch.id }, id);
+    if (!automatic) emit({
+      type: "error", id,
+      code: message.startsWith("Authenticate a model") ? "model_not_connected" : "research_failed",
+      message
+    });
+  } finally {
+    researchRunning = false;
+  }
+}
+
+function researchBrief(watch: ResearchWatch, run: ResearchRun): { digest: Digest; items: AttentionItem[] } {
+  const occurredAt = run.completedAt;
+  const currentItems = run.claims.slice(0, 24).map((claim) => researchClaimItem(watch, run, claim, occurredAt));
+  const currentByKey = new Map(run.claims.map((claim, index) => [claim.key, currentItems[index]!])) ;
+  const removedItems = run.changes.filter((change) => change.kind === "no-longer-supported").map((change) => ({
+    id: `research:${run.id}:removed:${change.key}`,
+    source: "omadigest.research", app: watch.name,
+    title: `No longer supported: ${change.statement}`.slice(0, 1_000),
+    body: change.significance.slice(0, 3_000), category: "research-change", intent: "update" as const,
+    contentAvailable: true, urgency: "normal" as const, occurredAt
+  }));
+  const removedByKey = new Map(run.changes.filter((change) => change.kind === "no-longer-supported")
+    .map((change, index) => [change.key, removedItems[index]!]));
+  const changeEntries = run.changes.slice(0, 24).map((change) => {
+    const item = currentByKey.get(change.key) ?? removedByKey.get(change.key)!;
+    const label = change.kind === "new" ? "New" : change.kind === "changed" ? "Changed" : "No longer supported";
+    return {
+      headline: `${label}: ${change.statement}`.slice(0, 200),
+      explanation: change.significance,
+      importance: change.kind === "changed" ? "high" as const : "normal" as const,
+      sourceIds: [item.id], confidence: change.confidence
+    };
+  });
+  const currentEntries = run.claims.slice(0, 24).map((claim, index) => ({
+    headline: claim.statement.slice(0, 200), explanation: claim.significance,
+    importance: "normal" as const, sourceIds: [currentItems[index]!.id], confidence: claim.confidence
+  }));
+  const digest: Digest = {
+    id: randomUUID(), templateId: "research-brief", generatedAt: occurredAt,
+    title: run.baseline ? `${watch.name} · Baseline` : `${watch.name} · ${run.changes.length} ${run.changes.length === 1 ? "change" : "changes"}`,
+    sections: [
+      ...(changeEntries.length === 0 ? [] : [{ title: "What changed", entries: changeEntries }]),
+      { title: "Current picture", entries: currentEntries }
+    ]
+  };
+  return { digest, items: [...currentItems, ...removedItems] };
+}
+
+function researchClaimItem(watch: ResearchWatch, run: ResearchRun, claim: ResearchClaim, occurredAt: string): AttentionItem {
+  const sources = claim.evidence.map((evidence) => evidence.url).join("\n").slice(0, 4_000);
+  return {
+    id: `research:${run.id}:${claim.key}`, source: "omadigest.research", app: watch.name,
+    title: claim.statement.slice(0, 1_000),
+    body: `${claim.significance}\n\nSources:\n${sources}`.slice(0, 5_000),
+    category: "research", intent: "update", contentAvailable: true, urgency: "normal", occurredAt
+  };
 }
 
 function setAttentionActivity(state: AttentionActivity["state"], message: string, id = "attention-loop"): void {
@@ -761,10 +902,21 @@ const followUpPoller = setInterval(() => {
 followUpPoller.unref();
 const startupReview = setTimeout(() => scheduleAttentionCycle("startup", 1_000), 30_000);
 startupReview.unref();
+const researchPoller = setInterval(() => {
+  const due = research.due()[0];
+  if (due !== undefined && !researchRunning) void runResearchWatch(due, `research-scheduled-${Date.now()}`, true);
+}, 60_000);
+researchPoller.unref();
+const startupResearch = setTimeout(() => {
+  const due = research.due()[0];
+  if (due !== undefined && !researchRunning) void runResearchWatch(due, `research-startup-${Date.now()}`, true);
+}, 15_000);
+startupResearch.unref();
 
 async function reloadFileBackedConfiguration(): Promise<void> {
   templateVisibility.reload();
   templates = loadAllTemplates();
+  research.reload();
   sourceStatuses.clear();
   privacy.reload();
   attention.applyPolicy((item) => {
@@ -778,6 +930,7 @@ async function reloadFileBackedConfiguration(): Promise<void> {
   emit({ type: "templates", id: "config-watch", templates: publicTemplates() });
   emit({ type: "integrations", id: "config-watch", integrations: publicIntegrations() });
   emit({ type: "privacy", id: "config-watch", policy: privacy.status() });
+  emitResearchState("config-watch");
   emitAttention("config-watch");
   emitAttentionState("config-watch");
   emitTemplateSuggestions("config-watch");
@@ -830,11 +983,14 @@ async function handle(raw: string): Promise<boolean> {
       privacy: privacy.status(),
       policies: attentionPolicies.list(),
       templateSuggestions: currentTemplateSuggestions(),
-      update: releaseUpdates.status()
+      update: releaseUpdates.status(),
+      researchWatches: research.watches(),
+      researchRuns: research.runs()
     });
     emitAttention("initialize");
     emit({ type: "attention_activity", id: "initialize", activity: attentionActivity });
     emitAttentionState("initialize");
+    emitResearchState("initialize");
     void checkReleaseUpdate("initialize", false);
     return true;
   }
@@ -850,6 +1006,36 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "update_open") {
     const url = releaseUpdates.releaseUrl();
     if (url !== undefined) void launchExternalUrl(url);
+    return true;
+  }
+
+  if (command.type === "research_create") {
+    try {
+      const watch = research.create({
+        name: command.name, question: command.question, cadence: command.cadence, sourceUrls: command.sourceUrls
+      });
+      emitResearchState(command.id);
+      void runResearchWatch(watch, command.id, false);
+    } catch (error) {
+      emit({ type: "error", id: command.id, code: "research_invalid", message: boundedMessage(error, "The research watch could not be created.") });
+    }
+    return true;
+  }
+  if (command.type === "research_set_enabled") {
+    const watch = research.setEnabled(command.watchId, command.enabled);
+    if (watch === undefined) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
+    else emitResearchState(command.id);
+    return true;
+  }
+  if (command.type === "research_delete") {
+    if (!research.delete(command.watchId)) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
+    else emitResearchState(command.id);
+    return true;
+  }
+  if (command.type === "research_run") {
+    const watch = research.get(command.watchId);
+    if (watch === undefined) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
+    else void runResearchWatch(watch, command.id, false);
     return true;
   }
 
@@ -1214,6 +1400,10 @@ async function handle(raw: string): Promise<boolean> {
         nativeSourceStore.clear();
         nativeSourceState = { version: 1, events: [] };
       }
+      if (deleteAll || command.target === "research") {
+        research.clear();
+        emitResearchState(command.id);
+      }
 
       if (deleteAll || command.target === "integrations") {
         const discovered = discoverIntegrations(integrationRoots.bundled, integrationRoots.user, integrationRoots.state);
@@ -1371,7 +1561,9 @@ async function handle(raw: string): Promise<boolean> {
         privacy: privacy.status(),
         policies: attentionPolicies.list(),
         templateSuggestions: currentTemplateSuggestions(),
-        update: releaseUpdates.status()
+        update: releaseUpdates.status(),
+        researchWatches: research.watches(),
+        researchRuns: research.runs()
       });
     } catch (error) {
       emit({ type: "error", id: command.id, code: "draft_install_failed", message: error instanceof Error ? error.message : "The draft could not be installed." });

@@ -23,11 +23,14 @@ isolated black-box boundary tests
   and Herdr handoffs, browser launches, voice capture, and playback.
 - **A6 — availability and budget:** the Quickshell process, broker, storage,
   provider quotas, and desktop responsiveness.
+- **A7 — research intent and claims:** user-authored questions, preferred URLs,
+  retrieved public evidence, cited baselines, and claim deltas.
 
 ### Threat actors and entry points
 
 - A malicious or compromised notification-producing application.
 - Prompt-injection content in notification or connector evidence.
+- Prompt-injection or poisoned evidence in search results and public pages.
 - A malicious generated, modified, or manually installed connector/template.
 - A compromised model/provider or adversarial structured model output.
 - A same-session local process invoking Quickshell IPC.
@@ -62,6 +65,7 @@ flowchart LR
   Sources[Connector services]
   Speech[TTS provider]
   Releases[GitHub Releases]
+  Web[Public web and search]
 
   subgraph TB0["TB0 — Omarchy desktop session"]
     Omarchy[Omarchy notification and idle services]
@@ -83,6 +87,7 @@ flowchart LR
   Oma -->|EP6: finalized read text| Speech
   Oma -->|EP7: fixed release check| Releases
   Oma -->|EP8: explicit broad handoff| Agent
+  Oma <-->|EP9: bounded research query/read| Web
 ```
 
 ## L1 — containers and trust boundaries
@@ -117,6 +122,7 @@ flowchart LR
     Remote[Connector services]
     TTS[TTS endpoint]
     GitHub[GitHub API]
+    Web[Public search and HTTPS pages]
   end
 
   subgraph TB5["TB5 — explicit authority expansion"]
@@ -143,6 +149,7 @@ flowchart LR
   Broker <-->|bounded evidence and emit-only tools| Model
   Broker -->|normalized text and configured key| TTS
   Broker -->|fixed repository and bounded response| GitHub
+  Broker <-->|bounded credential-free search/read| Web
   Broker -->|user-triggered framed prompt| DefaultAgent
   Broker <--> Voice
 ```
@@ -156,6 +163,7 @@ flowchart TD
   Notifications[EP3: notification evidence]
   ConnectorOut[EP4: connector output]
   ModelOut[EP5: model tool arguments]
+  ResearchOut[EP6: untrusted search/page evidence]
 
   subgraph TB2["Trusted broker"]
     Parser[Command schema and dispatcher]
@@ -174,6 +182,7 @@ flowchart TD
     Installer[Package validator and atomic installer]
     Credentials[Credential adapters]
     Actions[Release, TTS, voice, browser, and handoffs]
+    Research[Schedule, public-URL guard, and claim diff]
   end
 
   QML --> Parser
@@ -203,6 +212,11 @@ flowchart TD
   Credentials --> Sandbox
   Credentials --> Pi
   Parser --> Actions
+  Parser --> Research
+  Research --> ResearchOut
+  ResearchOut --> Pi
+  ModelOut --> Research
+  Research --> History
 ```
 
 ## Existing controls
@@ -220,6 +234,9 @@ flowchart TD
   the action variants and eligible templates the broker supplies.
 - Model sessions receive bounded evidence and emit-only structured tools; they
   receive no shell, filesystem, browser, or general coding tools.
+- Research sessions receive only three broker-owned tools: three searches,
+  eight validated public-HTTPS reads, and one cited snapshot emitter. The
+  broker owns cadence, a 24-run daily budget, SSRF checks, retention, and diffs.
 - Digest validation constrains sections, entry counts, grouping, titles, and
   citations to supplied evidence IDs.
 - Integration discovery and installation reject malformed schemas, unsafe
@@ -247,6 +264,7 @@ flowchart TD
 | TB3 — broker to connector | Manifest, config, secrets, subprocess authority, network, and response envelope | Installed connector code should receive only its declared, user-approved capability and return bounded opaque evidence. | Connectors have no network/child permission; HTTPS is exact-host broker mediation and commands are rejected. Final responses require matching IDs/versions and clean exit (TM-02/TM-03/TM-19 fixed). |
 | TB4 — broker to persistence | Notifications, digests, templates, policies, setup values, and credentials | Sensitive content must remain private, bounded, schema-valid, and deletable under tightened policy. | Private permissions, retention, atomic writes, projected integration config, deduplicated append, and segment/total budgets exist. Nested digest reload and orphan-secret cleanup remain incomplete (TM-07/TM-14 fixed; TM-11/TM-15 open). |
 | TB5 — broker to remote services | Model evidence, connector requests, TTS text, and release checks | Each service receives only the minimum intended data under bounded time and response size. | Model/release inputs are bounded, release routing is fixed, connector HTTPS is mediated, and TTS audio streams to a private file under an incremental 50-MiB cap (TM-02/TM-13 fixed; TM-21 residual). |
+| TB7 — broker to public research | User query, search terms, and credential-free public HTTPS reads | Remote content must not gain instruction or execution authority; private networks and runaway schedules must remain unreachable. | User-visible disclosure, minimum hourly cadence, one run at a time, 24 automatic runs/day, 3-search/8-read budgets, public-address DNS validation, redirect revalidation, byte/time limits, read-before-cite validation, and broker-owned claim diffs. |
 | TB6 — explicit broad handoff | User-approved prompt to the default agent or Herdr | The user must see and approve the exact authority-expanding request. | The broker derives and previews out-of-scope prompts, consumes a one-use confirmation, and transports all handoff payloads through a private one-use Unix-socket claim. Process arguments carry only a fixed instruction and opaque five-minute capability (TM-08/TM-16 fixed). |
 
 ## White-box source review
@@ -303,6 +321,7 @@ are P2 hardening or explicitly documented residual risks.
 | TM-19 | S, T | Fixed in v0.1.3 | P2 | The broker requires one final response with the matching request ID and protocol version, waits for a clean connector exit, and rejects duplicate or trailing final responses. |
 | TM-20 | T, E | Residual | — | The plugin executes in the long-running Quickshell process with desktop-user authority; dependency or release compromise has high impact. | Retain reproducible checked-in bundles, lockfile/audit review, source maps, marketplace scanning, signed release practice, and minimal QML authority. |
 | TM-21 | I | Residual | — | Remote model and configured TTS use deliberately disclose selected evidence or digest text to those providers. | Keep separate explicit configuration and show the active provider/endpoint before first use. |
+| TM-22 | I, E, D | Mitigated in v0.1.8 | P1 | A research page may contain prompt injection, target a private service through redirects/DNS, or induce runaway model/network cost. | Page text is framed as evidence; research tools provide no execution or credentials; every initial/redirect URL is HTTPS-validated and every hostname must resolve only to public addresses; per-run, cadence, concurrency, daily, byte, time, item, and retention budgets are enforced outside the model. |
 
 ### Defense-in-depth backlog
 

@@ -7,12 +7,13 @@ OmaDigest processes private notification, calendar, model, and speech data. Its 
 - **Quickshell UI:** presentation and bounded snapshots from public Omarchy services. It does not perform network or filesystem work.
 - **Broker:** trusted local authority for persistence, credentials, model sessions, connector processes, and validation. Provider credentials are written mode `0600` under `${XDG_CONFIG_HOME:-~/.config}/omadigest/auth.json`; OAuth URLs and prompts cross the QML boundary, but tokens do not.
 - **Pi model provider:** receives only bounded evidence plus the public templates or selected template needed for one ephemeral attention or digest session.
+- **Public research sources:** receive the user-authored query or an HTTPS request without OmaDigest credentials. Their content is untrusted evidence.
 - **Integration:** separately launched, source-specific code with user authority constrained by process options and protocol.
 - **TTS provider:** receives finalized read-mode text only.
 
 ## Prompt injection
 
-Notification and connector strings are framed as untrusted evidence. They never become system instructions or add tools. Attention sessions expose only the action variants currently permitted by broker policy and may select only a broker-eligible template; digest sessions expose only `emit_digest`; standing-policy compilation exposes only `emit_attention_policy`; drafting sessions expose one matching emitter and `out_of_scope`.
+Notification, connector, search-result, and public-page strings are framed as untrusted evidence. They never become system instructions or add tools. Attention sessions expose only the action variants currently permitted by broker policy and may select only a broker-eligible template; digest sessions expose only `emit_digest`; standing-policy compilation exposes only `emit_attention_policy`; drafting sessions expose one matching emitter and `out_of_scope`. Research sessions expose only three broker-owned tools: bounded search, bounded public-HTTPS read, and cited snapshot submission.
 
 Structured output does not prove that model classification is correct. It does ensure citations refer to supplied source IDs, section shape matches the selected policy, and unsupported actions cannot execute.
 
@@ -70,6 +71,8 @@ Attention memory is a separate derived store capped at 512 episodes, 512 KiB, an
 The attention agent cannot create a timer or execute an alert. It submits one cited `hold`, `digest`, or `notify` proposal. A hold may request only fixed wake conditions—related evidence, cited-source change, or deadline—and the broker owns subject matching, scheduling, template eligibility, interruption and digest thresholds, source-ID validation, execution, acknowledgement, and cancellation. Automatic deliberations have a 60-second minimum interval and a 24-per-day budget; watches are capped at 16, three attempts, 24 hours per follow-up, 48 hours of life, and a 256-KiB ledger.
 
 Standing policies do not grant new evidence or execution authority. Their compiler receives one bounded user request, has one typed output tool, and cannot access notification history. The broker caps, validates, stores, deterministically matches, enables, disables, and deletes policies. Broad notify policies fail validation. Outcome-derived preference hints come only from observable UI actions and remain soft evidence; they cannot override privacy, standing policy, urgency gates, or current-source citation requirements.
+
+Research schedules are created by the user and run no faster than hourly. The broker permits one run at a time and at most 24 automatic runs per day. Each run may perform at most three searches and eight page reads under request, response, text, and time limits. URL parsing, redirect validation, DNS resolution, and private/non-routable address rejection occur outside the model; requests carry no cookies or credentials. A cited claim must reference a page successfully read in that run. The model cannot reschedule itself, contact arbitrary tools, or turn page content into execution. Watch definitions are capped at 16/128 KiB; claim history is capped at 12 runs per watch, 90 days, and 1 MiB.
 
 The release checker has no model or connector authority. It contacts one compiled-in GitHub API URL, rejects redirects and non-stable tags, caps the response and single-record cache at 64 KiB, and constructs the browser URL from the validated release tag rather than accepting a remote action URL.
 

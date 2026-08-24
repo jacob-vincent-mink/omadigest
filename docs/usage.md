@@ -69,6 +69,8 @@ The scoped drafting session cannot edit files or browse the system. If the reque
 
 Open **Settings → Sources** for a compact status list. Omarchy-native inputs and connected services are separated; each row shows health, enablement, and a category count. Open a row for status refresh, setup/authentication, the overall on/off control, category switches, and quiet permission details.
 
+Open **Research watches** at the top of Sources to schedule a recurring public-web question. Give it a name, the question to keep current, an hourly-or-slower cadence, and up to eight preferred HTTPS sources. The first run establishes a cited baseline; later runs compare stable claims and create an unread research brief only when the answer meaningfully changes. Search, page reading, synthesis, pause/resume, run-now, last result, and deletion stay visible in the same surface. The question, search terms, and fetched public pages leave the computer; pages are treated as untrusted evidence rather than instructions.
+
 Choose **Add source**, describe a new connector, and press **Build in default agent**. OmaDigest opens the user's default coding agent with a dedicated integration-authoring skill and exact local validator commands. The agent builds in a temporary directory; the validator bounds the package, checks its manifest and syntax, runs its tests inside the connector sandbox, performs a mocked protocol probe where possible, and only then installs it atomically. A successful install remains disabled. Configuration, category selection, and enablement are separate user actions back in OmaDigest.
 
 The bundled GitHub connector uses the active authenticated `gh` session and imports bounded unread-notification metadata. **Check status** runs its non-mutating live probe and reports the active GitHub identity without enabling it. Other applications participate through native notifications unless the user installs a separately reviewed custom connector.
@@ -102,8 +104,8 @@ Read-aloud controls appear only after a TTS adapter is configured under **Settin
 ## Data locations
 
 ```text
-${XDG_CONFIG_HOME:-~/.config}/omadigest/   policy, templates, integrations, setup, enablement
-${XDG_STATE_HOME:-~/.local/state}/omadigest/ attention segments, progressive memory, watches, and digest history
+${XDG_CONFIG_HOME:-~/.config}/omadigest/   policy, templates, integrations, setup, enablement, research schedules
+${XDG_STATE_HOME:-~/.local/state}/omadigest/ attention segments, progressive memory, research claims, and digest history
 ```
 
 Provider authentication and secrets are intentionally not part of the editable configuration tree. See [configuration](configuration.md) for the complete file contract.
@@ -114,7 +116,7 @@ OmaDigest checks its latest stable GitHub release in the background no more than
 
 App rules and templates can be deleted inline after a compact confirmation. Removing an app rule restores the global default (or the protected-app default). Removing a custom template deletes it; removing a packaged template hides it without changing plugin files.
 
-Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, custom integrations, or templates, or to delete all stored OmaDigest data. Every action requires confirmation. Template deletion here also restores packaged defaults hidden inline.
+Open **Settings → Data** to delete digest history, OmaDigest's retained notification evidence, research watches and claim history, custom integrations, or templates, or to delete all stored OmaDigest data. Every action requires confirmation. Template deletion here also restores packaged defaults hidden inline.
 
 Deleting notification history affects only OmaDigest state. It records an OmaDigest-owned cutoff so older notifications still present in Omarchy are not imported again; Omarchy's own notification history is never changed. Deleting integrations removes custom packages, setup, enablement, and known integration secrets while leaving bundled packages available. **Delete all** also removes standing attention policies, but does not remove model authentication or privacy rules.
 

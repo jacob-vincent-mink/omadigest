@@ -43,6 +43,7 @@ Panel {
   property string selectedAuthMethod: ""
   property string connectionView: "overview"
   property string privacyRuleMode: "digest"
+  property string researchCadence: "daily"
   property string ttsProvider: "openai-compatible"
   readonly property var privacyOptions: [
     { value: "ignore", label: "Ignore" },
@@ -107,12 +108,24 @@ Panel {
     return labels.join(" · ")
   }
 
+  function latestResearchRun(watchId) {
+    var runs = OmaDigest.OmaDigestStore.researchRuns || []
+    for (var index = 0; index < runs.length; index++)
+      if (String(runs[index].watchId || "") === String(watchId || "")) return runs[index]
+    return null
+  }
+
+  function activeResearchCount() {
+    return (OmaDigest.OmaDigestStore.researchWatches || []).filter(function(watch) { return watch.enabled === true }).length
+  }
+
   function dataDeletionPrompt(target) {
     if (target === "digest-history") return "Delete every digest saved by OmaDigest? This cannot be undone."
     if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
+    if (target === "research") return "Delete every research watch and its retained claim history? Saved digest briefs are unchanged."
     if (target === "integrations") return "Delete custom integrations, integration setup, enablement, and known integration secrets? Bundled integrations will be reset, not removed."
     if (target === "templates") return "Delete every custom template and restore packaged defaults?"
-    return "Delete all OmaDigest digest and notification history, standing policies, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
+    return "Delete all OmaDigest digest, notification, and research history, standing policies, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
   }
 
   function requestDataDeletion(target) {
@@ -413,7 +426,7 @@ Panel {
       if (focusing && root.dndStartedAt <= 0) root.dndStartedAt = Date.now()
       OmaDigest.OmaDigestStore.setAttentionFocus(focusing)
     }
-    function onDigestChanged() {
+    function onDigestReadyRevisionChanged() {
       if (!OmaDigest.OmaDigestStore.digest) return
       root.page = "detail"
       if (root.opened) root.markCurrentDigestRead()
@@ -503,6 +516,16 @@ Panel {
       return "ok"
     }
 
+    function showResearch(): string {
+      root.settingsPage = "integrations"
+      root.sourcesView = "research"
+      root.selectedSource = null
+      root.page = "settings"
+      root.open()
+      root.scrollToTop()
+      return "ok"
+    }
+
     function showTimeline(mode: string): string {
       root.page = "timeline"
       root.timelineThreadsOpen = false
@@ -530,7 +553,7 @@ Panel {
     function previewDataDeletion(target: string): string {
       if (demoGuard()) return demoGuard()
       var requested = root.boundedIpc(target, 32)
-      if (["digest-history", "notification-history", "integrations", "templates", "all"].indexOf(requested) < 0)
+      if (["digest-history", "notification-history", "research", "integrations", "templates", "all"].indexOf(requested) < 0)
         return "invalid"
       root.settingsPage = "data"
       root.page = "settings"
@@ -2057,6 +2080,77 @@ Panel {
               visible: root.settingsPage === "integrations" && root.sourcesView === "list"
               spacing: Style.space(8)
 
+              Rectangle {
+                width: parent.width
+                height: Style.space(58)
+                radius: Style.cornerRadius
+                color: researchSourceMouse.containsMouse || activeFocus
+                  ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent"
+                border.width: researchSourceMouse.containsMouse || activeFocus ? Style.spacing.hairline : 0
+                border.color: activeFocus ? Color.accent : Style.normalBorderFor(root.foreground, Color.accent)
+                activeFocusOnTab: true
+                Keys.onReturnPressed: root.sourcesView = "research"
+                Keys.onEnterPressed: root.sourcesView = "research"
+                Keys.onSpacePressed: root.sourcesView = "research"
+
+                Row {
+                  anchors.fill: parent
+                  anchors.leftMargin: Style.space(10)
+                  anchors.rightMargin: Style.space(8)
+                  spacing: Style.space(9)
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(8)
+                    height: width
+                    radius: width / 2
+                    color: String(OmaDigest.OmaDigestStore.researchActivity.state || "") === "error"
+                      ? Color.urgent : root.activeResearchCount() > 0 ? "#62b879" : "#d6a84b"
+                  }
+                  Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - Style.space(17) - researchChevron.width - parent.spacing * 2
+                    spacing: Style.space(1)
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: "Research watches"
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: root.activeResearchCount() + " active · cited briefs when the answer changes"
+                      color: Qt.darker(root.foreground, 1.4)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+                  Text {
+                    textFormat: Text.PlainText
+                    id: researchChevron
+                    width: Style.space(16)
+                    anchors.verticalCenter: parent.verticalCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "󰅂"
+                    color: Qt.darker(root.foreground, 1.25)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                  }
+                }
+                MouseArea {
+                  id: researchSourceMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.sourcesView = "research"
+                }
+              }
+
               Text {
                 textFormat: Text.PlainText
                 text: "OMARCHY"
@@ -2127,6 +2221,225 @@ Panel {
                 bordered: true
                 focusable: true
                 onClicked: root.openSourceAuthoring()
+              }
+            }
+
+            Column {
+              width: parent.width
+              visible: root.settingsPage === "integrations" && root.sourcesView === "research"
+              spacing: Style.space(10)
+
+              Button {
+                width: parent.width
+                height: Style.space(40)
+                text: "Back to sources"
+                iconText: "󰅁"
+                leftAlign: true
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                focusable: true
+                onClicked: root.showSourceList()
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "RESEARCH WATCHES"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "Keep a question warm. OmaDigest builds a cited baseline, then briefs you when the answer meaningfully changes."
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Rectangle {
+                id: researchActivityBanner
+                readonly property bool working: ["searching", "reading", "synthesizing"].indexOf(
+                  String(OmaDigest.OmaDigestStore.researchActivity.state || "")) >= 0
+                visible: working || String(OmaDigest.OmaDigestStore.researchActivity.state || "") === "error"
+                width: parent.width
+                height: visible ? researchActivityText.implicitHeight + Style.space(20) : 0
+                radius: Style.cornerRadius
+                color: Style.selectedFillFor(root.foreground, Color.accent)
+                border.width: Style.spacing.hairline
+                border.color: String(OmaDigest.OmaDigestStore.researchActivity.state || "") === "error" ? Color.urgent : Color.accent
+                SequentialAnimation on opacity {
+                  running: researchActivityBanner.working
+                  loops: Animation.Infinite
+                  NumberAnimation { from: 0.78; to: 1; duration: 650; easing.type: Easing.InOutSine }
+                  NumberAnimation { from: 1; to: 0.78; duration: 650; easing.type: Easing.InOutSine }
+                }
+                Text {
+                  textFormat: Text.PlainText
+                  id: researchActivityText
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.margins: Style.space(10)
+                  text: String(OmaDigest.OmaDigestStore.researchActivity.message || "Researching public sources")
+                  color: parent.border.color
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                  wrapMode: Text.WordWrap
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "NEW WATCH"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              QQC.TextField {
+                id: researchName
+                width: parent.width
+                height: Style.space(40)
+                placeholderText: "Competition watch"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              QQC.TextArea {
+                textFormat: TextEdit.PlainText
+                id: researchQuestion
+                width: parent.width
+                height: Style.space(86)
+                placeholderText: "What has changed in the Omarchy plugin competition, deadlines, rules, or judging?"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: TextEdit.Wrap
+                background: Rectangle {
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: Style.spacing.hairline
+                  border.color: Style.normalBorderFor(root.foreground, Color.accent)
+                }
+              }
+
+              Row {
+                width: parent.width
+                height: Style.space(40)
+                spacing: Style.space(6)
+                Repeater {
+                  model: [
+                    { id: "hourly", label: "Hourly" }, { id: "six-hourly", label: "6 hours" },
+                    { id: "daily", label: "Daily" }, { id: "weekly", label: "Weekly" }
+                  ]
+                  Button {
+                    required property var modelData
+                    width: (parent.width - parent.spacing * 3) / 4
+                    height: parent.height
+                    text: String(modelData.label)
+                    selected: root.researchCadence === String(modelData.id)
+                    foreground: root.foreground
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    bordered: root.researchCadence === String(modelData.id)
+                    focusable: true
+                    onClicked: root.researchCadence = String(modelData.id)
+                  }
+                }
+              }
+
+              QQC.TextArea {
+                textFormat: TextEdit.PlainText
+                id: researchSources
+                width: parent.width
+                height: Style.space(66)
+                placeholderText: "Preferred HTTPS sources, one per line (optional)"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: TextEdit.WrapAnywhere
+                background: Rectangle {
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: Style.spacing.hairline
+                  border.color: Style.normalBorderFor(root.foreground, Color.accent)
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "Your question, search terms, and public pages leave this computer. Sources are treated as untrusted evidence."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
+
+              Button {
+                width: parent.width
+                height: Style.space(40)
+                text: "Create watch and build baseline"
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                bordered: true
+                focusable: true
+                enabled: researchName.text.trim() !== "" && researchQuestion.text.trim().length >= 3
+                  && ["searching", "reading", "synthesizing"].indexOf(String(OmaDigest.OmaDigestStore.researchActivity.state || "")) < 0
+                opacity: enabled ? 1 : 0.5
+                onClicked: {
+                  OmaDigest.OmaDigestStore.createResearchWatch(
+                    researchName.text, researchQuestion.text, root.researchCadence, researchSources.text.split(/\r?\n/))
+                  researchName.text = ""
+                  researchQuestion.text = ""
+                  researchSources.text = ""
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                visible: (OmaDigest.OmaDigestStore.researchWatches || []).length > 0
+                width: parent.width
+                topPadding: Style.space(5)
+                text: "YOUR WATCHES"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.researchWatches || []
+                OmaDigest.ResearchWatchCard {
+                  required property var modelData
+                  watch: modelData
+                  latestRun: root.latestResearchRun(String(modelData.id || ""))
+                  activity: OmaDigest.OmaDigestStore.researchActivity
+                  width: parent.width
+                  foreground: root.foreground
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  onRunRequested: function(watchId) { OmaDigest.OmaDigestStore.runResearchWatch(watchId) }
+                  onWatchEnabledRequested: function(watchId, enabled) { OmaDigest.OmaDigestStore.setResearchWatchEnabled(watchId, enabled) }
+                  onDeleteRequested: function(watchId) { OmaDigest.OmaDigestStore.deleteResearchWatch(watchId) }
+                }
               }
             }
 
@@ -3423,6 +3736,7 @@ Panel {
                 model: [
                   { id: "digest-history", title: "Delete digest history", description: "Remove all saved read and unread digests." },
                   { id: "notification-history", title: "Delete notification history", description: "Remove notification evidence retained by OmaDigest and prevent older Omarchy notifications from being re-imported." },
+                  { id: "research", title: "Delete research watches", description: "Remove scheduled questions and their retained claim history. Saved digest briefs remain until separately deleted." },
                   { id: "integrations", title: "Delete integrations", description: "Remove custom integrations and reset all integration setup, enablement, and known secrets." },
                   { id: "templates", title: "Delete templates", description: "Remove custom templates and restore packaged defaults." }
                 ]
