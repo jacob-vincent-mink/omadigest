@@ -12,17 +12,21 @@ Rectangle {
   property color accent: Color.accent
   property string fontFamily: Style.font.family
   property bool confirmingDelete: false
+  property bool confirmingRebaseline: false
   property bool configuring: false
 
   signal runRequested(string watchId)
   signal watchEnabledRequested(string watchId, bool enabled)
   signal configurationRequested(string watchId, string depth, string recency)
+  signal rebaselineRequested(string watchId)
   signal deleteRequested(string watchId)
 
   readonly property bool running: String(activity.watchId || "") === String(watch.id || "")
     && ["searching", "reading", "synthesizing"].indexOf(String(activity.state || "")) >= 0
   readonly property bool failed: latestRun !== null && String(latestRun.status || "") === "error"
+  readonly property bool partial: latestRun !== null && String(latestRun.status || "") === "partial"
   readonly property color statusColor: running ? accent : failed ? Color.urgent
+    : partial ? "#d6a84b"
     : watch.enabled === true ? "#62b879" : Qt.darker(foreground, 1.45)
 
   width: parent ? parent.width : Style.space(420)
@@ -160,7 +164,7 @@ Rectangle {
       Text {
         textFormat: Text.PlainText
         width: parent.width
-        text: "FRESHNESS"
+        text: "CHANGE WINDOW"
         color: Qt.darker(root.foreground, 1.35)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
@@ -187,6 +191,24 @@ Rectangle {
             focusable: true
             onClicked: root.configurationRequested(String(root.watch.id || ""), String(root.watch.depth || "broad"), String(modelData.id))
           }
+        }
+      }
+      Button {
+        width: parent.width
+        height: Style.space(40)
+        text: root.confirmingRebaseline ? "Rebuild now?" : "Rebuild baseline"
+        foreground: root.confirmingRebaseline ? Color.urgent : root.foreground
+        accent: root.confirmingRebaseline ? Color.urgent : root.accent
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        bordered: true
+        focusable: true
+        onClicked: {
+          if (root.confirmingRebaseline) {
+            root.confirmingRebaseline = false
+            root.configuring = false
+            root.rebaselineRequested(String(root.watch.id || ""))
+          } else root.confirmingRebaseline = true
         }
       }
     }
@@ -222,7 +244,10 @@ Rectangle {
         fontSize: Style.font.caption
         bordered: root.configuring
         focusable: true
-        onClicked: root.configuring = !root.configuring
+        onClicked: {
+          root.configuring = !root.configuring
+          if (!root.configuring) root.confirmingRebaseline = false
+        }
       }
 
       Button {
@@ -261,11 +286,25 @@ Rectangle {
     if (root.running) return String(root.activity.message || "Researching public sources")
     if (!root.latestRun) return "No brief yet"
     if (String(root.latestRun.status || "") === "error") return String(root.latestRun.error || "Last run failed")
-    var usage = Number(root.latestRun.readCount || 0) > 0 ? " · " + Number(root.latestRun.readCount) + " pages" : ""
-    if (root.latestRun.baseline === true) return "Baseline ready · " + Number((root.latestRun.claims || []).length) + " tracked claims" + usage
+    var coverage = root.coverageText()
+    if (String(root.latestRun.status || "") === "partial") return "Partial crawl · Last good picture kept" + coverage
+    if (root.latestRun.baseline === true) {
+      var claimCount = Number((root.latestRun.claims || []).length)
+      return "Baseline ready · " + claimCount + (claimCount === 1 ? " tracked claim" : " tracked claims") + coverage
+    }
     if (root.latestRun.meaningfulChange === true)
-      return Number((root.latestRun.changes || []).length) + " meaningful changes" + usage + " · " + String(root.latestRun.summary || "")
-    return "No meaningful change" + usage + " · " + String(root.latestRun.summary || "")
+      return Number((root.latestRun.changes || []).length) + (Number((root.latestRun.changes || []).length) === 1
+        ? " meaningful change" : " meaningful changes") + coverage
+    return "No meaningful change" + coverage
+  }
+
+  function coverageText() {
+    var sources = Number(root.latestRun && root.latestRun.sourceCount || 0)
+    var attempts = Number(root.latestRun && root.latestRun.readCount || 0)
+    var parts = []
+    if (sources > 0) parts.push(sources + (sources === 1 ? " source" : " sources"))
+    if (attempts > sources) parts.push(attempts + " page attempts")
+    return parts.length > 0 ? " · " + parts.join(" · ") : ""
   }
 
   function depthLabel() {

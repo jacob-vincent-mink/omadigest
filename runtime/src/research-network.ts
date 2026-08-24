@@ -23,21 +23,42 @@ export type ResearchDocument = {
 export async function searchResearchWeb(query: string): Promise<ResearchSearchResult[]> {
   const boundedQuery = query.trim().slice(0, 500);
   if (boundedQuery.length < 2) throw new Error("A research search needs a more specific query");
-  const url = `https://www.bing.com/search?q=${encodeURIComponent(boundedQuery)}&format=rss`;
-  const response = await boundedHttpsGet(url);
-  if (response.status < 200 || response.status >= 300) throw new Error(`Research search returned HTTP ${response.status}`);
-  const items = [...response.body.matchAll(/<item>([\s\S]*?)<\/item>/giu)].slice(0, MAX_SEARCH_RESULTS);
+  const urls = [
+    `https://www.bing.com/news/search?q=${encodeURIComponent(boundedQuery)}&format=rss`,
+    `https://www.bing.com/search?q=${encodeURIComponent(boundedQuery)}&format=rss`
+  ];
+  const responses = await Promise.allSettled(urls.map((url) => boundedHttpsGet(url)));
+  const successful = responses.flatMap((response, index) => response.status === "fulfilled"
+    && response.value.status >= 200 && response.value.status < 300
+    ? [{ response: response.value, trustPublishedAt: index === 0 }] : []);
+  if (successful.length === 0) throw new Error("Research search did not return a usable response");
+  const results = successful.flatMap(({ response, trustPublishedAt }) =>
+    parseResearchSearchFeed(response.body, trustPublishedAt));
+  return [...new Map(results.map((result) => [result.url, result])).values()].slice(0, MAX_SEARCH_RESULTS);
+}
+
+export function parseResearchSearchFeed(body: string, trustPublishedAt = false): ResearchSearchResult[] {
+  const items = [...body.matchAll(/<item>([\s\S]*?)<\/item>/giu)].slice(0, MAX_SEARCH_RESULTS);
   return items.flatMap((match) => {
     const item = match[1] ?? "";
     const title = decodeEntities(xmlValue(item, "title")).replaceAll(/\s+/gu, " ").trim().slice(0, 200);
-    const rawUrl = decodeEntities(xmlValue(item, "link")).trim();
+    const rawUrl = canonicalSearchResultUrl(decodeEntities(xmlValue(item, "link")).trim());
     const snippet = stripMarkup(decodeEntities(xmlValue(item, "description"))).slice(0, 600);
-    const publishedAt = normalizedDate(xmlValue(item, "pubDate"));
+    const publishedAt = trustPublishedAt ? normalizedDate(xmlValue(item, "pubDate")) : undefined;
     try {
       const safeUrl = validateResearchUrl(rawUrl).toString();
       return title && snippet ? [{ title, url: safeUrl, snippet, ...(publishedAt ? { publishedAt } : {}) }] : [];
     } catch { return []; }
   });
+}
+
+function canonicalSearchResultUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.hostname === "www.bing.com" && parsed.pathname === "/news/apiclick.aspx")
+      return parsed.searchParams.get("url") ?? rawUrl;
+  } catch { /* rejected by validateResearchUrl */ }
+  return rawUrl;
 }
 
 export async function readResearchUrl(rawUrl: string): Promise<ResearchDocument> {

@@ -411,6 +411,11 @@ Scope {
     send({ type: "research_run", id: "research-" + nextId++, watchId: String(watchId) })
   }
 
+  function rebuildResearchBaseline(watchId) {
+    clearError()
+    send({ type: "research_rebaseline", id: "research-" + nextId++, watchId: String(watchId) })
+  }
+
   function deleteResearchWatch(watchId) {
     clearError()
     send({ type: "research_delete", id: "research-" + nextId++, watchId: String(watchId) })

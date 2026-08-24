@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import type { ResearchCadence, ResearchChange, ResearchClaim, ResearchDepth, ResearchRun, ResearchWatch } from "./types.js";
+import type {
+  ResearchCadence, ResearchChange, ResearchClaim, ResearchDepth, ResearchRetirement, ResearchRun, ResearchWatch
+} from "./types.js";
 
 export const MAX_RESEARCH_WATCHES = 16;
 export const MAX_RESEARCH_RUNS_PER_WATCH = 12;
@@ -64,7 +66,7 @@ const runSchema = z.object({
   watchName: z.string().min(1).max(100),
   startedAt: z.string().datetime(),
   completedAt: z.string().datetime(),
-  status: z.enum(["complete", "error"]),
+  status: z.enum(["complete", "partial", "error"]),
   summary: z.string().max(1_200),
   baseline: z.boolean(),
   meaningfulChange: z.boolean(),
@@ -73,6 +75,7 @@ const runSchema = z.object({
   depth: depthSchema.optional(),
   searchCount: z.number().int().min(0).max(20).optional(),
   readCount: z.number().int().min(0).max(60).optional(),
+  sourceCount: z.number().int().min(0).max(60).optional(),
   corpusChars: z.number().int().min(0).max(480_000).optional(),
   error: z.string().max(500).optional()
 }).strict();
@@ -148,6 +151,21 @@ export class ResearchWatchStore {
     return changed === undefined ? undefined : { ...changed, sourceUrls: [...changed.sourceUrls] };
   }
 
+  resetBaseline(id: string, now = new Date()): ResearchWatch | undefined {
+    let changed: ResearchWatch | undefined;
+    this.#watches = this.#watches.map((watch) => {
+      if (watch.id !== id) return watch;
+      const { lastRunAt: _lastRunAt, ...withoutLastRun } = watch;
+      changed = { ...withoutLastRun, updatedAt: now.toISOString(), nextRunAt: now.toISOString() };
+      return changed;
+    });
+    if (changed === undefined) return undefined;
+    this.#runs = this.#runs.filter((run) => run.watchId !== id);
+    this.#saveConfig();
+    this.#saveHistory(now);
+    return { ...changed, sourceUrls: [...changed.sourceUrls] };
+  }
+
   delete(id: string): boolean {
     const before = this.#watches.length;
     this.#watches = this.#watches.filter((watch) => watch.id !== id);
@@ -164,7 +182,7 @@ export class ResearchWatchStore {
     this.#runs = boundedRuns(this.#runs, now);
     this.#watches = this.#watches.map((watch) => watch.id !== run.watchId ? watch : ({
       ...watch, lastRunAt: run.completedAt, updatedAt: now.toISOString(),
-      nextRunAt: new Date(now.getTime() + cadenceMilliseconds(watch.cadence)).toISOString()
+      nextRunAt: new Date(now.getTime() + (run.status === "complete" ? cadenceMilliseconds(watch.cadence) : 60 * 60_000)).toISOString()
     }));
     this.#saveConfig();
     this.#saveHistory(now);
@@ -213,9 +231,12 @@ export function researchDepthBudget(depth: ResearchDepth): {
   return { searches: 10, reads: 30, corpusChars: 300_000, timeoutMs: 180_000, automaticWeight: 2 };
 }
 
-export function diffResearchClaims(previous: ResearchClaim[], current: ResearchClaim[]): ResearchChange[] {
+export function diffResearchClaims(
+  previous: ResearchClaim[], current: ResearchClaim[], retirements: ResearchRetirement[] = []
+): ResearchChange[] {
   const before = new Map(previous.slice(0, 24).map((claim) => [claim.key, claim]));
   const after = new Map(current.slice(0, 24).map((claim) => [claim.key, claim]));
+  const retired = new Map(retirements.slice(0, 24).map((retirement) => [retirement.key, retirement]));
   const changes: ResearchChange[] = [];
   for (const claim of current.slice(0, 24)) {
     const prior = before.get(claim.key);
@@ -226,12 +247,26 @@ export function diffResearchClaims(previous: ResearchClaim[], current: ResearchC
     if (normalizedClaim(prior.statement) !== normalizedClaim(claim.statement))
       changes.push({ kind: "changed", ...claim, previousStatement: prior.statement });
   }
-  for (const claim of previous.slice(0, 24)) if (!after.has(claim.key)) changes.push({
-    kind: "no-longer-supported", key: claim.key, statement: claim.statement,
-    previousStatement: claim.statement, significance: claim.significance,
-    confidence: claim.confidence, evidence: []
-  });
+  for (const claim of previous.slice(0, 24)) {
+    const retirement = retired.get(claim.key);
+    if (!after.has(claim.key) && retirement !== undefined) changes.push({
+      kind: "no-longer-supported", key: claim.key, statement: claim.statement,
+      previousStatement: claim.statement, significance: retirement.reason,
+      confidence: claim.confidence, evidence: retirement.evidence
+    });
+  }
   return changes.slice(0, 24);
+}
+
+export function groupResearchClaimsByEvidence(claims: ResearchClaim[]): ResearchClaim[][] {
+  const groups = new Map<string, ResearchClaim[]>();
+  for (const claim of claims.slice(0, 24)) {
+    const evidenceKey = claim.evidence.map((item) => item.url).sort().join("\n") || claim.key;
+    const group = groups.get(evidenceKey) ?? [];
+    group.push(claim);
+    groups.set(evidenceKey, group);
+  }
+  return [...groups.values()];
 }
 
 function normalizedClaim(value: string): string {

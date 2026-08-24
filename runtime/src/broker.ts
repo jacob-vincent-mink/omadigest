@@ -40,7 +40,7 @@ import { readOmarchyNotificationHistory } from "./notification-history.js";
 import { HandoffTransport } from "./handoff-transport.js";
 import { readBoundedProtocolLines } from "./protocol-lines.js";
 import { mergeVisibleTemplates, TemplateVisibilityStore, templateIdSchema } from "./template-visibility.js";
-import { diffResearchClaims, researchDepthBudget, ResearchWatchStore } from "./research-watches.js";
+import { diffResearchClaims, groupResearchClaimsByEvidence, researchDepthBudget, ResearchWatchStore } from "./research-watches.js";
 import { readResearchUrl, searchResearchWeb } from "./research-network.js";
 import {
   PROTOCOL_VERSION,
@@ -99,6 +99,7 @@ const commandSchema = z.discriminatedUnion("type", [
     depth: z.enum(["focused", "broad", "deep"]), recency: z.enum(["day", "week", "month", "anytime"])
   }).strict(),
   z.object({ type: z.literal("research_run"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("research_rebaseline"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("research_delete"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("select_template"), id: z.string().min(1).max(100), context: contextSchema }).strict(),
   z.object({
@@ -469,16 +470,20 @@ async function runResearchWatch(watch: ResearchWatch, id: string, automatic: boo
     }, budget.timeoutMs, (state, message) => setResearchActivity({ state, message, watchId: watch.id }, id));
     const completedAt = new Date();
     const baseline = previous === undefined;
-    const changes = baseline ? [] : diffResearchClaims(previous.claims, snapshot.claims);
+    const changes = baseline || snapshot.partial ? []
+      : diffResearchClaims(previous.claims, snapshot.claims, snapshot.retirements);
     const run: ResearchRun = {
       id: randomUUID(), watchId: watch.id, watchName: watch.name,
-      startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString(), status: "complete",
-      summary: snapshot.summary, baseline, meaningfulChange: !baseline && changes.length > 0,
+      startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString(),
+      status: snapshot.partial ? "partial" : "complete",
+      summary: snapshot.summary, baseline, meaningfulChange: !snapshot.partial && !baseline && changes.length > 0,
       claims: snapshot.claims, changes, depth: watch.depth,
-      searchCount: snapshot.searchCount, readCount: snapshot.readCount, corpusChars: snapshot.corpusChars
+      searchCount: snapshot.searchCount, readCount: snapshot.readCount,
+      sourceCount: snapshot.sourceCount, corpusChars: snapshot.corpusChars,
+      ...(snapshot.partialReason ? { error: snapshot.partialReason } : {})
     };
     research.record(run, completedAt);
-    if (baseline || changes.length > 0) {
+    if (!snapshot.partial && (baseline || changes.length > 0)) {
       const { digest, items } = researchBrief(watch, run);
       ingestAttentionItems(items.map(classifyAttentionItem));
       digestHistory.save(digest);
@@ -490,7 +495,8 @@ async function runResearchWatch(watch: ResearchWatch, id: string, automatic: boo
     }
     setResearchActivity({
       state: "idle",
-      message: baseline ? `Baseline ready for ${watch.name}`
+      message: snapshot.partial ? `Partial crawl; retrying ${watch.name} within an hour`
+        : baseline ? `Baseline ready for ${watch.name}`
         : changes.length > 0 ? `${changes.length} meaningful ${changes.length === 1 ? "change" : "changes"} found`
           : `No meaningful change for ${watch.name}`
     }, id);
@@ -521,35 +527,66 @@ function researchBrief(watch: ResearchWatch, run: ResearchRun): { digest: Digest
   const removedItems = run.changes.filter((change) => change.kind === "no-longer-supported").map((change) => ({
     id: `research:${run.id}:removed:${change.key}`,
     source: "omadigest.research", app: watch.name,
-    title: `No longer supported: ${change.statement}`.slice(0, 1_000),
-    body: change.significance.slice(0, 3_000), category: "research-change", intent: "update" as const,
+    title: `Retired: ${compactDigestText(change.statement, 140)}`,
+    body: `${compactDigestText(change.significance, 280)}\n\nSources:\n${change.evidence.map((item) => item.url).join("\n")}`.slice(0, 3_000),
+    category: "research-change", intent: "update" as const,
     contentAvailable: true, urgency: "normal" as const, occurredAt
   }));
   const removedByKey = new Map(run.changes.filter((change) => change.kind === "no-longer-supported")
     .map((change, index) => [change.key, removedItems[index]!]));
   const changeEntries = run.changes.slice(0, 24).map((change) => {
     const item = currentByKey.get(change.key) ?? removedByKey.get(change.key)!;
-    const label = change.kind === "new" ? "New" : change.kind === "changed" ? "Changed" : "No longer supported";
+    const label = change.kind === "new" ? "New" : change.kind === "changed" ? "Changed" : "Retired";
     return {
-      headline: `${label}: ${change.statement}`.slice(0, 200),
-      explanation: change.significance,
+      headline: compactDigestText(`${label}: ${change.statement}`, 120),
+      explanation: compactDigestText(change.significance, 220),
       importance: change.kind === "changed" ? "high" as const : "normal" as const,
       sourceIds: [item.id], confidence: change.confidence
     };
   });
-  const currentEntries = run.claims.slice(0, 24).map((claim, index) => ({
-    headline: claim.statement.slice(0, 200), explanation: claim.significance,
-    importance: "normal" as const, sourceIds: [currentItems[index]!.id], confidence: claim.confidence
-  }));
+  const currentEntries = groupResearchClaimsByEvidence(run.claims).slice(0, 8).map((group) => {
+    const primary = group[0]!;
+    const supporting = group.slice(1, 3).map((claim) => claim.statement).join(" ");
+    return {
+      headline: compactDigestText(primary.statement, 120),
+      explanation: compactDigestText(
+        `${supporting || primary.significance} ${researchGroupVerificationText(group)}`, 220
+      ),
+      importance: "normal" as const,
+      sourceIds: group.map((claim) => currentByKey.get(claim.key)!.id),
+      confidence: Math.min(...group.map((claim) => claim.confidence))
+    };
+  });
   const digest: Digest = {
     id: randomUUID(), templateId: "research-brief", generatedAt: occurredAt,
-    title: run.baseline ? `${watch.name} · Baseline` : `${watch.name} · ${run.changes.length} ${run.changes.length === 1 ? "change" : "changes"}`,
+    title: compactDigestText(
+      run.baseline ? `${watch.name} · Baseline` : `${watch.name} · ${run.changes.length} ${run.changes.length === 1 ? "change" : "changes"}`,
+      80
+    ),
     sections: [
       ...(changeEntries.length === 0 ? [] : [{ title: "What changed", entries: changeEntries }]),
       { title: "Current picture", entries: currentEntries }
     ]
   };
   return { digest, items: [...currentItems, ...removedItems] };
+}
+
+function compactDigestText(value: string, maximum: number): string {
+  const compact = value.replaceAll(/\s+/gu, " ").trim();
+  if (compact.length <= maximum) return compact;
+  const prefix = compact.slice(0, Math.max(1, maximum - 1));
+  const boundary = prefix.lastIndexOf(" ");
+  return `${prefix.slice(0, boundary >= maximum * 0.6 ? boundary : prefix.length).replaceAll(/[,:;.!?]+$/gu, "")}…`;
+}
+
+function researchGroupVerificationText(claims: ResearchClaim[]): string {
+  const timestamps = claims.flatMap((claim) => claim.evidence).flatMap((item) => [
+    item.publishedAt, item.updatedAt, item.retrievedAt
+  ]).filter((value): value is string => value !== undefined)
+    .map((value) => Date.parse(value)).filter(Number.isFinite);
+  if (timestamps.length === 0) return "";
+  const verified = new Date(Math.max(...timestamps));
+  return `Last verified ${verified.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}.`;
 }
 
 function researchClaimItem(watch: ResearchWatch, run: ResearchRun, claim: ResearchClaim, occurredAt: string): AttentionItem {
@@ -1056,6 +1093,15 @@ async function handle(raw: string): Promise<boolean> {
     const watch = research.get(command.watchId);
     if (watch === undefined) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
     else void runResearchWatch(watch, command.id, false);
+    return true;
+  }
+  if (command.type === "research_rebaseline") {
+    const watch = research.resetBaseline(command.watchId);
+    if (watch === undefined) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
+    else {
+      emitResearchState(command.id);
+      void runResearchWatch(watch, command.id, false);
+    }
     return true;
   }
 

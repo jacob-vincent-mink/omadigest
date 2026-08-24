@@ -2438,7 +2438,7 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                text: "FRESHNESS"
+                text: "CHANGE WINDOW"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -2555,6 +2555,7 @@ Panel {
                   onConfigurationRequested: function(watchId, depth, recency) {
                     OmaDigest.OmaDigestStore.updateResearchWatch(watchId, depth, recency)
                   }
+                  onRebaselineRequested: function(watchId) { OmaDigest.OmaDigestStore.rebuildResearchBaseline(watchId) }
                   onDeleteRequested: function(watchId) { OmaDigest.OmaDigestStore.deleteResearchWatch(watchId) }
                 }
               }

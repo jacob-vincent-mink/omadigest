@@ -290,13 +290,19 @@ export type ResearchChange = {
   evidence: ResearchEvidence[];
 };
 
+export type ResearchRetirement = {
+  key: string;
+  reason: string;
+  evidence: ResearchEvidence[];
+};
+
 export type ResearchRun = {
   id: string;
   watchId: string;
   watchName: string;
   startedAt: string;
   completedAt: string;
-  status: "complete" | "error";
+  status: "complete" | "partial" | "error";
   summary: string;
   baseline: boolean;
   meaningfulChange: boolean;
@@ -305,6 +311,7 @@ export type ResearchRun = {
   depth?: ResearchDepth;
   searchCount?: number;
   readCount?: number;
+  sourceCount?: number;
   corpusChars?: number;
   error?: string;
 };
@@ -428,6 +435,7 @@ export type BrokerCommand =
   | { type: "research_update"; id: string; watchId: string; depth: ResearchDepth; recency: ResearchRecency }
   | { type: "research_set_enabled"; id: string; watchId: string; enabled: boolean }
   | { type: "research_run"; id: string; watchId: string }
+  | { type: "research_rebaseline"; id: string; watchId: string }
   | { type: "research_delete"; id: string; watchId: string }
   | { type: "select_template"; id: string; context: GenerationContext }
   | { type: "integration_set_enabled"; id: string; integrationId: string; enabled: boolean }
