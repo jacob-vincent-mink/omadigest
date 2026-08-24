@@ -83,10 +83,10 @@ describe("AttentionLedger", () => {
     roots.push(root);
     const env = { XDG_STATE_HOME: root, HOME: root };
     const first = new AttentionLedger(env);
-    const now = new Date("2026-08-22T12:00:00.000Z");
+    const now = new Date();
     const watch = first.schedule(hold("Wait for CI", ["pr-42"], 15), now);
-    expect(first.due(new Date("2026-08-22T12:14:59.000Z"))).toEqual([]);
-    expect(new AttentionLedger(env).due(new Date("2026-08-22T12:15:00.000Z"))[0]?.id).toBe(watch.id);
+    expect(first.due(new Date(now.getTime() + 15 * 60_000 - 1))).toEqual([]);
+    expect(new AttentionLedger(env).due(new Date(now.getTime() + 15 * 60_000))[0]?.id).toBe(watch.id);
   });
 
   it("caps a watch at three follow-up attempts", () => {

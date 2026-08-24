@@ -98,4 +98,16 @@ describe("QML untrusted-text boundary", () => {
     expect(panel).toContain("Persistent rules you set for recurring situations");
     expect(panel).not.toContain('text: "ADD A STANDING POLICY"');
   });
+
+  it("opens digest history rows and marks unread digests as read", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    const start = panel.indexOf("function openSavedDigest(saved)");
+    const action = panel.slice(start, start + 400);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(action).toContain("OmaDigest.OmaDigestStore.openDigestFromHistory(saved)");
+    expect(action).toContain('root.page = "detail"');
+    expect(action).toContain("root.scrollToTop()");
+    expect(action).toContain("root.markCurrentDigestRead()");
+    expect(panel).toContain("onClicked: root.openSavedDigest(modelData)");
+  });
 });

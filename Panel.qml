@@ -217,6 +217,14 @@ Panel {
     OmaDigest.OmaDigestStore.digest = Object.assign({}, current, { readAt: new Date().toISOString() })
   }
 
+  function openSavedDigest(saved) {
+    if (!saved) return
+    OmaDigest.OmaDigestStore.openDigestFromHistory(saved)
+    root.page = "detail"
+    root.scrollToTop()
+    root.markCurrentDigestRead()
+  }
+
   function openAttentionTimeline(threadId, threadLabel) {
     root.timelineThreadsOpen = false
     root.page = "timeline"
@@ -514,10 +522,8 @@ Panel {
       var matches = root.digestsForTab(requested)
       if (matches.length === 0) return "empty"
       root.digestTab = requested
-      OmaDigest.OmaDigestStore.openDigestFromHistory(matches[0])
-      root.page = "detail"
       root.open()
-      root.scrollToTop()
+      root.openSavedDigest(matches[0])
       return "ok"
     }
 
@@ -1326,7 +1332,7 @@ Panel {
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
-                  onClicked: OmaDigest.OmaDigestStore.openDigestFromHistory(modelData)
+                  onClicked: root.openSavedDigest(modelData)
                 }
               }
             }
