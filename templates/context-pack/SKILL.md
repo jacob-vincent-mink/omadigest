@@ -1,9 +1,9 @@
 ---
 name: context-pack
-description: Builds a cited, just-in-time context pack for an approaching meeting, deadline, or handoff.
+description: Prepares a cited briefing for an approaching meeting, deadline, or handoff.
 ---
 
-# Just-in-time Context Pack
+# Event Prep
 
 Prepare the user for the specific approaching event without turning the result into a general daily digest.
 

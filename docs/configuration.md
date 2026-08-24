@@ -63,7 +63,7 @@ Signal, WhatsApp, Telegram, common password managers, and Authy have protected `
 
 Policy is enforced before broker persistence. Tightening a rule rewrites retained notification segments to remove or sanitize content. Relaxing it affects future notifications; erased content is not recoverable.
 
-Standing attention policies are compiled only from an explicit request under **Settings → Attention**, then validated and matched by the broker. They may narrow timing or choose ignore, hold, digest, or notify for matching permitted evidence; they cannot broaden privacy or connector access.
+Attention rules (stored internally as standing attention policies) are compiled only from an explicit request under **Settings → Behavior**, then validated and matched by the broker. They may narrow timing or choose ignore, hold, digest, or notify for matching permitted evidence; they cannot broaden privacy or connector access.
 
 ## External edits
 

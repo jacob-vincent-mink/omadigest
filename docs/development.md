@@ -43,7 +43,7 @@ filesystem and shell tools.
 `npm run eval:replay -- [fixture.json]` performs a deterministic, bounded
 attention-policy replay and reports grouping, interruption, critical-miss, and
 model-call metrics. `npm run eval:attention` starts isolated brokers with the
-configured real model and exercises PR correlation, a JIT context pack,
+configured real model and exercises PR correlation, timed event prep,
 low-signal holding, historical recall, and standing-policy compilation. It
 does not read or write the installed plugin's state.
 

@@ -20,7 +20,7 @@ const matcherSchema = z.object({
   entities: z.array(z.string().min(1).max(160)).max(16).optional(),
   contains: z.array(z.string().min(2).max(80)).max(16).optional()
 }).strict().refine((match) => Object.values(match).some((values) => Array.isArray(values) && values.length > 0), {
-  message: "A standing policy needs at least one bounded match condition"
+  message: "An attention rule needs at least one bounded match condition"
 });
 
 export const attentionPolicyDraftSchema = z.object({

@@ -87,4 +87,15 @@ describe("QML untrusted-text boundary", () => {
     expect(action.indexOf("dismissTemplateSuggestion")).toBeGreaterThanOrEqual(0);
     expect(action.indexOf("dismissTemplateSuggestion")).toBeLessThan(action.indexOf("startDraft"));
   });
+
+  it("separates source inputs from attention behavior in settings", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    expect(panel).toContain('{ id: "integrations", label: "Sources" }');
+    expect(panel).toContain('{ id: "attention", label: "Behavior" }');
+    expect(panel).toContain("What OmaDigest watches and researches");
+    expect(panel).toContain("What OmaDigest does when information arrives");
+    expect(panel).toContain('text: "ATTENTION RULES"');
+    expect(panel).toContain("Persistent rules you set for recurring situations");
+    expect(panel).not.toContain('text: "ADD A STANDING POLICY"');
+  });
 });

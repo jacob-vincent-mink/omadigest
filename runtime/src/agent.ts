@@ -310,13 +310,13 @@ export async function runAttentionPolicyAgent(
   onProgress?: (message: string) => void
 ): Promise<AttentionPolicyDraft> {
   const normalized = request.replaceAll(/\s+/gu, " ").trim().slice(0, 2_000);
-  if (normalized === "") throw new Error("Describe the standing attention policy first");
+  if (normalized === "") throw new Error("Describe the attention rule first");
   const availableTemplates = templates.slice(0, 64).map((template) => ({
     id: template.manifest.id, name: template.manifest.name, description: template.manifest.description
   }));
   const runtime = await modelRuntime();
   const model = selectAgentModel(await availableAgentModels(runtime));
-  if (model === undefined) throw new Error("Authenticate a model with Pi before creating a standing policy");
+  if (model === undefined) throw new Error("Authenticate a model with Pi before creating an attention rule");
   let result: AttentionPolicyDraft | undefined;
   const emitPolicy = defineTool({
     name: "emit_attention_policy",
@@ -356,7 +356,7 @@ export async function runAttentionPolicyAgent(
         result = parsed;
         return { content: [{ type: "text", text: "Standing attention policy validated." }], details: {} };
       } catch (error) {
-        return toolError(error instanceof Error ? error.message : "The standing policy was invalid.");
+        return toolError(error instanceof Error ? error.message : "The attention rule was invalid.");
       }
     }
   });
@@ -374,7 +374,7 @@ export async function runAttentionPolicyAgent(
   timer.unref();
   const unsubscribe = session.subscribe((event) => {
     if (event.type === "agent_start") onProgress?.("Translating your attention preference");
-    if (event.type === "tool_execution_start") onProgress?.("Validating the standing policy");
+    if (event.type === "tool_execution_start") onProgress?.("Validating the attention rule");
   });
   try {
     await session.prompt([
@@ -390,8 +390,8 @@ export async function runAttentionPolicyAgent(
     unsubscribe();
     session.reset();
   }
-  if (timedOut) throw new Error("The standing policy agent timed out");
-  if (result === undefined) throw new Error("The standing policy agent did not submit a valid policy");
+  if (timedOut) throw new Error("The attention-rule agent timed out");
+  if (result === undefined) throw new Error("The attention-rule agent did not submit a valid rule");
   return result;
 }
 

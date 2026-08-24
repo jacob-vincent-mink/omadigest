@@ -70,7 +70,7 @@ Rectangle {
         Text {
           textFormat: Text.PlainText
           width: parent.width
-          text: String(root.watch.name || "Research watch")
+          text: String(root.watch.name || "Research brief")
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall

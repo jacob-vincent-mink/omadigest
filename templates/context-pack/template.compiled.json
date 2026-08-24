@@ -1,8 +1,8 @@
 {
   "version": 1,
   "id": "context-pack",
-  "name": "Just-in-time Context Pack",
-  "description": "A concise briefing assembled around an approaching meeting, deadline, or handoff.",
+  "name": "Event Prep",
+  "description": "A concise briefing for an approaching meeting, deadline, or handoff.",
   "priority": 100,
   "match": {
     "intents": ["meeting", "deadline"],

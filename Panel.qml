@@ -92,6 +92,20 @@ Panel {
   function toggle() { root.opened ? close() : open() }
   function closeForPopoutSwitch() { root.controller.hide() }
   function boundedIpc(value, maximum) { return String(value || "").slice(0, maximum) }
+  function settingsSubtitle() {
+    if (root.settingsPage === "integrations") {
+      if (root.sourcesView === "research") return "Recurring web research"
+      if (root.sourcesView === "detail") return "Source status, categories, and access"
+      if (root.sourcesView === "authoring") return "Build a source with your default agent"
+      return "What OmaDigest watches and researches"
+    }
+    if (root.settingsPage === "templates") return "How incoming information becomes a digest"
+    if (root.settingsPage === "attention") return "What OmaDigest does when information arrives"
+    if (root.settingsPage === "privacy") return "What notification content OmaDigest may retain"
+    if (root.settingsPage === "connections") return "Model and read-aloud providers"
+    if (root.settingsPage === "data") return "Retained OmaDigest data"
+    return ""
+  }
   function visibleAttentionWatches() {
     return (OmaDigest.OmaDigestStore.attentionWatches || []).filter(function(watch) {
       return String(watch && watch.hiddenAt || "") === ""
@@ -133,10 +147,10 @@ Panel {
   function dataDeletionPrompt(target) {
     if (target === "digest-history") return "Delete every digest saved by OmaDigest? This cannot be undone."
     if (target === "notification-history") return "Delete notification evidence retained by OmaDigest? Omarchy's notification history will not be changed."
-    if (target === "research") return "Delete every research watch and its retained claim history? Saved digest briefs are unchanged."
+    if (target === "research") return "Delete every recurring research job and its retained claim history? Saved digest briefs are unchanged."
     if (target === "integrations") return "Delete custom integrations, integration setup, enablement, and known integration secrets? Bundled integrations will be reset, not removed."
     if (target === "templates") return "Delete every custom template and restore packaged defaults?"
-    return "Delete all OmaDigest digest, notification, and research history, standing policies, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
+    return "Delete all OmaDigest digest, notification, and research history, attention rules, custom integrations, integration setup, and custom templates? Omarchy data, model connections, and the privacy policy will remain."
   }
 
   function requestDataDeletion(target) {
@@ -905,7 +919,7 @@ Panel {
                   ? (root.attentionBusy
                     ? String(OmaDigest.OmaDigestStore.attentionActivity.message || "Reviewing attention…")
                     : root.attentionSummaryText())
-                  : root.page === "settings" ? "Sources, privacy, connections, and retained data"
+                  : root.page === "settings" ? root.settingsSubtitle()
                   : root.page === "timeline" ? String(OmaDigest.OmaDigestStore.attentionTimelineThreadLabel || "All attention") : ""
                 visible: text !== ""
                 color: Qt.darker(root.foreground, 1.35)
@@ -1976,7 +1990,7 @@ Panel {
                 model: [
                   { id: "integrations", label: "Sources" },
                   { id: "templates", label: "Templates" },
-                  { id: "attention", label: "Attention" },
+                  { id: "attention", label: "Behavior" },
                   { id: "privacy", label: "Privacy" },
                   { id: "connections", label: "Connections" },
                   { id: "data", label: "Data" }
@@ -2092,6 +2106,27 @@ Panel {
               visible: root.settingsPage === "integrations" && root.sourcesView === "list"
               spacing: Style.space(8)
 
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "SOURCES"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "Choose what OmaDigest watches: live inputs below, or recurring research across the public web."
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
               Rectangle {
                 width: parent.width
                 height: Style.space(58)
@@ -2125,7 +2160,7 @@ Panel {
                     Text {
                       textFormat: Text.PlainText
                       width: parent.width
-                      text: "Research watches"
+                      text: "Recurring research"
                       color: root.foreground
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.bodySmall
@@ -2165,7 +2200,7 @@ Panel {
 
               Text {
                 textFormat: Text.PlainText
-                text: "OMARCHY"
+                text: "OMARCHY INPUTS"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -2258,7 +2293,7 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                text: "RESEARCH WATCHES"
+                text: "RECURRING RESEARCH"
                 color: Color.accent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -2312,7 +2347,7 @@ Panel {
               Button {
                 width: parent.width
                 height: Style.space(40)
-                text: root.researchCreateOpen ? "Close new watch" : "New research watch"
+                text: root.researchCreateOpen ? "Close new brief" : "New recurring brief"
                 iconText: root.researchCreateOpen ? "󰅖" : "+"
                 leftAlign: true
                 foreground: root.foreground
@@ -3178,7 +3213,7 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                text: "ATTENTION AGENT"
+                text: "BEHAVIOR"
                 color: Color.accent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -3189,13 +3224,23 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                text: Number(OmaDigest.OmaDigestStore.attentionMemory.episodeCount || 0) + " remembered moments · "
-                  + Number(OmaDigest.OmaDigestStore.attentionPolicies.length || 0) + " standing policies · "
-                  + Number(OmaDigest.OmaDigestStore.attentionActivity.dailyDeliberations || 0) + "/"
-                  + Number(OmaDigest.OmaDigestStore.attentionActivity.dailyLimit || 0) + " reviews today"
+                text: "Choose whether matching information waits, becomes a digest, is ignored, or interrupts you."
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: Number(OmaDigest.OmaDigestStore.attentionMemory.episodeCount || 0) + " remembered moments · "
+                  + Number(OmaDigest.OmaDigestStore.attentionPolicies.length || 0) + " attention rules · "
+                  + Number(OmaDigest.OmaDigestStore.attentionActivity.dailyDeliberations || 0) + "/"
+                  + Number(OmaDigest.OmaDigestStore.attentionActivity.dailyLimit || 0) + " reviews today"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
               }
 
@@ -3209,6 +3254,16 @@ Panel {
                 font.pixelSize: Style.font.caption
                 font.bold: true
                 font.letterSpacing: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "Temporary follow-ups OmaDigest scheduled while waiting for more evidence or a deadline."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
               }
 
               Text {
@@ -3412,12 +3467,22 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                text: "ADD A STANDING POLICY"
+                text: "ATTENTION RULES"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
                 font.letterSpacing: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "Persistent rules you set for recurring situations. Matching updates can be ignored, held, bundled, or surfaced."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
               }
 
               QQC.TextArea {
@@ -3442,7 +3507,7 @@ Panel {
               Button {
                 width: parent.width
                 height: Style.space(38)
-                text: OmaDigest.OmaDigestStore.attentionPolicyState === "working" ? "Building policy…" : "Add policy"
+                text: OmaDigest.OmaDigestStore.attentionPolicyState === "working" ? "Building rule…" : "Create rule"
                 foreground: root.foreground
                 accent: Color.accent
                 fontFamily: root.fontFamily
@@ -3486,7 +3551,7 @@ Panel {
                   Text {
                     textFormat: Text.PlainText
                     width: parent.width
-                    text: "POLICY PREVIEW"
+                    text: "RULE PREVIEW"
                     color: Color.accent
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -3497,7 +3562,7 @@ Panel {
                   Text {
                     textFormat: Text.PlainText
                     width: parent.width
-                    text: parent.parent.preview ? String(parent.parent.preview.draft.name || "Standing policy") : ""
+                    text: parent.parent.preview ? String(parent.parent.preview.draft.name || "Attention rule") : ""
                     color: root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.body
@@ -3562,8 +3627,8 @@ Panel {
                       width: parent.width
                       text: String(modelData.name || "Existing policy") + " · "
                         + (String(modelData.winner || "existing") === "draft"
-                          ? "new policy wins by priority"
-                          : String(modelData.action || "hold").toUpperCase() + " wins by priority")
+                          ? "new rule wins by priority"
+                          : String(modelData.action || "hold").toUpperCase() + " rule wins by priority")
                       color: Color.urgent
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
@@ -3591,7 +3656,7 @@ Panel {
                       anchors.verticalCenter: parent.verticalCenter
                       width: parent.width - parent.spacing - (parent.width - parent.spacing) * 0.38
                       height: parent.height
-                      text: "Add policy"
+                      text: "Add rule"
                       foreground: root.foreground
                       accent: Color.accent
                       fontFamily: root.fontFamily
@@ -3627,7 +3692,7 @@ Panel {
                         textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width - policyToggle.width - policyDelete.width - parent.spacing * 2
-                        text: String(modelData.name || "Standing policy")
+                        text: String(modelData.name || "Attention rule")
                         color: root.foreground
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.bodySmall
@@ -3679,7 +3744,7 @@ Panel {
                 textFormat: Text.PlainText
                 width: parent.width
                 topPadding: Style.space(4)
-                text: "SEARCH ATTENTION HISTORY"
+                text: "SEARCH MEMORY"
                 color: Qt.darker(root.foreground, 1.35)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -3982,7 +4047,7 @@ Panel {
                 model: [
                   { id: "digest-history", title: "Delete digest history", description: "Remove all saved read and unread digests." },
                   { id: "notification-history", title: "Delete notification history", description: "Remove notification evidence retained by OmaDigest and prevent older Omarchy notifications from being re-imported." },
-                  { id: "research", title: "Delete research watches", description: "Remove scheduled questions and their retained claim history. Saved digest briefs remain until separately deleted." },
+                  { id: "research", title: "Delete recurring research", description: "Remove scheduled questions and their retained claim history. Saved digest briefs remain until separately deleted." },
                   { id: "integrations", title: "Delete integrations", description: "Remove custom integrations and reset all integration setup, enablement, and known secrets." },
                   { id: "templates", title: "Delete templates", description: "Remove custom templates and restore packaged defaults." }
                 ]

@@ -57,7 +57,7 @@ Scope {
   property var attentionCalibration: ({ outcomeCount: 0, readCount: 0, handoffCount: 0, usefulCount: 0, notUsefulCount: 0, subjects: [] })
   property var researchWatches: []
   property var researchRuns: []
-  property var researchActivity: ({ state: "idle", message: "Research watches are ready" })
+  property var researchActivity: ({ state: "idle", message: "Recurring research is ready" })
   property var attentionPolicies: []
   property string attentionPolicyState: "idle"
   property string attentionPolicyMessage: ""
@@ -360,7 +360,7 @@ Scope {
     if (!text || attentionPolicyState === "working") return
     clearError()
     attentionPolicyState = "working"
-    attentionPolicyMessage = "Drafting a bounded standing policy"
+    attentionPolicyMessage = "Drafting an attention rule"
     attentionPolicyPreview = null
     send({ type: "attention_policy_create", id: "attention-policy-" + nextId++, request: text })
   }
@@ -369,7 +369,7 @@ Scope {
     if (!attentionPolicyPreview || !attentionPolicyPreview.id) return
     var previewId = String(attentionPolicyPreview.id)
     attentionPolicyState = "working"
-    attentionPolicyMessage = "Saving standing policy"
+    attentionPolicyMessage = "Saving attention rule"
     send({ type: "attention_policy_accept", id: "attention-policy-" + nextId++, previewId: previewId })
   }
 
@@ -785,7 +785,7 @@ Scope {
       dataDeleteMessage = dataDeleteTarget === "digest-history" ? "Digest history deleted"
         : dataDeleteTarget === "notification-history" ? "OmaDigest notification history deleted"
         : dataDeleteTarget === "integrations" ? "Integration data deleted"
-        : dataDeleteTarget === "research" ? "Research watches deleted"
+        : dataDeleteTarget === "research" ? "Recurring research deleted"
         : dataDeleteTarget === "templates" ? "Templates reset"
         : "OmaDigest history, integrations, and templates deleted"
       if (dataDeleteTarget === "digest-history" || dataDeleteTarget === "all") {
@@ -803,7 +803,7 @@ Scope {
       if (dataDeleteTarget === "research" || dataDeleteTarget === "all") {
         researchWatches = []
         researchRuns = []
-        researchActivity = ({ state: "idle", message: "Research watches are ready" })
+        researchActivity = ({ state: "idle", message: "Recurring research is ready" })
       }
       dataDeleteRevision += 1
       status = dataDeleteMessage

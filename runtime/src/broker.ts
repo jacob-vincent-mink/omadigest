@@ -296,7 +296,7 @@ let attentionActivity = attentionLedger.activity("observing", "Watching enabled 
 let attentionCycleRunning = false;
 let queuedAttentionCycle: AttentionCycleRequest | undefined;
 let notificationQuietTimer: NodeJS.Timeout | undefined;
-let researchActivity: ResearchActivity = { state: "idle", message: "Research watches are ready" };
+let researchActivity: ResearchActivity = { state: "idle", message: "Recurring research is ready" };
 let researchRunning = false;
 
 type AttentionCycleRequest = {
@@ -719,7 +719,7 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     if (ignoredIds.size > 0) {
       attention.acknowledge([...ignoredIds]);
       for (const match of ignored)
-        attentionMemory.recordDecision("ignore", `Standing policy: ${match.policy.name}`, match.items, match.policy.name, now);
+        attentionMemory.recordDecision("ignore", `Attention rule: ${match.policy.name}`, match.items, match.policy.name, now);
     }
     const reviewable = items.filter((item) => !ignoredIds.has(item.id));
     const activePolicyMatch = automatic
@@ -1336,7 +1336,7 @@ async function handle(raw: string): Promise<boolean> {
     const historyQuery = [group?.subject, entry.headline, ...applications].filter(Boolean).join(" ").slice(0, 200);
     const history = historyQuery === "" ? [] : attentionMemory.search({ query: historyQuery, limit: 6 });
     const policySummary = matchedPolicy === undefined ? ""
-      : ` Standing policy “${matchedPolicy.name}” matched with action ${matchedPolicy.action}.`;
+      : ` Attention rule “${matchedPolicy.name}” matched with action ${matchedPolicy.action}.`;
     emit({
       type: "attention_explanation", id: command.id,
       explanation: {
@@ -1357,7 +1357,7 @@ async function handle(raw: string): Promise<boolean> {
   }
 
   if (command.type === "attention_policy_create") {
-    emit({ type: "attention_policy_state", id: command.id, state: "working", message: "Drafting a bounded standing policy" });
+    emit({ type: "attention_policy_state", id: command.id, state: "working", message: "Drafting an attention rule" });
     try {
       const draft = await (await agentModule()).runAttentionPolicyAgent(
         command.request, templates, 60_000,
@@ -1386,7 +1386,7 @@ async function handle(raw: string): Promise<boolean> {
     } catch (error) {
       emit({
         type: "error", id: command.id, code: "attention_policy_failed",
-        message: error instanceof Error ? error.message : "The standing policy could not be created."
+        message: error instanceof Error ? error.message : "The attention rule could not be created."
       });
     }
     return true;
@@ -1396,7 +1396,7 @@ async function handle(raw: string): Promise<boolean> {
     const pending = pendingPolicyPreviews.get(command.previewId);
     pendingPolicyPreviews.delete(command.previewId);
     if (pending === undefined || pending.expiresAt <= Date.now()) {
-      emit({ type: "error", id: command.id, code: "attention_policy_preview_expired", message: "That policy preview expired. Draft it again." });
+      emit({ type: "error", id: command.id, code: "attention_policy_preview_expired", message: "That rule preview expired. Draft it again." });
       return true;
     }
     const policy = attentionPolicies.add(pending.draft);
@@ -1413,14 +1413,14 @@ async function handle(raw: string): Promise<boolean> {
 
   if (command.type === "attention_policy_set_enabled") {
     if (attentionPolicies.setEnabled(command.policyId, command.enabled) === undefined)
-      emit({ type: "error", id: command.id, code: "attention_policy_unavailable", message: "That standing policy is unavailable." });
+      emit({ type: "error", id: command.id, code: "attention_policy_unavailable", message: "That attention rule is unavailable." });
     else emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
     return true;
   }
 
   if (command.type === "attention_policy_delete") {
     if (!attentionPolicies.delete(command.policyId))
-      emit({ type: "error", id: command.id, code: "attention_policy_unavailable", message: "That standing policy is unavailable." });
+      emit({ type: "error", id: command.id, code: "attention_policy_unavailable", message: "That attention rule is unavailable." });
     else emit({ type: "attention_policies", id: command.id, policies: attentionPolicies.list() });
     return true;
   }
