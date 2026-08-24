@@ -79,4 +79,12 @@ describe("QML untrusted-text boundary", () => {
     expect(store).toContain('type: "privacy_delete_rule"');
     expect(store).toContain('type: "template_delete"');
   });
+
+  it("acknowledges a template suggestion before drafting it", () => {
+    const panel = readFileSync(join(repositoryRoot, "Panel.qml"), "utf8");
+    const start = panel.indexOf("function draftTemplateSuggestion(suggestion)");
+    const action = panel.slice(start, start + 700);
+    expect(action.indexOf("dismissTemplateSuggestion")).toBeGreaterThanOrEqual(0);
+    expect(action.indexOf("dismissTemplateSuggestion")).toBeLessThan(action.indexOf("startDraft"));
+  });
 });

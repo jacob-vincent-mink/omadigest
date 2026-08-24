@@ -378,6 +378,7 @@ Panel {
 
   function draftTemplateSuggestion(suggestion) {
     if (!suggestion) return
+    OmaDigest.OmaDigestStore.dismissTemplateSuggestion(String(suggestion.id || ""))
     root.settingsPage = "templates"
     root.selectedTemplate = null
     root.page = "settings"

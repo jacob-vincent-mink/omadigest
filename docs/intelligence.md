@@ -83,7 +83,7 @@ For meeting or deadline evidence, the broker accepts only bounded relative, ISO,
 
 OmaDigest examines at most 200 retained items from the last seven days. Fixed recipes cover known useful patterns, while a deterministic app-and-intent clusterer can propose a template after at least four privacy-permitted examples across two days. Dynamic suggestions receive an outcome-oriented product name such as **Figma review queue** or **Herdr completion brief**, show bounded example titles, and construct a narrow draft request; count-only content cannot enter dynamic discovery. Known count-only GitHub frequency can still suggest connecting the bundled GitHub source without reading masked text.
 
-Suggestions never auto-install policy. The user can inspect the examples, draft one through the constrained template agent, or dismiss it for 30 days. At most three suggestions are published and only one is shown prominently in the panel.
+Suggestions never auto-install policy. The user can inspect the examples, draft one through the constrained template agent, or dismiss it for 30 days. Choosing **Draft template** immediately acknowledges the suggestion before starting the draft, so the same prompt does not remain as an active recommendation. At most three suggestions are published and only one is shown prominently in the panel.
 
 ## Replay evaluation
 

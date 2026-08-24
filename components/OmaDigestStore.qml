@@ -451,7 +451,12 @@ Scope {
   function deleteDigest(digestId) { send({ type: "digest_delete", id: "history-" + nextId++, digestId: String(digestId) }) }
   function clearDigests() { send({ type: "digest_clear", id: "history-" + nextId++ }) }
   function dismissTemplateSuggestion(suggestionId) {
-    send({ type: "template_suggestion_dismiss", id: "suggestion-" + nextId++, suggestionId: String(suggestionId) })
+    var target = String(suggestionId || "")
+    if (!target) return
+    templateSuggestions = (templateSuggestions || []).filter(function(suggestion) {
+      return String(suggestion.id || "") !== target
+    })
+    send({ type: "template_suggestion_dismiss", id: "suggestion-" + nextId++, suggestionId: target })
   }
   function deleteData(target) {
     clearError()
