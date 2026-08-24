@@ -281,6 +281,18 @@ Scope {
     send({ type: "attention_watch_cancel", id: "attention-watch-" + nextId++, watchId: target })
   }
 
+  function dismissAttentionWatch(watchId) {
+    var target = String(watchId || "")
+    if (!target) return
+    send({ type: "attention_watch_dismiss", id: "attention-watch-" + nextId++, watchId: target })
+  }
+
+  function showAttentionWatch(watchId) {
+    var target = String(watchId || "")
+    if (!target) return
+    send({ type: "attention_watch_show", id: "attention-watch-" + nextId++, watchId: target })
+  }
+
   function searchAttentionMemory(query) {
     var text = String(query || "").trim().slice(0, 200)
     if (!text) return

@@ -92,8 +92,16 @@ Panel {
   function toggle() { root.opened ? close() : open() }
   function closeForPopoutSwitch() { root.controller.hide() }
   function boundedIpc(value, maximum) { return String(value || "").slice(0, maximum) }
+  function visibleAttentionWatches() {
+    return (OmaDigest.OmaDigestStore.attentionWatches || []).filter(function(watch) {
+      return String(watch && watch.hiddenAt || "") === ""
+    })
+  }
   function attentionNextCheckText() {
-    var raw = String(OmaDigest.OmaDigestStore.attentionActivity.nextCheckAt || "")
+    var watches = root.visibleAttentionWatches().slice().sort(function(left, right) {
+      return String(left.dueAt || "").localeCompare(String(right.dueAt || ""))
+    })
+    var raw = watches.length > 0 ? String(watches[0].dueAt || "") : ""
     if (!raw) return ""
     var due = new Date(raw)
     if (isNaN(due.getTime())) return ""
@@ -294,7 +302,7 @@ Panel {
   function attentionSummaryText() {
     var available = root.attentionAvailableCount
     if (available > 0) return available + (available === 1 ? " attention item" : " attention items")
-    var followUps = (OmaDigest.OmaDigestStore.attentionWatches || []).length
+    var followUps = root.visibleAttentionWatches().length
     if (followUps > 0) return followUps + (followUps === 1 ? " follow-up" : " follow-ups")
     return "All quiet"
   }
@@ -1082,7 +1090,7 @@ Panel {
               radius: Style.cornerRadius
               visible: ["checking", "deliberating", "holding", "generating", "notifying", "error"]
                 .indexOf(String(OmaDigest.OmaDigestStore.attentionActivity.state || "")) >= 0
-                || (OmaDigest.OmaDigestStore.attentionWatches || []).length > 0
+                || root.visibleAttentionWatches().length > 0
               color: Util.alpha(Color.accent, 0.08)
               border.width: Style.spacing.hairline
               border.color: Util.alpha(Color.accent, 0.42)
@@ -1146,18 +1154,18 @@ Panel {
                 }
 
                 Repeater {
-                  model: (OmaDigest.OmaDigestStore.attentionWatches || []).slice(0, 3)
+                  model: root.visibleAttentionWatches().slice(0, 3)
 
                   Row {
                     required property var modelData
                     width: parent.width
-                    height: Math.max(watchCopy.implicitHeight, cancelWatch.implicitHeight)
+                    height: Math.max(watchCopy.implicitHeight, dismissWatch.implicitHeight)
                     spacing: Style.space(7)
 
                     Column {
                       id: watchCopy
                       anchors.verticalCenter: parent.verticalCenter
-                      width: parent.width - cancelWatch.width - Style.space(7)
+                      width: parent.width - dismissWatch.width - Style.space(7)
                       spacing: Style.space(1)
 
                       Text {
@@ -1183,13 +1191,13 @@ Panel {
                     }
 
                     PanelActionButton {
-                      id: cancelWatch
+                      id: dismissWatch
                       anchors.verticalCenter: parent.verticalCenter
                       iconText: "×"
-                      tooltipText: "Stop watching"
+                      tooltipText: "Hide from main"
                       foreground: root.foreground
                       fontFamily: root.fontFamily
-                      onClicked: OmaDigest.OmaDigestStore.cancelAttentionWatch(String(modelData.id || ""))
+                      onClicked: OmaDigest.OmaDigestStore.dismissAttentionWatch(String(modelData.id || ""))
                     }
                   }
                 }
@@ -3188,6 +3196,125 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 wrapMode: Text.WordWrap
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                topPadding: Style.space(4)
+                text: "NEXT REVIEWS"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                visible: (OmaDigest.OmaDigestStore.attentionWatches || []).length === 0
+                width: parent.width
+                text: "No reviews are scheduled."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Repeater {
+                model: OmaDigest.OmaDigestStore.attentionWatches || []
+
+                Rectangle {
+                  required property var modelData
+                  property bool confirmingCancel: false
+                  width: parent.width
+                  height: scheduledReviewContent.implicitHeight + Style.space(18)
+                  radius: Style.cornerRadius
+                  color: Style.normalFillFor(root.foreground, Color.accent)
+                  border.width: Style.spacing.hairline
+                  border.color: Style.normalBorderFor(root.foreground, Color.accent)
+
+                  Column {
+                    id: scheduledReviewContent
+                    anchors.fill: parent
+                    anchors.margins: Style.space(9)
+                    spacing: Style.space(7)
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: String(modelData.subject || modelData.reason || "Scheduled review")
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: parent.width
+                      text: root.watchDetailText(modelData)
+                      color: Qt.darker(root.foreground, 1.35)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+
+                    Row {
+                      width: parent.width
+                      height: Style.space(34)
+                      spacing: Style.space(8)
+
+                      Text {
+                        textFormat: Text.PlainText
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - reviewActions.implicitWidth - parent.spacing
+                        text: String(modelData.hiddenAt || "") !== "" ? "Hidden from main" : "Shown on main"
+                        color: String(modelData.hiddenAt || "") !== "" ? Qt.darker(root.foreground, 1.35) : Color.accent
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                      }
+
+                      Row {
+                        id: reviewActions
+                        anchors.verticalCenter: parent.verticalCenter
+                        height: parent.height
+                        spacing: Style.space(6)
+
+                        Button {
+                          visible: String(modelData.hiddenAt || "") !== ""
+                          width: visible ? Style.space(94) : 0
+                          height: parent.height
+                          text: "Show on main"
+                          foreground: root.foreground
+                          accent: Color.accent
+                          fontFamily: root.fontFamily
+                          fontSize: Style.font.caption
+                          bordered: true
+                          onClicked: OmaDigest.OmaDigestStore.showAttentionWatch(String(modelData.id || ""))
+                        }
+
+                        Button {
+                          width: confirmingCancel ? Style.space(106) : Style.space(70)
+                          height: parent.height
+                          text: confirmingCancel ? "Cancel review?" : "Cancel"
+                          foreground: confirmingCancel ? Color.urgent : root.foreground
+                          accent: Color.urgent
+                          fontFamily: root.fontFamily
+                          fontSize: Style.font.caption
+                          bordered: true
+                          onClicked: {
+                            if (confirmingCancel) {
+                              confirmingCancel = false
+                              OmaDigest.OmaDigestStore.cancelAttentionWatch(String(modelData.id || ""))
+                            } else confirmingCancel = true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
 
               Rectangle {

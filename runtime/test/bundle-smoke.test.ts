@@ -67,6 +67,8 @@ describe("checked-in broker bundle", () => {
       JSON.stringify({ type: "attention_focus", id: "focus-on", active: true }),
       JSON.stringify({ type: "attention_memory_search", id: "memory-search", query: "PR #184" }),
       JSON.stringify({ type: "attention_timeline_query", id: "timeline", mode: "events", limit: 12 }),
+      JSON.stringify({ type: "attention_watch_dismiss", id: "watch-dismiss", watchId }),
+      JSON.stringify({ type: "attention_watch_show", id: "watch-show", watchId }),
       JSON.stringify({ type: "attention_watch_cancel", id: "watch-cancel", watchId }),
       JSON.stringify({ type: "template_delete", id: "template-delete", templateId: "general" }),
       JSON.stringify({ type: "shutdown" }),
@@ -101,6 +103,12 @@ describe("checked-in broker bundle", () => {
     });
     expect(events.find((event) => event.type === "attention_state" && event.id === "initialize")).toMatchObject({
       memory: { episodeCount: 1 }, watches: [{ id: watchId, subject: "PR #184" }]
+    });
+    expect(events.find((event) => event.type === "attention_state" && event.id === "watch-dismiss")).toMatchObject({
+      watches: [{ id: watchId, hiddenAt: expect.any(String) }]
+    });
+    expect(events.find((event) => event.type === "attention_state" && event.id === "watch-show")).toMatchObject({
+      watches: [{ id: watchId }]
     });
     expect(events.find((event) => event.type === "attention_state" && event.id === "watch-cancel")).toMatchObject({
       watches: []

@@ -45,7 +45,7 @@ OmaDigest has three trigger paths:
 6. **Conditional watch** — revisit held evidence when a related update arrives, a cited source changes, or the broker-owned deadline expires.
 7. **Manual** — press **+** to check all sources and require a digest now.
 
-The panel's compact activity strip shows whether OmaDigest is checking sources, weighing evidence, holding related updates, generating, or surfacing an alert. Active watches list their subject, wake conditions, deadline, and a cancel action. Automatic reviews are rate-limited and daily-budgeted. The model cannot create its own timer or call notification, shell, filesystem, browser, or connector tools.
+The panel's compact activity strip shows whether OmaDigest is checking sources, weighing evidence, holding related updates, generating, or surfacing an alert. Active reviews list their subject, wake conditions, and deadline. The main-page **×** hides that notice without stopping the review; **Settings → Attention → Next reviews** shows hidden and visible reviews, restores a hidden notice, and provides the explicit cancellation action. Automatic reviews are rate-limited and daily-budgeted. The model cannot create its own timer or call notification, shell, filesystem, browser, or connector tools.
 
 Before deciding, the attention agent receives a bounded time-decayed view of its recent episodes and may make up to four typed, read-only calls to search, read one broker-supplied subject thread, or zoom into a coarse summary. Recalled history remains cited data, and the final action must include current evidence. This lets OmaDigest compare an evolving PR, meeting, incident, or agent task with what it previously saw without replaying its full history into every model call.
 
@@ -83,7 +83,7 @@ The bundled GitHub connector uses the active authenticated `gh` session and impo
 
 Open the clock-arrow action in the main header for the **Attention timeline**. **Events** is a newest-first audit trail grouped into selectable subjects. **Memory** shows the same retained history as a time-decayed cover; open an outlined span to reveal its two child spans. On any digest entry, **Why this?** links directly to that subject timeline.
 
-Open **Settings → Attention** to add, pause, or delete plain-language standing policies and search retained attention history. A new policy is shown as a compact preview of its current matches and priority overlaps before **Add policy** persists it. The calibration card summarizes only explicit reads, handoffs, and useful/not-useful feedback, including the bounded direction OmaDigest may use as a soft timing hint.
+Open **Settings → Attention** to manage next reviews, add, pause, or delete plain-language standing policies, and search retained attention history. A new policy is shown as a compact preview of its current matches and priority overlaps before **Add policy** persists it. The calibration card summarizes only explicit reads, handoffs, and useful/not-useful feedback, including the bounded direction OmaDigest may use as a soft timing hint.
 
 **Send to agent** passes the selected digest headline and explanation plus bounded source application/timestamp metadata and explicit safety framing to the default Omarchy agent. Original notification titles and bodies are omitted. The payload is claimed once from the broker rather than placed in process arguments, and all digest strings remain untrusted observations rather than instructions.
 

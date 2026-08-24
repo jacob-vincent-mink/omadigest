@@ -143,4 +143,25 @@ describe("AttentionLedger", () => {
     expect(state.cancel(watch.id, now)?.subject).toBe("PR #42");
     expect(state.active(now)).toEqual([]);
   });
+
+  it("hides a watch without cancelling it and lets the user restore it", () => {
+    const state = ledger();
+    const now = new Date("2026-08-22T12:00:00.000Z");
+    const watch = state.schedule(hold("Wait", ["one"], 30), now);
+    const hidden = state.dismiss(watch.id, new Date("2026-08-22T12:01:00.000Z"));
+    expect(hidden?.hiddenAt).toBe("2026-08-22T12:01:00.000Z");
+    expect(state.active(now)).toHaveLength(1);
+    expect(state.show(watch.id, new Date("2026-08-22T12:02:00.000Z"))?.hiddenAt).toBeUndefined();
+    expect(state.active(now)[0]?.hiddenAt).toBeUndefined();
+  });
+
+  it("surfaces a hidden watch again when the agent schedules its next review", () => {
+    const state = ledger();
+    const now = new Date("2026-08-22T12:00:00.000Z");
+    const watch = state.schedule(hold("Wait", ["one"], 1), now);
+    state.dismiss(watch.id, new Date("2026-08-22T12:00:30.000Z"));
+    const rescheduled = state.schedule(hold("Keep waiting", ["one"], 10),
+      new Date("2026-08-22T12:01:00.000Z"), state.get(watch.id));
+    expect(rescheduled.hiddenAt).toBeUndefined();
+  });
 });

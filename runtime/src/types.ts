@@ -158,6 +158,7 @@ export type AttentionWatch = {
   dueAt: string;
   expiresAt: string;
   attempts: number;
+  hiddenAt?: string | undefined;
 };
 
 export type AttentionMemoryKind = "evidence" | "decision" | "digest" | "outcome";
@@ -476,6 +477,8 @@ export type BrokerCommand =
   | { type: "attention_acknowledge"; id: string; itemIds: string[] }
   | { type: "attention_acknowledge_all"; id: string }
   | { type: "attention_focus"; id: string; active: boolean }
+  | { type: "attention_watch_dismiss"; id: string; watchId: string }
+  | { type: "attention_watch_show"; id: string; watchId: string }
   | { type: "attention_watch_cancel"; id: string; watchId: string }
   | { type: "attention_memory_search"; id: string; query: string }
   | { type: "attention_timeline_query"; id: string; mode: AttentionTimelineMode; threadId?: string; cursor?: string; limit?: number }

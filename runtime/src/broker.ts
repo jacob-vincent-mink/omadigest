@@ -185,6 +185,8 @@ const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attention_acknowledge"), id: z.string().min(1).max(100), itemIds: z.array(z.string().min(1).max(200)).max(200) }).strict(),
   z.object({ type: z.literal("attention_acknowledge_all"), id: z.string().min(1).max(100) }).strict(),
   z.object({ type: z.literal("attention_focus"), id: z.string().min(1).max(100), active: z.boolean() }).strict(),
+  z.object({ type: z.literal("attention_watch_dismiss"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("attention_watch_show"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("attention_watch_cancel"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("attention_memory_search"), id: z.string().min(1).max(100), query: z.string().min(1).max(200) }).strict(),
   z.object({
@@ -611,6 +613,10 @@ function emitAttentionState(id: string): void {
   });
 }
 
+function visibleAttentionWatchCount(now = new Date()): number {
+  return attentionLedger.active(now).filter((watch) => watch.hiddenAt === undefined).length;
+}
+
 function ingestAttentionItems(items: AttentionItem[]): { total: number; changedIds: string[] } {
   const ingested = attention.ingestWithResult(items);
   if (ingested.changedIds.length === 0) return ingested;
@@ -701,8 +707,8 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     const { items, excludedIds } = privacy.selectDigestEvidence(candidate, 100);
     if (excludedIds.length > 0) attention.acknowledge(excludedIds);
     if (items.length === 0) {
-      setAttentionActivity(attentionLedger.active(now).length > 0 ? "holding" : "observing",
-        attentionLedger.active(now).length > 0 ? "Waiting for related updates" : "Watching enabled sources", request.id);
+      setAttentionActivity(visibleAttentionWatchCount(now) > 0 ? "holding" : "observing",
+        visibleAttentionWatchCount(now) > 0 ? "Waiting for related updates" : "Watching enabled sources", request.id);
       if (!automatic) emit({ type: "digest_skipped", id: request.id, reason: "No digestible items are available" });
       emitAttention(request.id);
       return;
@@ -724,15 +730,17 @@ async function runAttentionCycle(request: AttentionCycleRequest): Promise<void> 
     if (reviewItems.length === 0) {
       emitAttention(request.id);
       emitAttentionState(request.id);
-      setAttentionActivity(attentionLedger.active(now).length > 0 ? "holding" : "observing",
-        attentionLedger.active(now).length > 0 ? "Waiting for related updates" : "Watching enabled sources", request.id);
+      setAttentionActivity(visibleAttentionWatchCount(now) > 0 ? "holding" : "observing",
+        visibleAttentionWatchCount(now) > 0 ? "Waiting for related updates" : "Watching enabled sources", request.id);
       return;
     }
     const permit = attentionLedger.permit(request.reason, now);
     if (!permit.allowed) {
       if (dueWatch !== undefined && permit.retryAfterMs !== undefined)
         scheduleAttentionCycle("follow-up", permit.retryAfterMs + 250, dueWatch.id);
-      setAttentionActivity("holding", permit.reason ?? "Waiting for the next attention review", request.id);
+      setAttentionActivity(visibleAttentionWatchCount(now) > 0 ? "holding" : "observing",
+        visibleAttentionWatchCount(now) > 0
+          ? permit.reason ?? "Waiting for the next attention review" : "Watching enabled sources", request.id);
       if (!automatic) emit({ type: "digest_skipped", id: request.id, reason: permit.reason ?? "Attention review is paused" });
       return;
     }
@@ -1264,8 +1272,21 @@ async function handle(raw: string): Promise<boolean> {
     }
     attentionMemory.recordOutcome("cancelled", watch.subject, watch.sourceIds);
     emitAttentionState(command.id);
-    setAttentionActivity(attentionLedger.active().length > 0 ? "holding" : "observing",
-      attentionLedger.active().length > 0 ? "Waiting on active watches" : "Watching enabled sources", command.id);
+    setAttentionActivity(visibleAttentionWatchCount() > 0 ? "holding" : "observing",
+      visibleAttentionWatchCount() > 0 ? "Waiting on active watches" : "Watching enabled sources", command.id);
+    return true;
+  }
+
+  if (command.type === "attention_watch_dismiss" || command.type === "attention_watch_show") {
+    const watch = command.type === "attention_watch_dismiss"
+      ? attentionLedger.dismiss(command.watchId) : attentionLedger.show(command.watchId);
+    if (watch === undefined) {
+      emit({ type: "error", id: command.id, code: "watch_unavailable", message: "That attention watch is no longer active." });
+      return true;
+    }
+    emitAttentionState(command.id);
+    setAttentionActivity(visibleAttentionWatchCount() > 0 ? "holding" : "observing",
+      visibleAttentionWatchCount() > 0 ? "Waiting on active watches" : "Watching enabled sources", command.id);
     return true;
   }
 

@@ -26,7 +26,8 @@ const watchSchema = z.object({
   createdAt: z.string().datetime(),
   dueAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
-  attempts: z.number().int().min(1).max(ATTENTION_MAX_WATCH_ATTEMPTS)
+  attempts: z.number().int().min(1).max(ATTENTION_MAX_WATCH_ATTEMPTS),
+  hiddenAt: z.string().datetime().optional()
 }).strict();
 const decisionSchema = z.object({
   at: z.string().datetime(),
@@ -173,6 +174,22 @@ export class AttentionLedger {
 
   get(id: string, now = new Date()): AttentionWatch | undefined {
     return this.active(now).find((watch) => watch.id === id);
+  }
+
+  dismiss(id: string, now = new Date()): AttentionWatch | undefined {
+    const watch = this.#state.watches.find((candidate) => candidate.id === id);
+    if (watch === undefined) return undefined;
+    watch.hiddenAt = now.toISOString();
+    this.#save(now);
+    return { ...watch, sourceIds: [...watch.sourceIds], wakeOn: [...watch.wakeOn] };
+  }
+
+  show(id: string, now = new Date()): AttentionWatch | undefined {
+    const watch = this.#state.watches.find((candidate) => candidate.id === id);
+    if (watch === undefined) return undefined;
+    delete watch.hiddenAt;
+    this.#save(now);
+    return { ...watch, sourceIds: [...watch.sourceIds], wakeOn: [...watch.wakeOn] };
   }
 
   cancel(id: string, now = new Date()): AttentionWatch | undefined {
