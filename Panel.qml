@@ -44,6 +44,9 @@ Panel {
   property string connectionView: "overview"
   property string privacyRuleMode: "digest"
   property string researchCadence: "daily"
+  property string researchDepth: "broad"
+  property string researchRecency: "month"
+  property bool researchCreateOpen: false
   property string ttsProvider: "openai-compatible"
   readonly property var privacyOptions: [
     { value: "ignore", label: "Ignore" },
@@ -2297,6 +2300,26 @@ Panel {
                 }
               }
 
+              Button {
+                width: parent.width
+                height: Style.space(40)
+                text: root.researchCreateOpen ? "Close new watch" : "New research watch"
+                iconText: root.researchCreateOpen ? "󰅖" : "+"
+                leftAlign: true
+                foreground: root.foreground
+                accent: Color.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                bordered: root.researchCreateOpen
+                focusable: true
+                onClicked: root.researchCreateOpen = !root.researchCreateOpen
+              }
+
+              Column {
+                width: parent.width
+                visible: root.researchCreateOpen
+                spacing: Style.space(10)
+
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
@@ -2362,6 +2385,93 @@ Panel {
                 }
               }
 
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "RESEARCH DEPTH"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Row {
+                width: parent.width
+                height: Style.space(40)
+                spacing: Style.space(6)
+                Repeater {
+                  model: [
+                    { id: "focused", label: "Focused" },
+                    { id: "broad", label: "Broad" },
+                    { id: "deep", label: "Deep" }
+                  ]
+                  Button {
+                    required property var modelData
+                    width: (parent.width - parent.spacing * 2) / 3
+                    height: parent.height
+                    text: String(modelData.label)
+                    selected: root.researchDepth === String(modelData.id)
+                    foreground: root.foreground
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    bordered: selected
+                    focusable: true
+                    onClicked: root.researchDepth = String(modelData.id)
+                  }
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: root.researchDepth === "focused" ? "Up to 4 searches and 12 pages per run."
+                  : root.researchDepth === "deep" ? "Up to 20 searches and 60 pages per run."
+                    : "Up to 10 searches and 30 pages per run."
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: "FRESHNESS"
+                color: Qt.darker(root.foreground, 1.35)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1
+              }
+
+              Row {
+                width: parent.width
+                height: Style.space(40)
+                spacing: Style.space(6)
+                Repeater {
+                  model: [
+                    { id: "day", label: "24h" }, { id: "week", label: "7d" },
+                    { id: "month", label: "30d" }, { id: "anytime", label: "Any time" }
+                  ]
+                  Button {
+                    required property var modelData
+                    width: (parent.width - parent.spacing * 3) / 4
+                    height: parent.height
+                    text: String(modelData.label)
+                    selected: root.researchRecency === String(modelData.id)
+                    foreground: root.foreground
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    bordered: selected
+                    focusable: true
+                    onClicked: root.researchRecency = String(modelData.id)
+                  }
+                }
+              }
+
               QQC.TextArea {
                 textFormat: TextEdit.PlainText
                 id: researchSources
@@ -2405,11 +2515,15 @@ Panel {
                 opacity: enabled ? 1 : 0.5
                 onClicked: {
                   OmaDigest.OmaDigestStore.createResearchWatch(
-                    researchName.text, researchQuestion.text, root.researchCadence, researchSources.text.split(/\r?\n/))
+                    researchName.text, researchQuestion.text, root.researchCadence, root.researchDepth,
+                    root.researchRecency, researchSources.text.split(/\r?\n/))
                   researchName.text = ""
                   researchQuestion.text = ""
                   researchSources.text = ""
+                  root.researchCreateOpen = false
                 }
+              }
+
               }
 
               Text {
@@ -2438,6 +2552,9 @@ Panel {
                   fontFamily: root.fontFamily
                   onRunRequested: function(watchId) { OmaDigest.OmaDigestStore.runResearchWatch(watchId) }
                   onWatchEnabledRequested: function(watchId, enabled) { OmaDigest.OmaDigestStore.setResearchWatchEnabled(watchId, enabled) }
+                  onConfigurationRequested: function(watchId, depth, recency) {
+                    OmaDigest.OmaDigestStore.updateResearchWatch(watchId, depth, recency)
+                  }
                   onDeleteRequested: function(watchId) { OmaDigest.OmaDigestStore.deleteResearchWatch(watchId) }
                 }
               }

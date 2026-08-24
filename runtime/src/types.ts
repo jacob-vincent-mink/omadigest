@@ -245,12 +245,16 @@ export type AttentionActivity = {
 };
 
 export type ResearchCadence = "hourly" | "six-hourly" | "daily" | "weekly";
+export type ResearchDepth = "focused" | "broad" | "deep";
+export type ResearchRecency = "day" | "week" | "month" | "anytime";
 
 export type ResearchWatch = {
   id: string;
   name: string;
   question: string;
   cadence: ResearchCadence;
+  depth: ResearchDepth;
+  recency: ResearchRecency;
   sourceUrls: string[];
   enabled: boolean;
   createdAt: string;
@@ -263,6 +267,8 @@ export type ResearchEvidence = {
   url: string;
   title: string;
   retrievedAt: string;
+  publishedAt?: string;
+  updatedAt?: string;
   excerptHash: string;
 };
 
@@ -296,6 +302,10 @@ export type ResearchRun = {
   meaningfulChange: boolean;
   claims: ResearchClaim[];
   changes: ResearchChange[];
+  depth?: ResearchDepth;
+  searchCount?: number;
+  readCount?: number;
+  corpusChars?: number;
   error?: string;
 };
 
@@ -414,7 +424,8 @@ export type BrokerCommand =
   | { type: "update_check"; id: string }
   | { type: "update_dismiss"; id: string }
   | { type: "update_open"; id: string }
-  | { type: "research_create"; id: string; name: string; question: string; cadence: ResearchCadence; sourceUrls: string[] }
+  | { type: "research_create"; id: string; name: string; question: string; cadence: ResearchCadence; depth: ResearchDepth; recency: ResearchRecency; sourceUrls: string[] }
+  | { type: "research_update"; id: string; watchId: string; depth: ResearchDepth; recency: ResearchRecency }
   | { type: "research_set_enabled"; id: string; watchId: string; enabled: boolean }
   | { type: "research_run"; id: string; watchId: string }
   | { type: "research_delete"; id: string; watchId: string }

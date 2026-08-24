@@ -9,12 +9,14 @@ const MAX_DOCUMENT_CHARS = 24_000;
 const MAX_SEARCH_RESULTS = 8;
 const TIMEOUT_MS = 12_000;
 
-export type ResearchSearchResult = { title: string; url: string; snippet: string };
+export type ResearchSearchResult = { title: string; url: string; snippet: string; publishedAt?: string };
 export type ResearchDocument = {
   url: string;
   title: string;
   text: string;
   retrievedAt: string;
+  publishedAt?: string;
+  updatedAt?: string;
   excerptHash: string;
 };
 
@@ -30,9 +32,10 @@ export async function searchResearchWeb(query: string): Promise<ResearchSearchRe
     const title = decodeEntities(xmlValue(item, "title")).replaceAll(/\s+/gu, " ").trim().slice(0, 200);
     const rawUrl = decodeEntities(xmlValue(item, "link")).trim();
     const snippet = stripMarkup(decodeEntities(xmlValue(item, "description"))).slice(0, 600);
+    const publishedAt = normalizedDate(xmlValue(item, "pubDate"));
     try {
       const safeUrl = validateResearchUrl(rawUrl).toString();
-      return title && snippet ? [{ title, url: safeUrl, snippet }] : [];
+      return title && snippet ? [{ title, url: safeUrl, snippet, ...(publishedAt ? { publishedAt } : {}) }] : [];
     } catch { return []; }
   });
 }
@@ -48,11 +51,15 @@ export async function readResearchUrl(rawUrl: string): Promise<ResearchDocument>
     ? readableJson(response.body) : stripMarkup(response.body);
   if (text.length < 20) throw new Error("Research source did not contain enough readable text");
   const bounded = text.slice(0, MAX_DOCUMENT_CHARS);
+  const publishedAt = extractPublishedAt(response.body);
+  const updatedAt = normalizedDate(response.lastModified);
   return {
     url: response.url,
     title,
     text: bounded,
     retrievedAt: new Date().toISOString(),
+    ...(publishedAt ? { publishedAt } : {}),
+    ...(updatedAt ? { updatedAt } : {}),
     excerptHash: createHash("sha256").update(bounded).digest("hex")
   };
 }
@@ -66,7 +73,7 @@ export function validateResearchUrl(rawUrl: string): URL {
 }
 
 async function boundedHttpsGet(rawUrl: string, redirects = 0): Promise<{
-  status: number; body: string; contentType: string; url: string;
+  status: number; body: string; contentType: string; url: string; lastModified: string;
 }> {
   const url = validateResearchUrl(rawUrl);
   const addresses = await lookup(url.hostname, { all: true, verbatim: true });
@@ -112,7 +119,7 @@ async function boundedHttpsGet(rawUrl: string, redirects = 0): Promise<{
         resolveRequest({
           status, body: Buffer.concat(chunks, bytes).toString("utf8"),
           contentType: String(response.headers["content-type"] ?? "text/plain").split(";", 1)[0] ?? "text/plain",
-          url: url.toString()
+          url: url.toString(), lastModified: String(response.headers["last-modified"] ?? "")
         });
       });
     });
@@ -141,6 +148,25 @@ function extractTitle(body: string, url: string): string {
     if (title) return title;
   }
   return new URL(url).hostname.slice(0, 200);
+}
+
+function extractPublishedAt(body: string): string | undefined {
+  for (const match of body.matchAll(/<meta\b[^>]*>/giu)) {
+    const tag = match[0];
+    const key = /(?:property|name)\s*=\s*["']([^"']+)["']/iu.exec(tag)?.[1]?.toLowerCase();
+    if (!["article:published_time", "date", "datepublished", "publish-date", "pubdate"].includes(key ?? "")) continue;
+    const value = /content\s*=\s*["']([^"']+)["']/iu.exec(tag)?.[1];
+    const normalized = normalizedDate(value ?? "");
+    if (normalized) return normalized;
+  }
+  const structured = /["']datePublished["']\s*:\s*["']([^"']+)["']/iu.exec(body)?.[1];
+  const time = /<time\b[^>]*datetime\s*=\s*["']([^"']+)["']/iu.exec(body)?.[1];
+  return normalizedDate(structured ?? time ?? "");
+}
+
+function normalizedDate(value: string): string | undefined {
+  const timestamp = Date.parse(decodeEntities(value).trim());
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
 function stripMarkup(value: string): string {

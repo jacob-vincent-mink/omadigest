@@ -12,9 +12,11 @@ Rectangle {
   property color accent: Color.accent
   property string fontFamily: Style.font.family
   property bool confirmingDelete: false
+  property bool configuring: false
 
   signal runRequested(string watchId)
   signal watchEnabledRequested(string watchId, bool enabled)
+  signal configurationRequested(string watchId, string depth, string recency)
   signal deleteRequested(string watchId)
 
   readonly property bool running: String(activity.watchId || "") === String(watch.id || "")
@@ -117,13 +119,85 @@ Rectangle {
       elide: Text.ElideRight
     }
 
+    Column {
+      width: parent.width
+      visible: root.configuring
+      spacing: Style.space(6)
+
+      Text {
+        textFormat: Text.PlainText
+        width: parent.width
+        text: "DEPTH"
+        color: Qt.darker(root.foreground, 1.35)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        font.letterSpacing: 1
+      }
+      Row {
+        width: parent.width
+        height: Style.space(40)
+        spacing: Style.space(6)
+        Repeater {
+          model: [{ id: "focused", label: "Focused" }, { id: "broad", label: "Broad" }, { id: "deep", label: "Deep" }]
+          Button {
+            required property var modelData
+            width: (parent.width - parent.spacing * 2) / 3
+            height: parent.height
+            text: String(modelData.label)
+            selected: String(root.watch.depth || "broad") === String(modelData.id)
+            bordered: selected
+            foreground: root.foreground
+            accent: root.accent
+            fontFamily: root.fontFamily
+            fontSize: Style.font.caption
+            focusable: true
+            onClicked: root.configurationRequested(String(root.watch.id || ""), String(modelData.id), String(root.watch.recency || "month"))
+          }
+        }
+      }
+
+      Text {
+        textFormat: Text.PlainText
+        width: parent.width
+        text: "FRESHNESS"
+        color: Qt.darker(root.foreground, 1.35)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        font.letterSpacing: 1
+      }
+      Row {
+        width: parent.width
+        height: Style.space(40)
+        spacing: Style.space(6)
+        Repeater {
+          model: [{ id: "day", label: "24h" }, { id: "week", label: "7d" }, { id: "month", label: "30d" }, { id: "anytime", label: "Any time" }]
+          Button {
+            required property var modelData
+            width: (parent.width - parent.spacing * 3) / 4
+            height: parent.height
+            text: String(modelData.label)
+            selected: String(root.watch.recency || "month") === String(modelData.id)
+            bordered: selected
+            foreground: root.foreground
+            accent: root.accent
+            fontFamily: root.fontFamily
+            fontSize: Style.font.caption
+            focusable: true
+            onClicked: root.configurationRequested(String(root.watch.id || ""), String(root.watch.depth || "broad"), String(modelData.id))
+          }
+        }
+      }
+    }
+
     Row {
       width: parent.width
       height: Style.space(40)
       spacing: Style.space(8)
 
       Button {
-        width: parent.width - deleteButton.width - parent.spacing
+        width: parent.width - configureButton.width - deleteButton.width - parent.spacing * 2
         height: parent.height
         text: root.running ? "Researching…" : "Run now"
         foreground: root.foreground
@@ -135,6 +209,20 @@ Rectangle {
         enabled: !root.running
         opacity: enabled ? 1 : 0.6
         onClicked: root.runRequested(String(root.watch.id || ""))
+      }
+
+      Button {
+        id: configureButton
+        width: Style.space(44)
+        height: parent.height
+        text: root.configuring ? "󰅖" : "󰒓"
+        foreground: root.foreground
+        accent: root.accent
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        bordered: root.configuring
+        focusable: true
+        onClicked: root.configuring = !root.configuring
       }
 
       Button {
@@ -165,16 +253,28 @@ Rectangle {
     if (root.watch.enabled !== true) return label + " · Paused"
     var next = new Date(String(root.watch.nextRunAt || ""))
     if (isNaN(next.getTime())) return label
-    return label + " · Next " + next.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    return label + " · " + root.depthLabel() + " · " + root.recencyLabel() + " · Next "
+      + next.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
   }
 
   function resultText() {
     if (root.running) return String(root.activity.message || "Researching public sources")
     if (!root.latestRun) return "No brief yet"
     if (String(root.latestRun.status || "") === "error") return String(root.latestRun.error || "Last run failed")
-    if (root.latestRun.baseline === true) return "Baseline ready · " + Number((root.latestRun.claims || []).length) + " tracked claims"
+    var usage = Number(root.latestRun.readCount || 0) > 0 ? " · " + Number(root.latestRun.readCount) + " pages" : ""
+    if (root.latestRun.baseline === true) return "Baseline ready · " + Number((root.latestRun.claims || []).length) + " tracked claims" + usage
     if (root.latestRun.meaningfulChange === true)
-      return Number((root.latestRun.changes || []).length) + " meaningful changes · " + String(root.latestRun.summary || "")
-    return "No meaningful change · " + String(root.latestRun.summary || "")
+      return Number((root.latestRun.changes || []).length) + " meaningful changes" + usage + " · " + String(root.latestRun.summary || "")
+    return "No meaningful change" + usage + " · " + String(root.latestRun.summary || "")
+  }
+
+  function depthLabel() {
+    var depth = String(root.watch.depth || "broad")
+    return depth === "focused" ? "Focused" : depth === "deep" ? "Deep" : "Broad"
+  }
+
+  function recencyLabel() {
+    var recency = String(root.watch.recency || "month")
+    return recency === "day" ? "24h" : recency === "week" ? "7d" : recency === "anytime" ? "Any time" : "30d"
   }
 }

@@ -234,9 +234,9 @@ flowchart TD
   the action variants and eligible templates the broker supplies.
 - Model sessions receive bounded evidence and emit-only structured tools; they
   receive no shell, filesystem, browser, or general coding tools.
-- Research sessions receive only three broker-owned tools: three searches,
-  eight validated public-HTTPS reads, and one cited snapshot emitter. The
-  broker owns cadence, a 24-run daily budget, SSRF checks, retention, and diffs.
+- Research sessions receive only three broker-owned tools: configurable bounded
+  search/read budgets (up to 20/60), and one cited snapshot emitter. The broker
+  owns cadence, weighted daily work, corpus limits, SSRF checks, retention, and diffs.
 - Digest validation constrains sections, entry counts, grouping, titles, and
   citations to supplied evidence IDs.
 - Integration discovery and installation reject malformed schemas, unsafe
@@ -264,7 +264,7 @@ flowchart TD
 | TB3 — broker to connector | Manifest, config, secrets, subprocess authority, network, and response envelope | Installed connector code should receive only its declared, user-approved capability and return bounded opaque evidence. | Connectors have no network/child permission; HTTPS is exact-host broker mediation and commands are rejected. Final responses require matching IDs/versions and clean exit (TM-02/TM-03/TM-19 fixed). |
 | TB4 — broker to persistence | Notifications, digests, templates, policies, setup values, and credentials | Sensitive content must remain private, bounded, schema-valid, and deletable under tightened policy. | Private permissions, retention, atomic writes, projected integration config, deduplicated append, and segment/total budgets exist. Nested digest reload and orphan-secret cleanup remain incomplete (TM-07/TM-14 fixed; TM-11/TM-15 open). |
 | TB5 — broker to remote services | Model evidence, connector requests, TTS text, and release checks | Each service receives only the minimum intended data under bounded time and response size. | Model/release inputs are bounded, release routing is fixed, connector HTTPS is mediated, and TTS audio streams to a private file under an incremental 50-MiB cap (TM-02/TM-13 fixed; TM-21 residual). |
-| TB7 — broker to public research | User query, search terms, and credential-free public HTTPS reads | Remote content must not gain instruction or execution authority; private networks and runaway schedules must remain unreachable. | User-visible disclosure, minimum hourly cadence, one run at a time, 24 automatic runs/day, 3-search/8-read budgets, public-address DNS validation, redirect revalidation, byte/time limits, read-before-cite validation, and broker-owned claim diffs. |
+| TB7 — broker to public research | User query, search terms, and credential-free public HTTPS reads | Remote content must not gain instruction or execution authority; private networks and runaway schedules must remain unreachable. | User-visible disclosure, minimum hourly cadence, one run at a time, 24 automatic runs/day plus 48 weighted work units, configurable 4/12–20/60 search/read budgets, total-corpus bounds, public-address DNS validation, redirect revalidation, byte/time limits, read-before-cite validation, and broker-owned claim diffs. |
 | TB6 — explicit broad handoff | User-approved prompt to the default agent or Herdr | The user must see and approve the exact authority-expanding request. | The broker derives and previews out-of-scope prompts, consumes a one-use confirmation, and transports all handoff payloads through a private one-use Unix-socket claim. Process arguments carry only a fixed instruction and opaque five-minute capability (TM-08/TM-16 fixed). |
 
 ## White-box source review

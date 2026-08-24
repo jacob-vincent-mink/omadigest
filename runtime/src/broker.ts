@@ -40,7 +40,7 @@ import { readOmarchyNotificationHistory } from "./notification-history.js";
 import { HandoffTransport } from "./handoff-transport.js";
 import { readBoundedProtocolLines } from "./protocol-lines.js";
 import { mergeVisibleTemplates, TemplateVisibilityStore, templateIdSchema } from "./template-visibility.js";
-import { diffResearchClaims, ResearchWatchStore } from "./research-watches.js";
+import { diffResearchClaims, researchDepthBudget, ResearchWatchStore } from "./research-watches.js";
 import { readResearchUrl, searchResearchWeb } from "./research-network.js";
 import {
   PROTOCOL_VERSION,
@@ -89,9 +89,15 @@ const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("research_create"), id: z.string().min(1).max(100),
     name: z.string().trim().min(1).max(100), question: z.string().trim().min(3).max(1_000),
     cadence: z.enum(["hourly", "six-hourly", "daily", "weekly"]),
+    depth: z.enum(["focused", "broad", "deep"]),
+    recency: z.enum(["day", "week", "month", "anytime"]),
     sourceUrls: z.array(z.string().url().max(2_048)).max(8)
   }).strict(),
   z.object({ type: z.literal("research_set_enabled"), id: z.string().min(1).max(100), watchId: z.string().uuid(), enabled: z.boolean() }).strict(),
+  z.object({
+    type: z.literal("research_update"), id: z.string().min(1).max(100), watchId: z.string().uuid(),
+    depth: z.enum(["focused", "broad", "deep"]), recency: z.enum(["day", "week", "month", "anytime"])
+  }).strict(),
   z.object({ type: z.literal("research_run"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("research_delete"), id: z.string().min(1).max(100), watchId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("select_template"), id: z.string().min(1).max(100), context: contextSchema }).strict(),
@@ -441,21 +447,26 @@ async function runResearchWatch(watch: ResearchWatch, id: string, automatic: boo
     if (!automatic) emit({ type: "error", id, code: "research_busy", message: "Another research watch is already running." });
     return;
   }
+  const budget = researchDepthBudget(watch.depth);
   if (automatic) {
-    const recentRuns = research.runs().filter((run) => Date.parse(run.startedAt) >= Date.now() - 86_400_000).length;
-    if (recentRuns >= 24) return;
+    const recentRuns = research.runs().filter((run) => Date.parse(run.startedAt) >= Date.now() - 86_400_000);
+    const automaticWork = recentRuns.reduce((total, run) => total + researchDepthBudget(run.depth ?? "broad").automaticWeight, 0);
+    if (recentRuns.length >= 24 || automaticWork + budget.automaticWeight > 48) return;
   }
   researchRunning = true;
   const startedAt = new Date();
   const previous = research.latestRun(watch.id);
   try {
-    setResearchActivity({ state: "searching", message: `Researching ${watch.name}`, watchId: watch.id }, id);
+    setResearchActivity({ state: "searching", message: `Researching ${watch.name} · ${watch.depth}`, watchId: watch.id }, id);
     const snapshot = await (await agentModule()).runResearchAgent({
       watch,
       previousClaims: previous?.claims ?? [],
+      ...(previous?.completedAt ? { previousCompletedAt: previous.completedAt } : {}),
+      now: startedAt.toISOString(),
+      budget,
       search: searchResearchWeb,
       read: readResearchUrl
-    }, 90_000, (state, message) => setResearchActivity({ state, message, watchId: watch.id }, id));
+    }, budget.timeoutMs, (state, message) => setResearchActivity({ state, message, watchId: watch.id }, id));
     const completedAt = new Date();
     const baseline = previous === undefined;
     const changes = baseline ? [] : diffResearchClaims(previous.claims, snapshot.claims);
@@ -463,7 +474,8 @@ async function runResearchWatch(watch: ResearchWatch, id: string, automatic: boo
       id: randomUUID(), watchId: watch.id, watchName: watch.name,
       startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString(), status: "complete",
       summary: snapshot.summary, baseline, meaningfulChange: !baseline && changes.length > 0,
-      claims: snapshot.claims, changes
+      claims: snapshot.claims, changes, depth: watch.depth,
+      searchCount: snapshot.searchCount, readCount: snapshot.readCount, corpusChars: snapshot.corpusChars
     };
     research.record(run, completedAt);
     if (baseline || changes.length > 0) {
@@ -488,7 +500,8 @@ async function runResearchWatch(watch: ResearchWatch, id: string, automatic: boo
     research.record({
       id: randomUUID(), watchId: watch.id, watchName: watch.name,
       startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString(), status: "error",
-      summary: "", baseline: previous === undefined, meaningfulChange: false, claims: [], changes: [], error: message
+      summary: "", baseline: previous === undefined, meaningfulChange: false, claims: [], changes: [],
+      error: message, depth: watch.depth
     }, completedAt);
     setResearchActivity({ state: "error", message, watchId: watch.id }, id);
     if (!automatic) emit({
@@ -1012,7 +1025,8 @@ async function handle(raw: string): Promise<boolean> {
   if (command.type === "research_create") {
     try {
       const watch = research.create({
-        name: command.name, question: command.question, cadence: command.cadence, sourceUrls: command.sourceUrls
+        name: command.name, question: command.question, cadence: command.cadence,
+        depth: command.depth, recency: command.recency, sourceUrls: command.sourceUrls
       });
       emitResearchState(command.id);
       void runResearchWatch(watch, command.id, false);
@@ -1023,6 +1037,12 @@ async function handle(raw: string): Promise<boolean> {
   }
   if (command.type === "research_set_enabled") {
     const watch = research.setEnabled(command.watchId, command.enabled);
+    if (watch === undefined) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
+    else emitResearchState(command.id);
+    return true;
+  }
+  if (command.type === "research_update") {
+    const watch = research.updateResearchPolicy(command.watchId, command.depth, command.recency);
     if (watch === undefined) emit({ type: "error", id: command.id, code: "research_unavailable", message: "That research watch is unavailable." });
     else emitResearchState(command.id);
     return true;

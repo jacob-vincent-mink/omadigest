@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import type { ResearchCadence, ResearchChange, ResearchClaim, ResearchRun, ResearchWatch } from "./types.js";
+import type { ResearchCadence, ResearchChange, ResearchClaim, ResearchDepth, ResearchRun, ResearchWatch } from "./types.js";
 
 export const MAX_RESEARCH_WATCHES = 16;
 export const MAX_RESEARCH_RUNS_PER_WATCH = 12;
@@ -11,6 +11,8 @@ export const MAX_RESEARCH_CONFIG_BYTES = 128 * 1024;
 export const MAX_RESEARCH_HISTORY_BYTES = 1024 * 1024;
 
 const cadenceSchema = z.enum(["hourly", "six-hourly", "daily", "weekly"]);
+const depthSchema = z.enum(["focused", "broad", "deep"]);
+const recencySchema = z.enum(["day", "week", "month", "anytime"]);
 const urlSchema = z.string().url().max(2_048).superRefine((value, context) => {
   const url = new URL(value);
   if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.hash !== "")
@@ -20,6 +22,8 @@ export const researchWatchInputSchema = z.object({
   name: z.string().trim().min(1).max(100),
   question: z.string().trim().min(3).max(1_000),
   cadence: cadenceSchema,
+  depth: depthSchema.default("broad"),
+  recency: recencySchema.default("month"),
   sourceUrls: z.array(urlSchema).max(8)
 }).strict();
 const watchSchema = researchWatchInputSchema.extend({
@@ -34,6 +38,8 @@ const evidenceSchema = z.object({
   url: urlSchema,
   title: z.string().max(200),
   retrievedAt: z.string().datetime(),
+  publishedAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime().optional(),
   excerptHash: z.string().regex(/^[a-f0-9]{64}$/u)
 }).strict();
 const claimSchema = z.object({
@@ -64,6 +70,10 @@ const runSchema = z.object({
   meaningfulChange: z.boolean(),
   claims: z.array(claimSchema).max(24),
   changes: z.array(changeSchema).max(24),
+  depth: depthSchema.optional(),
+  searchCount: z.number().int().min(0).max(20).optional(),
+  readCount: z.number().int().min(0).max(60).optional(),
+  corpusChars: z.number().int().min(0).max(480_000).optional(),
   error: z.string().max(500).optional()
 }).strict();
 const configSchema = z.object({ version: z.literal(1), watches: z.array(watchSchema).max(MAX_RESEARCH_WATCHES) }).strict();
@@ -125,6 +135,19 @@ export class ResearchWatchStore {
     return changed === undefined ? undefined : { ...changed, sourceUrls: [...changed.sourceUrls] };
   }
 
+  updateResearchPolicy(id: string, depth: ResearchWatch["depth"], recency: ResearchWatch["recency"], now = new Date()): ResearchWatch | undefined {
+    const safeDepth = depthSchema.parse(depth);
+    const safeRecency = recencySchema.parse(recency);
+    let changed: ResearchWatch | undefined;
+    this.#watches = this.#watches.map((watch) => {
+      if (watch.id !== id) return watch;
+      changed = { ...watch, depth: safeDepth, recency: safeRecency, updatedAt: now.toISOString() };
+      return changed;
+    });
+    if (changed !== undefined) this.#saveConfig();
+    return changed === undefined ? undefined : { ...changed, sourceUrls: [...changed.sourceUrls] };
+  }
+
   delete(id: string): boolean {
     const before = this.#watches.length;
     this.#watches = this.#watches.filter((watch) => watch.id !== id);
@@ -180,6 +203,14 @@ export function cadenceMilliseconds(cadence: ResearchCadence): number {
   return cadence === "hourly" ? 60 * 60_000
     : cadence === "six-hourly" ? 6 * 60 * 60_000
       : cadence === "daily" ? 24 * 60 * 60_000 : 7 * 24 * 60 * 60_000;
+}
+
+export function researchDepthBudget(depth: ResearchDepth): {
+  searches: number; reads: number; corpusChars: number; timeoutMs: number; automaticWeight: number;
+} {
+  if (depth === "focused") return { searches: 4, reads: 12, corpusChars: 120_000, timeoutMs: 90_000, automaticWeight: 1 };
+  if (depth === "deep") return { searches: 20, reads: 60, corpusChars: 480_000, timeoutMs: 300_000, automaticWeight: 4 };
+  return { searches: 10, reads: 30, corpusChars: 300_000, timeoutMs: 180_000, automaticWeight: 2 };
 }
 
 export function diffResearchClaims(previous: ResearchClaim[], current: ResearchClaim[]): ResearchChange[] {

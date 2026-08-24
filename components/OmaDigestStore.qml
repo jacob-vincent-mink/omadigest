@@ -378,7 +378,7 @@ Scope {
     send({ type: "attention_policy_delete", id: "attention-policy-" + nextId++, policyId: String(policyId) })
   }
 
-  function createResearchWatch(name, question, cadence, sourceUrls) {
+  function createResearchWatch(name, question, cadence, depth, recency, sourceUrls) {
     var title = String(name || "").trim().slice(0, 100)
     var request = String(question || "").trim().slice(0, 1000)
     if (!title || request.length < 3) return
@@ -387,6 +387,8 @@ Scope {
     send({
       type: "research_create", id: "research-" + nextId++, name: title, question: request,
       cadence: ["hourly", "six-hourly", "daily", "weekly"].indexOf(String(cadence)) >= 0 ? String(cadence) : "daily",
+      depth: ["focused", "broad", "deep"].indexOf(String(depth)) >= 0 ? String(depth) : "broad",
+      recency: ["day", "week", "month", "anytime"].indexOf(String(recency)) >= 0 ? String(recency) : "month",
       sourceUrls: (sourceUrls || []).map(function(url) { return String(url || "").trim().slice(0, 2048) })
         .filter(function(url) { return url !== "" }).slice(0, 8)
     })
@@ -394,6 +396,14 @@ Scope {
 
   function setResearchWatchEnabled(watchId, enabled) {
     send({ type: "research_set_enabled", id: "research-" + nextId++, watchId: String(watchId), enabled: enabled === true })
+  }
+
+  function updateResearchWatch(watchId, depth, recency) {
+    send({
+      type: "research_update", id: "research-" + nextId++, watchId: String(watchId),
+      depth: ["focused", "broad", "deep"].indexOf(String(depth)) >= 0 ? String(depth) : "broad",
+      recency: ["day", "week", "month", "anytime"].indexOf(String(recency)) >= 0 ? String(recency) : "month"
+    })
   }
 
   function runResearchWatch(watchId) {
